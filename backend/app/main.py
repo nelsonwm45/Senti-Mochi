@@ -1,9 +1,13 @@
 from fastapi import FastAPI
 from app.database import create_db_and_tables
-from app.routers import auth, users, google_auth
+from app.routers import auth, users, google_auth, documents, chat, health
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Finance AI Platform")
+app = FastAPI(
+    title="Finance AI Platform with RAG",
+    description="Secure finance API with document ingestion and RAG-powered chat",
+    version="1.0.0"
+)
 
 origins = [
     "http://localhost:3000",
@@ -22,10 +26,19 @@ app.add_middleware(
 def on_startup():
     create_db_and_tables()
 
+# Include routers
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(google_auth.router)
+app.include_router(documents.router)  # New: Document management
+app.include_router(chat.router)       # New: RAG chat
+app.include_router(health.router)     # New: Health checks
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to Finance AI Platform API"}
+    return {
+        "message": "Welcome to Finance AI Platform API",
+        "version": "1.0.0",
+        "features": ["Authentication", "Document Management", "RAG Chat", "AI Financial Advice"]
+    }
+
