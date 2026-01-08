@@ -27,19 +27,34 @@ class IngestionService:
         Returns:
             List of dicts with 'page_number' and 'content'
         """
-        pdf_file = io.BytesIO(file_bytes)
-        reader = PdfReader(pdf_file)
-        
-        pages = []
-        for page_num, page in enumerate(reader.pages, start=1):
-            text = page.extract_text()
-            if text.strip():
-                pages.append({
-                    "page_number": page_num,
-                    "content": text
-                })
-        
-        return pages
+        try:
+            pdf_file = io.BytesIO(file_bytes)
+            reader = PdfReader(pdf_file)
+            
+            pages = []
+            for page_num, page in enumerate(reader.pages, start=1):
+                text = page.extract_text()
+                if text.strip():
+                    pages.append({
+                        "page_number": page_num,
+                        "content": text
+                    })
+            
+            return pages
+        except Exception as e:
+            # If PDF reading fails, might be empty or corrupted
+            raise ValueError(f"Failed to extract text from PDF: {str(e)}")
+    
+    def extract_text_from_txt(self, file_bytes: bytes) -> List[Dict]:
+        """Extract text from plain text file"""
+        try:
+            text = file_bytes.decode('utf-8')
+            return [{
+                "page_number": 1,
+                "content": text
+            }]
+        except Exception as e:
+            raise ValueError(f"Failed to extract text from text file: {str(e)}")
     
     def extract_text_from_docx(self, file_bytes: bytes) -> List[Dict]:
         """Extract text from DOCX file"""
@@ -57,6 +72,8 @@ class IngestionService:
         """Extract text based on file type"""
         if content_type == "application/pdf":
             return self.extract_text_from_pdf(file_bytes)
+        elif content_type in ["text/plain", "text/txt"]:
+            return self.extract_text_from_txt(file_bytes)
         elif content_type in ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"]:
             return self.extract_text_from_docx(file_bytes)
         else:

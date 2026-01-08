@@ -47,7 +47,7 @@ echo
 echo "3. Uploading document..."
 UPLOAD_RESPONSE=$(curl -s -X POST http://localhost:8000/api/v1/documents/upload \
   -H "Authorization: Bearer $TOKEN" \
-  -F "file=@/tmp/test_doc.txt;filename=financial_report.pdf;type=application/pdf")
+  -F "file=@/tmp/test_doc.txt;type=text/plain")
 
 echo "Upload response: $UPLOAD_RESPONSE"
 

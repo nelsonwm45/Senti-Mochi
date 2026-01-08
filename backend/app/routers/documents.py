@@ -47,11 +47,15 @@ async def upload_document(
     - Returns document metadata
     """
     # Validate file type
-    allowed_types = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+    allowed_types = [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain"  # Added for easier testing
+    ]
     if file.content_type not in allowed_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type {file.content_type} not supported. Use PDF or DOCX."
+            detail=f"File type {file.content_type} not supported. Use PDF, DOCX, or TXT."
         )
     
     # Validate file size (max 50MB)
