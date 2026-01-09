@@ -7,54 +7,68 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white">
       {/* Navbar Overlay */}
-      <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-10">
-        <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-            <span className="font-bold text-sm">SF</span>
+      <nav className="absolute top-0 left-0 right-0 z-50">
+        <div className="container mx-auto px-6 py-6 flex justify-between items-center">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <span className="font-bold text-white text-lg">SF</span>
+            </div>
+            <span className="text-2xl font-bold tracking-tight text-white">Secure Finance</span>
           </div>
-          <span className="text-xl font-bold">Secure Finance</span>
+          <div className="flex items-center space-x-6">
+            <Link href="/login" className="text-gray-300 hover:text-white transition-colors font-medium">
+              Login
+            </Link>
+            <Link
+              href="/dashboard"
+              className="px-5 py-2.5 bg-white text-gray-900 rounded-full font-semibold hover:bg-gray-100 transition-all hover:scale-105 shadow-md"
+            >
+              Dashboard
+            </Link>
+          </div>
         </div>
-        <div className="space-x-4">
-          <Link href="/login" className="text-gray-300 hover:text-white transition-colors">
-            Login
-          </Link>
-          <Link
-            href="/dashboard"
-            className="bg-white text-gray-900 px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors"
-          >
-            Go to Dashboard
-          </Link>
-        </div>
-      </div>
+      </nav>
 
       {/* Hero Section */}
-      <div className="container mx-auto px-4 pt-24 pb-12 text-center">
-        <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 leading-tight">
-          AI-Powered<br className="hidden md:block" /> Financial Intelligence
-        </h1>
-        <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-12">
-          Securely analyze your financial documents with advanced RAG technology.
-          Get instant answers, deep insights, and automated processing.
-        </p>
+      <div className="relative min-h-screen flex flex-col justify-center items-center text-center px-4 pt-20">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-500/10 rounded-full blur-[100px]" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 rounded-full blur-[100px]" />
+        </div>
         
-        <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-          <Link href="/dashboard">
-            <button className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl font-bold text-lg hover:scale-105 transition-transform flex items-center justify-center">
-              Get Started
-              <ArrowRight className="w-5 h-5 ml-2" />
-            </button>
-          </Link>
-          <Link href="/documents">
-            <button className="w-full sm:w-auto px-8 py-4 bg-gray-800 border border-gray-700 rounded-xl font-bold text-lg hover:bg-gray-700 transition-colors flex items-center justify-center">
-              Upload Documents
-            </button>
-          </Link>
+        <div className="relative z-10 max-w-4xl mx-auto space-y-8">
+          <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6">
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
+              AI-Powered
+            </span>
+            <br />
+            <span className="text-white">Financial Intelligence</span>
+          </h1>
+          
+          <p className="text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">
+            Securely analyze your financial documents with advanced RAG technology.
+            Get instant answers, deep insights, and automated processing.
+          </p>
+          
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-4">
+            <Link href="/dashboard">
+              <button className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full font-bold text-lg text-white hover:scale-105 hover:shadow-lg hover:shadow-purple-500/25 transition-all flex items-center">
+                Get Started
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </button>
+            </Link>
+            <Link href="/documents">
+              <button className="px-8 py-4 bg-gray-800/50 border border-gray-700 hover:border-gray-600 rounded-full font-bold text-lg text-white hover:bg-gray-800 transition-all backdrop-blur-sm">
+                Upload Documents
+              </button>
+            </Link>
+          </div>
         </div>
       </div>
 
       {/* Features Grid */}
-      <div className="container mx-auto px-4 py-20">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="container mx-auto px-4 py-24 border-t border-gray-800/50">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           <FeatureCard
             icon={FileText}
             title="Smart Ingestion"
@@ -74,8 +88,8 @@ export default function LandingPage() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 py-12 text-center text-gray-500">
-        <p>© 2026 Secure Finance RAG. Built with Next.js & Python.</p>
+      <footer className="border-t border-gray-800/50 py-12 text-center">
+        <p className="text-gray-500">© 2026 Secure Finance RAG. Built with Next.js & Python.</p>
       </footer>
     </div>
   );
@@ -83,9 +97,9 @@ export default function LandingPage() {
 
 function FeatureCard({ icon: Icon, title, description }: { icon: any, title: string, description: string }) {
   return (
-    <div className="bg-gray-800/50 p-8 rounded-2xl border border-gray-700 hover:border-blue-500/50 transition-colors">
-      <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-6">
-        <Icon className="w-6 h-6 text-blue-400" />
+    <div className="bg-gray-800/30 p-8 rounded-3xl border border-gray-700/50 hover:border-blue-500/50 hover:bg-gray-800/50 transition-all group backdrop-blur-sm">
+      <div className="w-14 h-14 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+        <Icon className="w-7 h-7 text-blue-400" />
       </div>
       <h3 className="text-xl font-bold mb-3 text-white">{title}</h3>
       <p className="text-gray-400 leading-relaxed">
