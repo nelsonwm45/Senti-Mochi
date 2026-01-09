@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
 import Navbar from './components/Navbar'
 import './globals.css'
+import { Providers } from '@/components/providers'
 
 export const metadata: Metadata = {
-  title: 'Finance AI Platform',
-  description: 'AI-powered financial advice',
+  title: 'Secure Finance RAG',
+  description: 'AI-powered financial document analysis',
 }
 
 export default function RootLayout({
@@ -15,10 +16,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Navbar />
-        <main className="main-content">
-          {children}
-        </main>
+        <Providers>
+          <Navbar />
+          <main className="main-content">
+            {children}
+          </main>
+        </Providers>
       </body>
     </html>
   )
