@@ -7,8 +7,8 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white">
       {/* Navbar Overlay */}
-      <nav className="absolute top-0 left-0 right-0 z-50">
-        <div className="container mx-auto px-6 py-10 flex justify-between items-center">
+      <nav className="absolute top-10 left-0 right-0 z-50">
+        <div className="container mx-auto px-6 py-6 flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
               <span className="font-bold text-white text-lg">SF</span>
@@ -55,11 +55,6 @@ export default function LandingPage() {
               <button className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full font-bold text-lg text-white hover:scale-105 hover:shadow-lg hover:shadow-purple-500/25 transition-all flex items-center">
                 Get Started
                 <ArrowRight className="w-5 h-5 ml-2" />
-              </button>
-            </Link>
-            <Link href="/documents">
-              <button className="px-8 py-4 bg-gray-800/50 border border-gray-700 hover:border-gray-600 rounded-full font-bold text-lg text-white hover:bg-gray-800 transition-all backdrop-blur-sm">
-                Upload Documents
               </button>
             </Link>
           </div>

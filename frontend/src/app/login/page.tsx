@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Mail, Lock, LogIn, ArrowRight } from 'lucide-react';
+import { Mail, Lock, LogIn, ArrowRight, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 export default function Login() {
@@ -39,7 +39,17 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center p-4 relative">
+      {/* Back Button */}
+      <Link 
+        href="/" 
+        className="absolute top-8 left-8 flex items-center space-x-2 text-gray-400 hover:text-white transition-colors group"
+      >
+        <div className="p-2 bg-white/5 rounded-full group-hover:bg-white/10 transition-colors">
+          <ArrowLeft className="w-5 h-5" />
+        </div>
+        <span className="font-medium text-sm">Back to Home</span>
+      </Link>
       <motion.div
         className="w-full max-w-md bg-gray-800/50 backdrop-blur-xl border border-gray-700/50 rounded-2xl shadow-2xl overflow-hidden"
         initial={{ opacity: 0, y: 20 }}
