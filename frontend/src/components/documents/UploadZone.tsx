@@ -10,6 +10,8 @@ const ACCEPTED_TYPES = {
   'application/pdf': ['.pdf'],
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
   'text/plain': ['.txt'],
+  'image/png': ['.png'],
+  'image/jpeg': ['.jpg', '.jpeg']
 };
 
 export default function UploadZone() {
@@ -62,8 +64,8 @@ export default function UploadZone() {
               Drag & drop your files or{' '}
               <span className="text-blue-500 font-medium">browse</span>
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-              Supports PDF, DOCX, TXT • Max 50MB
+            <p className="mt-2 text-sm text-gray-400">
+              Supports PDF, DOCX, TXT, PNG, JPG • Max 50MB
             </p>
           </div>
 

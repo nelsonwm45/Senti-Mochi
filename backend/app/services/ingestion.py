@@ -5,6 +5,8 @@ from pypdf import PdfReader
 from docx import Document as DocxDocument
 import openai
 import os
+import pytesseract
+from PIL import Image
 from app.services.storage import S3StorageService
 from app.models import Document, DocumentChunk, DocumentStatus
 from app.database import engine
@@ -41,7 +43,7 @@ class IngestionService:
                 if text.strip():
                     pages.append({
                         "page_number": page_num,
-                        "content": text
+                        "content": text.replace("\x00", "")
                     })
             
             return pages
@@ -72,6 +74,19 @@ class IngestionService:
             "content": full_text
         }]
     
+    def extract_text_from_image(self, file_bytes: bytes) -> List[Dict]:
+        """Extract text from image using Tesseract OCR"""
+        try:
+            image = Image.open(io.BytesIO(file_bytes))
+            text = pytesseract.image_to_string(image)
+            
+            return [{
+                "page_number": 1,
+                "content": text.replace("\x00", "")
+            }]
+        except Exception as e:
+            raise ValueError(f"Failed to extract text from image: {str(e)}")
+    
     def extract_text(self, file_bytes: bytes, content_type: str) -> List[Dict]:
         """Extract text based on file type"""
         if content_type == "application/pdf":
@@ -80,6 +95,8 @@ class IngestionService:
             return self.extract_text_from_txt(file_bytes)
         elif content_type in ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"]:
             return self.extract_text_from_docx(file_bytes)
+        elif content_type.startswith("image/"):
+            return self.extract_text_from_image(file_bytes)
         else:
             raise ValueError(f"Unsupported content type: {content_type}")
     

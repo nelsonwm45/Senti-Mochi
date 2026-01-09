@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
@@ -50,12 +50,15 @@ async def upload_document(
     allowed_types = [
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "text/plain"  # Added for easier testing
+        "text/plain",
+        "image/png",
+        "image/jpeg",
+        "image/jpg"
     ]
     if file.content_type not in allowed_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File type {file.content_type} not supported. Use PDF, DOCX, or TXT."
+            detail=f"File type {file.content_type} not supported. Use PDF, DOCX, TXT, or Images (PNG/JPG)."
         )
     
     # Validate file size (max 50MB)
@@ -66,6 +69,9 @@ async def upload_document(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File size exceeds 50MB limit"
         )
+    
+    # Reset file pointer after reading bytes
+    await file.seek(0)
     
     # Upload to S3
     storage = S3StorageService()

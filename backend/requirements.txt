@@ -23,3 +23,5 @@ slowapi
 alembic>=1.12.0
 prometheus-client
 sentence-transformers
+pytesseract
+Pillow
