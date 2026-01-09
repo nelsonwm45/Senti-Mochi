@@ -23,8 +23,8 @@ class IngestionService:
             api_key=os.getenv("GROQ_API_KEY"),
             base_url="https://api.groq.com/openai/v1"
         )
-        self.chunk_size = 800  # tokens
-        self.chunk_overlap = 100  # tokens
+        self.chunk_size = 150  # tokens - smaller for better precision
+        self.chunk_overlap = 30  # tokens
     
     def extract_text_from_pdf(self, file_bytes: bytes) -> List[Dict]:
         """
@@ -102,10 +102,10 @@ class IngestionService:
     
     def chunk_text(self, pages: List[Dict]) -> List[Dict]:
         """
-        Split text into chunks with overlap
+        Split text into chunks with overlap, tracking line numbers
         
         Returns:
-            List of chunks with metadata
+            List of chunks with metadata and line numbers
         """
         chunks = []
         chunk_index = 0
@@ -114,21 +114,59 @@ class IngestionService:
             content = page["content"]
             page_number = page["page_number"]
             
-            # Simple word-based chunking (approximate tokens)
-            words = content.split()
+            # Map words to lines to verify where chunks come from
+            # Structure: [(word, line_number), ...]
+            words_with_lines = []
+            
+            # Split by lines first
+            lines = content.split('\n')
+            for line_idx, line in enumerate(lines):
+                line_words = line.split()
+                for word in line_words:
+                    # Store word and its 1-based line number
+                    words_with_lines.append((word, line_idx + 1))
+            
+            if not words_with_lines:
+                continue
+
             chunk_size_words = self.chunk_size  # Approximation: 1 word ≈ 1 token
             overlap_words = self.chunk_overlap
             
-            for i in range(0, len(words), chunk_size_words - overlap_words):
-                chunk_words = words[i:i + chunk_size_words]
-                chunk_text = " ".join(chunk_words)
+            # Sliding window
+            for i in range(0, len(words_with_lines), chunk_size_words - overlap_words):
+                # Get the slice of words+lines for this chunk
+                chunk_data = words_with_lines[i:i + chunk_size_words]
+                
+                # Reconstruct text preserving newlines
+                reconstructed_parts = []
+                last_line_num = -1
+                
+                for word, line_num in chunk_data:
+                    if last_line_num != -1:
+                        if line_num > last_line_num:
+                            # Add newline(s) for line breakdown
+                            reconstructed_parts.append("\n" * (line_num - last_line_num))
+                        else:
+                            # Same line, add space
+                            reconstructed_parts.append(" ")
+                    
+                    reconstructed_parts.append(word)
+                    last_line_num = line_num
+                
+                chunk_text = "".join(reconstructed_parts)
                 
                 if chunk_text.strip():
+                    # Get line range
+                    start_line = chunk_data[0][1]
+                    end_line = chunk_data[-1][1]
+                    
                     chunks.append({
                         "content": chunk_text,
                         "page_number": page_number,
                         "chunk_index": chunk_index,
                         "token_count": len(chunk_words),
+                        "start_line": start_line,
+                        "end_line": end_line,
                         "metadata": {
                             "word_count": len(chunk_words),
                             "start_word_index": i
@@ -177,6 +215,8 @@ class IngestionService:
                     page_number=chunk["page_number"],
                     chunk_index=chunk["chunk_index"],
                     token_count=chunk["token_count"],
+                    start_line=chunk.get("start_line"),
+                    end_line=chunk.get("end_line"),
                     embedding=chunk["embedding"],
                     metadata_=chunk.get("metadata", {})
                 )

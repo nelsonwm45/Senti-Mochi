@@ -68,6 +68,8 @@ class DocumentChunk(SQLModel, table=True):
     page_number: Optional[int] = None
     chunk_index: int
     token_count: int
+    start_line: Optional[int] = None
+    end_line: Optional[int] = None
     embedding: list[float] = Field(sa_column=Column(Vector(384)))  # Local SentenceTransformer
     metadata_: dict = Field(default={}, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow)

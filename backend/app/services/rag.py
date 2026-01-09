@@ -62,7 +62,9 @@ class RAGService:
                     dc.metadata_,
                     d.filename,
                     d.user_id,
-                    1 - (dc.embedding <=> '{embedding_str}'::vector) as similarity
+                    1 - (dc.embedding <=> '{embedding_str}'::vector) as similarity,
+                    dc.start_line,
+                    dc.end_line
                 FROM document_chunks dc
                 JOIN documents d ON dc.document_id = d.id
                 WHERE d.user_id = '{str(user_id)}'
@@ -86,7 +88,9 @@ class RAGService:
                     "chunk_index": row[4],
                     "metadata": row[5],
                     "filename": row[6],
-                    "similarity": float(row[8])
+                    "similarity": float(row[8]),
+                    "start_line": row[9],
+                    "end_line": row[10]
                 })
             
             return chunks

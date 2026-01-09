@@ -6,6 +6,8 @@ import { motion } from 'framer-motion';
 import { Mail, Lock, LogIn, ArrowRight, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
+import { setToken, getToken } from '@/lib/auth';
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,7 +15,7 @@ export default function Login() {
 
   // Redirect if already logged in
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (token) {
       router.push('/dashboard');
     }
@@ -27,10 +29,7 @@ export default function Login() {
       formData.append('password', password);
       
       const res = await axios.post('http://localhost:8000/auth/token', formData);
-      localStorage.setItem('token', res.data.access_token);
-      
-      // Dispatch event for other components to know auth state changed
-      window.dispatchEvent(new Event('auth-change'));
+      setToken(res.data.access_token);
       
       router.push('/dashboard');
     } catch (err) {

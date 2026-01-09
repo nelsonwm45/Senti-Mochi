@@ -69,4 +69,12 @@ export const documentsApi = {
 	async reprocess(id: string): Promise<void> {
 		await apiClient.post(`/api/v1/documents/${id}/reprocess`);
 	},
+
+	/**
+	 * Get full document content
+	 */
+	async getContent(id: string): Promise<{ chunks: Array<{ content: string; start_line: number; end_line: number; page_number?: number }> }> {
+		const { data } = await apiClient.get<{ chunks: Array<{ content: string; start_line: number; end_line: number; page_number?: number }> }>(`/api/v1/documents/${id}/content`);
+		return data;
+	},
 };

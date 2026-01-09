@@ -1,4 +1,4 @@
-.PHONY: up down build logs clean restart
+.PHONY: up down build logs clean restart prune
 
 # Run the application in detached mode
 up:
@@ -9,8 +9,12 @@ down:
 	docker compose down
 
 # Build the images
-build:
+build: prune
 	docker compose build
+
+# Remove dangling images
+prune:
+	docker image prune -f
 
 # View logs
 logs:

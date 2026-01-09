@@ -258,3 +258,38 @@ async def reprocess_document(
     process_document_task.delay(str(document.id))
     
     return {"message": "Document reprocessing queued"}
+
+@router.get("/{document_id}/content")
+async def get_document_content(
+    document_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """Get full document content as structured chunks"""
+    from app.models import DocumentChunk
+    
+    document = session.get(Document, document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    if document.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+        
+    # Fetch chunks sorted by index
+    chunks = session.exec(
+        select(DocumentChunk)
+        .where(DocumentChunk.document_id == document_id)
+        .order_by(DocumentChunk.chunk_index)
+    ).all()
+    
+    return {
+        "chunks": [
+            {
+                "content": chunk.content,
+                "start_line": chunk.start_line,
+                "end_line": chunk.end_line,
+                "page_number": chunk.page_number
+            }
+            for chunk in chunks
+        ]
+    }

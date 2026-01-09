@@ -15,6 +15,9 @@ export interface CitationInfo {
 	pageNumber?: number;
 	chunkId: string;
 	similarity: number;
+	text?: string;
+	startLine?: number;
+	endLine?: number;
 }
 
 export interface QueryResponse {

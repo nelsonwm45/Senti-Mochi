@@ -1,9 +1,10 @@
 'use client';
 
 import { Document } from '@/lib/api/documents';
-import { FileText, Download, Trash2, RefreshCw, Clock, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { FileText, Download, Trash2, RefreshCw, Clock, CheckCircle, AlertCircle, Loader2, Eye } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useDeleteDocument, useReprocessDocument } from '@/hooks/useDocuments';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 interface DocumentCardProps {
   document: Document;
@@ -57,6 +58,8 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function DocumentCard({ document }: DocumentCardProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const deleteMutation = useDeleteDocument();
   const reprocessMutation = useReprocessDocument();
 
@@ -71,6 +74,12 @@ export default function DocumentCard({ document }: DocumentCardProps) {
 
   const handleReprocess = () => {
     reprocessMutation.mutate(document.id);
+  };
+
+  const handleView = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('view', document.id);
+    router.push(`/documents?${params.toString()}`);
   };
 
   return (
@@ -111,6 +120,14 @@ export default function DocumentCard({ document }: DocumentCardProps) {
 
       {/* Actions */}
       <div className="flex items-center justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <button
+          onClick={handleView}
+          className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          title="View Content"
+        >
+          <Eye className="w-5 h-5" />
+        </button>
+
         {document.status === 'FAILED' && (
           <button
             onClick={handleReprocess}

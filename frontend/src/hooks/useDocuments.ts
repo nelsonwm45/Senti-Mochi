@@ -38,14 +38,17 @@ export function useDocument(id: string) {
 /**
  * Hook to upload a document
  */
-export function useUploadDocument() {
+export function useUploadDocument(onSuccess?: (documentId: string) => void) {
 	const queryClient = useQueryClient();
 
 	return useMutation({
 		mutationFn: (file: File) => documentsApi.upload(file),
-		onSuccess: () => {
+		onSuccess: (data) => {
 			queryClient.invalidateQueries({ queryKey: ['documents'] });
 			toast.success('Document uploaded successfully!');
+			if (onSuccess && data.id) {
+				onSuccess(data.id);
+			}
 		},
 		onError: (error: any) => {
 			toast.error(error.response?.data?.detail || 'Upload failed');
@@ -86,5 +89,16 @@ export function useReprocessDocument() {
 		onError: (error: any) => {
 			toast.error(error.response?.data?.detail || 'Reprocess failed');
 		},
+	});
+}
+
+/**
+ * Hook to fetch document content
+ */
+export function useDocumentContent(id: string) {
+	return useQuery({
+		queryKey: ['documentContent', id],
+		queryFn: () => documentsApi.getContent(id),
+		enabled: !!id,
 	});
 }
