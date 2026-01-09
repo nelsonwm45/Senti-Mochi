@@ -11,3 +11,17 @@ langchain
 langchain-openai
 python-dotenv
 httpx
+pydantic-settings
+openai>=1.3.0
+pypdf>=3.17.0
+python-docx
+openpyxl
+celery>=5.3.0
+redis>=5.0.0
+boto3>=1.29.0
+slowapi
+alembic>=1.12.0
+prometheus-client
+sentence-transformers
+pytesseract
+Pillow

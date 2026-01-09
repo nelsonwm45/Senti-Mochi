@@ -3,7 +3,9 @@ import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 
-export default function GoogleCallback() {
+import { Suspense } from 'react';
+
+function GoogleCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -35,5 +37,13 @@ export default function GoogleCallback() {
         </div>
       </motion.div>
     </div>
+  );
+}
+
+export default function GoogleCallback() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <GoogleCallbackContent />
+    </Suspense>
   );
 }
