@@ -78,13 +78,8 @@ async def query(
         limit=request.maxResults
     )
     
-    if not chunks:
-        # Generous fallback if no docs or no matches
-        return QueryResponse(
-            response="I couldn't find any relevant information in your documents to answer that. Please ensure you've uploaded documents and they have been processed.",
-            citations=[],
-            sessionId=str(uuid4())
-        )
+    # Proceed even if chunks is empty to allow for general chat
+    # if not chunks: ... (removed strict check)
     
     # Build context
     context = rag_service.build_context(chunks)
@@ -117,7 +112,7 @@ async def query(
                 session_id=session_id,
                 role="assistant",
                 content=full_response,
-                citations={"chunks": [c["id"] for c in chunks]}
+                citations={"chunks": [str(c["id"]) for c in chunks]}
             )
             session.add(assistant_message)
             session.commit()
@@ -134,7 +129,7 @@ async def query(
             session_id=session_id,
             role="assistant",
             content=result["response"],
-            citations={"chunks": [c["id"] for c in chunks]},
+            citations={"chunks": [str(c["id"]) for c in chunks]},
             token_count=result.get("tokens_used")
         )
         session.add(assistant_message)

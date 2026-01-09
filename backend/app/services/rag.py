@@ -37,7 +37,7 @@ class RAGService:
         user_id: UUID,
         document_ids: Optional[List[UUID]] = None,
         limit: int = 5,
-        threshold: float = 0.7
+        threshold: float = 0.4
     ) -> List[Dict]:
         """
         Perform vector similarity search
@@ -48,6 +48,9 @@ class RAGService:
             # Build query with vector similarity
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
             
+            # Log the query for debugging
+            print(f"Vector search query: {embedding_str[:50]}... User: {user_id}")
+
             # Base query with security check - MUST filter by user_id
             query_sql = f"""
                 SELECT 
@@ -64,12 +67,13 @@ class RAGService:
                 JOIN documents d ON dc.document_id = d.id
                 WHERE d.user_id = '{str(user_id)}'
                   AND d.is_deleted = false
-                  AND 1 - (dc.embedding <=> '{embedding_str}'::vector) >= {threshold}
+                  -- AND 1 - (dc.embedding <=> '{embedding_str}'::vector) >= {0.4}
                 ORDER BY similarity DESC
                 LIMIT {limit}
             """
             
             results = session.execute(text(query_sql)).fetchall()
+            print(f"Found {len(results)} chunks. Scores: {[row[8] for row in results]}")
             
             # Format results
             chunks = []
@@ -111,7 +115,7 @@ class RAGService:
         self,
         query: str,
         context: str,
-        model: str = "llama-3.1-70b-versatile",  # Groq's fast model
+        model: str = "llama-3.3-70b-versatile",  # Groq's fast model
         temperature: float = 0.7
     ) -> Dict:
         """
@@ -124,12 +128,12 @@ class RAGService:
 Your role is to provide accurate, helpful financial advice based on the provided context.
 
 CRITICAL RULES:
-1. Only use information from the provided context to answer questions
-2. If the context doesn't contain relevant information, say so
-3. Always cite your sources using the format [Source N] when referencing information
-4. Be precise with numbers and financial data
-5. Handle personally identifiable information (PII) carefully
-6. If you're unsure, acknowledge the uncertainty
+1. Use the provided context to answer questions about the user's documents.
+2. If the user greets you (e.g., "hi", "hello") or asks general questions, answer politely without needing context.
+3. If the user asks a specific question about their documents and the context is empty or irrelevant, say you couldn't find that information.
+4. Always cite your sources using the format [Source N] when referencing information.
+5. Be precise with numbers and financial data.
+6. Handle personally identifiable information (PII) carefully.
 
 Context:
 {context}
@@ -167,7 +171,7 @@ Answer (remember to cite sources as [Source 1], [Source 2], etc.):"""
         self,
         query: str,
         context: str,
-        model: str = "llama-3.1-70b-versatile"
+        model: str = "llama-3.3-70b-versatile"
     ):
         """
         Generate streaming response (for real-time UI updates)
@@ -179,10 +183,12 @@ Answer (remember to cite sources as [Source 1], [Source 2], etc.):"""
 Your role is to provide accurate, helpful financial advice based on the provided context.
 
 CRITICAL RULES:
-1. Only use information from the provided context
-2. Always cite sources using [Source N] format
-3. Be precise with financial data
-4. Handle PII carefully
+1. Use the provided context to answer questions about the user's documents.
+2. If the user greets you or asks general questions, answer politely.
+3. If the user asks a specific question about their documents and the context is empty, say you couldn't find that information.
+4. Always cite sources using [Source N] format.
+5. Be precise with financial data.
+6. Handle PII carefully.
 
 Context:
 {context}
