@@ -34,22 +34,23 @@ export default function MessageBubble({
       return <p className="whitespace-pre-wrap">{content}</p>;
     }
 
-    // Replace [Source N] with clickable badges
-    const parts = content.split(/(\[Source \d+\])/g);
+    // Replace [Source N: ...] with clickable badges
+    const parts = content.split(/(\[Source \d+(?:[^\]]*)\])/g);
     
     return (
       <p className="whitespace-pre-wrap">
         {parts.map((part, index) => {
-          const match = part.match(/\[Source (\d+)\]/);
+          const match = part.match(/\[Source (\d+)(?:[^\]]*)\]/);
           if (match) {
             const citationNum = parseInt(match[1]);
             return (
               <button
                 key={index}
                 onClick={() => onCitationClick?.(citationNum)}
-                className="inline-flex items-center px-1.5 py-0.5 mx-0.5 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                className="inline-flex items-center px-2 py-0.5 mx-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-500/30 transition-colors border border-indigo-200 dark:border-indigo-500/30 font-mono"
+                title={part} // Show full citation on hover
               >
-                {match[1]}
+                Source {match[1]}
               </button>
             );
           }

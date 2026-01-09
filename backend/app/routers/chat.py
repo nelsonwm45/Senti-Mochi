@@ -25,6 +25,9 @@ class CitationInfo(BaseModel):
     pageNumber: Optional[int]
     chunkId: str
     similarity: float
+    text: str
+    startLine: Optional[int] = None
+    endLine: Optional[int] = None
 
 class QueryResponse(BaseModel):
     response: str
@@ -143,7 +146,10 @@ async def query(
                 filename=chunk["filename"],
                 pageNumber=chunk["page_number"],
                 chunkId=str(chunk["id"]),
-                similarity=chunk["similarity"]
+                similarity=chunk["similarity"],
+                text=chunk["content"],
+                startLine=chunk.get("start_line"),
+                endLine=chunk.get("end_line")
             ))
         
         return QueryResponse(

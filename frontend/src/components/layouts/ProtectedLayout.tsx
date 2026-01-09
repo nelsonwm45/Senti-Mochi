@@ -1,6 +1,9 @@
+'use client';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/navigation/Sidebar';
+import { getToken } from '@/lib/auth';
 
 export default function ProtectedLayout({
   children,
@@ -11,7 +14,7 @@ export default function ProtectedLayout({
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) {
       router.push('/login');
     } else {

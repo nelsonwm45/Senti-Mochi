@@ -1,26 +1,41 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Mail, Lock, User, UserPlus, ArrowRight } from 'lucide-react';
+import { Mail, Lock, UserPlus, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+
+import { setToken, getToken } from '@/lib/auth';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const router = useRouter();
+
+  useEffect(() => {
+    if (getToken()) {
+      router.push('/dashboard');
+    }
+  }, [router]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (password !== confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+
     try {
-      await axios.post('http://localhost:8000/auth/signup', {
-        email,
-        password,
-        full_name: fullName
-      });
-      router.push('/login');
+      const formData = new FormData();
+      formData.append('username', email);
+      formData.append('password', password);
+      
+      const res = await axios.post('http://localhost:8000/auth/register', formData);
+      setToken(res.data.access_token);
+      
+      router.push('/dashboard');
     } catch (err) {
       alert('Signup failed');
     }
@@ -68,23 +83,6 @@ export default function Signup() {
         }}></div>
 
         <form onSubmit={handleSignup}>
-          {/* Full Name Field */}
-          <div className="form-group">
-            <label className="label">Full Name</label>
-            <div style={{ position: 'relative' }}>
-              <User size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', zIndex: 1 }} />
-              <input
-                type="text"
-                className="input-field enhanced-input"
-                style={{ paddingLeft: '2.75rem' }}
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-                placeholder="John Doe"
-              />
-            </div>
-          </div>
-
           {/* Email Field */}
           <div className="form-group">
             <label className="label">Email</label>

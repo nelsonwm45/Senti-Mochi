@@ -14,8 +14,12 @@ const ACCEPTED_TYPES = {
   'image/jpeg': ['.jpg', '.jpeg']
 };
 
-export default function UploadZone() {
-  const uploadMutation = useUploadDocument();
+interface UploadZoneProps {
+  onUploadSuccess?: (documentId: string) => void;
+}
+
+export default function UploadZone({ onUploadSuccess }: UploadZoneProps) {
+  const uploadMutation = useUploadDocument(onUploadSuccess);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     acceptedFiles.forEach((file) => {

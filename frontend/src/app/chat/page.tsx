@@ -13,6 +13,7 @@ import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 export default function ChatPage() {
   const { messages, agentState, isLoading, currentCitations, sendMessage, clearMessages } = useChat();
   const [citationPanelOpen, setCitationPanelOpen] = useState(false);
+  const [activeCitationId, setActiveCitationId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -32,8 +33,8 @@ export default function ChatPage() {
   };
 
   const handleCitationClick = (citationNumber: number) => {
-    console.log('Citation clicked:', citationNumber);
-    // TODO: Implement document viewer navigation
+    setActiveCitationId(citationNumber);
+    setCitationPanelOpen(true);
   };
 
   return (
@@ -122,7 +123,6 @@ export default function ChatPage() {
                       citations={message.citations?.map(c => c.sourceNumber)}
                       onCitationClick={(num) => {
                         handleCitationClick(num);
-                        setCitationPanelOpen(true);
                       }}
                     />
                   ))}
@@ -136,10 +136,13 @@ export default function ChatPage() {
           <CitationPanel
             citations={currentCitations}
             isOpen={citationPanelOpen}
-            onClose={() => setCitationPanelOpen(false)}
+            onClose={() => {
+                setCitationPanelOpen(false);
+                setActiveCitationId(null);
+            }}
+            activeCitationId={activeCitationId}
             onCitationClick={(citation) => {
               console.log('Navigate to:', citation);
-              // TODO: Implement document viewer
             }}
           />
         </div>
