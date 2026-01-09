@@ -1,63 +1,88 @@
 # Mochi: AI-Powered Finance Platform
 
-Mochi is a modern, full-stack finance application that leverages AI to provide personalized financial advice. It features a secure authentication system (including Google Login), a responsive UI with rich animations, and a robust backend integrated with LLMs.
+Mochi is a modern, full-stack finance application that leverages AI to provide personalized financial advice and document analysis. It features a secure authentication system, a responsive UI with rich animations, and a robust backend integrated with advanced LLMs and RAG (Retrieval-Augmented Generation) capabilities.
 
-## 🛠 Tech Stack
+## 🛠 Tech Stack & Justifications
 
 ### Frontend
-*   **Next.js 16**: The React framework for the web (App Router).
-*   **React 19**: A JavaScript library for building user interfaces.
-*   **TypeScript**: Statically typed superset of JavaScript.
-*   **Framer Motion**: Production-ready animation library for React.
-*   **Lucide React**: Beautiful & consistent icons.
-*   **Axios**: Promise-based HTTP client for the browser.
-*   **CSS Modules / Vanilla CSS**: Custom styling for maximum flexibility and modern design (Glassmorphism).
+*   **Next.js 16 (App Router)**: Chosen for its server-side rendering capabilities, SEO benefits, and the modern App Router architecture which simplifies routing and layouts.
+*   **React 19**: The latest version of the library, enabling modern features like Server Actions and improved concurrent rendering.
+*   **TypeScript**: Ensures type safety across the codebase, reducing runtime errors and improving developer experience.
+*   **Tailwind CSS**: A utility-first CSS framework that speeds up development and ensures a consistent design system.
+*   **Framer Motion**: Provides production-ready, high-performance animations (used for page transitions and component interactions) to give the application a premium feel.
+*   **Lucide React**: A consistent and beautiful icon library.
+*   **Axios**: For robust HTTP requests with interceptor support (useful for handling auth tokens).
+*   **React Dropzone**: Simplified file drag-and-drop interactions.
 
 ### Backend
-*   **FastAPI**: Modern, fast (high-performance) web framework for building APIs with Python.
-*   **Python 3.10**: The core programming language.
-*   **SQLModel**: Library for interacting with SQL databases from Python code, combining SQLAlchemy and Pydantic.
-*   **LangChain**: Framework for developing applications powered by Language Models.
-*   **OpenAI API**: Integration for AI financial analysis (`gpt-3.5-turbo`).
-*   **OAuth2 & JWT**: Secure authentication flow using `python-jose` and `passlib[bcrypt]`.
-*   **HTTPX**: Fully featured HTTP client for Python (used for Google Auth).
+*   **FastAPI (Python 3.10)**: Selected for its high performance (asynchronous), automatic OpenAPI (Swagger) documentation generation, and ease of use with Python's rich AI/ML ecosystem.
+*   **SQLModel**: A modern ORM that combines SQLAlchemy and Pydantic, reducing boilerplate code and making database interactions type-safe.
+*   **Celery + Redis**: 
+    *   **Celery**: Asynchronous task queue. Crucial for offloading long-running tasks like OCR (Tesseract) and PDF text extraction so the API remains responsive.
+    *   **Redis**: High-performance message broker for Celery and caching layer.
+*   **MinIO (S3 Compatible)**: Object storage for user documents. chosen for its S3 compatibility (easy to migrate to AWS S3 later) and ease of local deployment via Docker.
+*   **Tesseract OCR / Pytesseract**: Optical Character Recognition engine to extract text from images (PNG, JPG), enabling the AI to "read" receipts and scanned documents.
+*   **Sentence Transformers (all-MiniLM-L6-v2)**: Local embedding model. Used to generate vector embeddings for RAG. It's fast, free, and runs locally without external API costs.
+*   **Groq API (Llama 3.3)**: High-performance inference engine for the LLM. Chosen for its incredible speed, making the chat experience feel real-time.
 
 ### Database
-*   **PostgreSQL 16**: The world's most advanced open source relational database.
-*   **pgvector**: Open-source vector similarity search for Postgres (used for storing AI embeddings).
-
-### DevOps & Infrastructure
-*   **Docker**: Containerization platform.
-*   **Docker Compose**: Tool for defining and running multi-container Docker applications.
-*   **Make**: Automation tool for running tasks.
+*   **PostgreSQL 16**: A robust, industrial-strength relational database.
+*   **pgvector**: Extension for vector similarity search. Allows us to store and query document embeddings directly within the database, simplifying the infrastructure (no need for a separate vector DB like Pinecone).
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-*   Docker & Docker Compose
-*   Google Cloud Console Project (for Google Login)
-*   OpenAI API Key
+*   [Docker](https://docs.docker.com/get-docker/) & Docker Compose
+*   [Make](https://www.gnu.org/software/make/) (optional, but recommended for running commands)
 
-### Setup
-1.  **Environment Variables**:
-    Create a `.env` file in the `backend` directory (`backend/.env`) with the following:
-    ```env
-    DATABASE_URL=postgresql://user:password@db:5432/finance_db
-    SECRET_KEY=your_secret_key
-    OPENAI_API_KEY=your_openai_key
-    GOOGLE_CLIENT_ID=your_google_client_id
-    GOOGLE_CLIENT_SECRET=your_google_client_secret
-    ```
+### Setup Instructions
 
-2.  **Run with Make**:
+1.  **Clone the Repository**
     ```bash
-    make build   # Build the containers
-    make up      # Start the application
+    git clone <repository-url>
+    cd Mochi
     ```
 
-3.  **Access**:
-    *   Frontend: `http://localhost:3000`
-    *   Backend Docs: `http://localhost:8000/docs`
+2.  **Environment Configuration**
+    Create a `.env` file in the `backend` directory based on the example.
+    ```bash
+    cp backend/.env.example backend/.env
+    ```
+    
+    **Critical: Update `backend/.env` with your real keys:**
+    *   `GROQ_API_KEY`: Get one from [console.groq.com](https://console.groq.com/).
+    *   `GOOGLE_CLIENT_ID` / `SECRET`: Required if you want Google Login to work.
+    *   `SECRET_KEY`: Generate a random string for security (e.g., `openssl rand -hex 32`).
 
-## 🔐 Credentials Safety
-The `.env` file containing secrets is located in `backend/.env` and is **only** accessible by the backend container. The frontend container does not have access to these sensitive credentials.
+3.  **Run the Application**
+    We use `Makefile` to simplify Docker commands.
+
+    **Build and Start:**
+    ```bash
+    make build
+    make up
+    ```
+    *(Or using Docker directly: `docker compose up --build -d`)*
+
+4.  **Access the Application**
+    *   **Frontend**: [http://localhost:3000](http://localhost:3000)
+    *   **Backend API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+    *   **MinIO Console**: [http://localhost:9001](http://localhost:9001) (User/Pass: `minioadmin`)
+
+## 📂 Project Structure
+```
+Mochi/
+├── backend/            # FastAPI Backend
+│   ├── app/
+│   │   ├── routers/    # API Endpoints
+│   │   ├── services/   # Business Logic (RAG, Ingestion)
+│   │   └── models.py   # Database Schemas
+│   └── Dockerfile
+├── frontend/           # Next.js Frontend
+│   ├── src/
+│   │   ├── app/        # App Router Pages
+│   │   └── components/ # Reusable UI Components
+│   └── Dockerfile
+├── docker-compose.yml  # Container Orchestration
+└── Makefile            # Shortcut Commands
+```
