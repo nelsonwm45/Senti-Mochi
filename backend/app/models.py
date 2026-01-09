@@ -39,7 +39,7 @@ class ClientProfile(SQLModel, table=True):
     risk_tolerance: Optional[str] = None
     assets_value: Optional[float] = None
     # Embedding for AI analysis (using pgvector)
-    embedding: Optional[list[float]] = Field(default=None, sa_column=Column(Vector(1536)))
+    embedding: Optional[list[float]] = Field(default=None, sa_column=Column(Vector(384)))
 
 # Document Model
 class Document(SQLModel, table=True):
@@ -68,7 +68,7 @@ class DocumentChunk(SQLModel, table=True):
     page_number: Optional[int] = None
     chunk_index: int
     token_count: int
-    embedding: list[float] = Field(sa_column=Column(Vector(1536)))  # OpenAI ada-002
+    embedding: list[float] = Field(sa_column=Column(Vector(384)))  # Local SentenceTransformer
     metadata_: dict = Field(default={}, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
