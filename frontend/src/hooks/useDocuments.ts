@@ -13,10 +13,11 @@ export function useDocuments(params?: {
 	return useQuery({
 		queryKey: ['documents', params],
 		queryFn: () => documentsApi.list(params),
-		refetchInterval: (data) => {
+		refetchInterval: (query) => {
+			const data = query.state.data;
 			// Auto-refresh if any documents are processing
-			const hasProcessing = data?.documents.some(
-				(doc) => doc.status === 'PENDING' || doc.status === 'PROCESSING'
+			const hasProcessing = data?.documents?.some(
+				(doc: Document) => doc.status === 'PENDING' || doc.status === 'PROCESSING'
 			);
 			return hasProcessing ? 3000 : false; // Poll every 3s if processing
 		},
