@@ -79,9 +79,11 @@ async def query(
     )
     
     if not chunks:
-        raise HTTPException(
-            status_code=404,
-            detail="No relevant information found in your documents"
+        # Generous fallback if no docs or no matches
+        return QueryResponse(
+            response="I couldn't find any relevant information in your documents to answer that. Please ensure you've uploaded documents and they have been processed.",
+            citations=[],
+            sessionId=str(uuid4())
         )
     
     # Build context
