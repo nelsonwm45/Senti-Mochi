@@ -8,7 +8,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white">
       {/* Navbar Overlay */}
       <nav className="absolute top-0 left-0 right-0 z-50">
-        <div className="container mx-auto px-6 py-6 flex justify-between items-center">
+        <div className="container mx-auto px-6 py-10 flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
               <span className="font-bold text-white text-lg">SF</span>

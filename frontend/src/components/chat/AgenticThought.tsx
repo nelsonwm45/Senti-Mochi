@@ -11,7 +11,16 @@ interface AgenticThoughtProps {
   message?: string;
 }
 
-const STATE_CONFIG = {
+interface StateConfigItem {
+  icon: any;
+  label: string;
+  color: string;
+  bgGradient: string;
+  message: string;
+  animate?: boolean;
+}
+
+const STATE_CONFIG: Record<AgentState, StateConfigItem> = {
   idle: {
     icon: Sparkles,
     label: 'Ready',

@@ -9,7 +9,16 @@ interface DocumentCardProps {
   document: Document;
 }
 
-const STATUS_CONFIG = {
+interface StatusConfigItem {
+  icon: any;
+  color: string;
+  bg: string;
+  border: string;
+  label: string;
+  spin?: boolean;
+}
+
+const STATUS_CONFIG: Record<string, StatusConfigItem> = {
   PENDING: {
     icon: Clock,
     color: 'text-yellow-500',
