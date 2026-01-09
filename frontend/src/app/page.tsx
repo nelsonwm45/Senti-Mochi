@@ -28,9 +28,9 @@ export default function LandingPage() {
       </div>
 
       {/* Hero Section */}
-      <div className="container mx-auto px-4 pt-32 pb-20 text-center">
-        <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
-          AI-Powered Financial Intelligence
+      <div className="container mx-auto px-4 pt-24 pb-12 text-center">
+        <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 leading-tight">
+          AI-Powered<br className="hidden md:block" /> Financial Intelligence
         </h1>
         <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-12">
           Securely analyze your financial documents with advanced RAG technology.
