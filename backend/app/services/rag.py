@@ -6,29 +6,30 @@ from sqlmodel import Session, select, col
 from sqlalchemy import func, text
 from app.models import DocumentChunk, Document, ChatMessage
 from app.database import engine
+from sentence_transformers import SentenceTransformer
 
 class RAGService:
     """Service for Retrieval-Augmented Generation using Groq (OpenAI-compatible)"""
     
     def __init__(self):
-        # Configure for Groq
+        # Configure for Groq (for chat completions)
         self.client = openai.OpenAI(
             api_key=os.getenv("GROQ_API_KEY"),
             base_url="https://api.groq.com/openai/v1"
         )
+        
+        # Load embedding model (same as ingestion)
+        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
     
     def embed_query(self, query: str) -> List[float]:
         """
-        Generate embedding for user query
+        Generate embedding for user query using Sentence Transformers
         
-        Note: Groq doesn't support embeddings yet, using fallback
+        Uses the same model as document ingestion (all-MiniLM-L6-v2)
+        to ensure embedding compatibility
         """
-        # Fallback embedding (should match ingestion)
-        import hashlib
-        text_hash = hashlib.md5(query.encode()).hexdigest()
-        fake_embedding = [float(int(text_hash[i:i+2], 16)) / 255.0 for i in range(0, 32, 1)]
-        fake_embedding = fake_embedding * 48
-        return fake_embedding[:1536]
+        embedding = self.embedding_model.encode(query, show_progress_bar=False)
+        return embedding.tolist()
     
     def vector_search(
         self,
