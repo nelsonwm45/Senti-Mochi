@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
 from sqlmodel import Session, select, func
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.database import get_session
 from app.models import Document, User, DocumentStatus, AuditLog

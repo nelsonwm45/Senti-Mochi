@@ -11,7 +11,7 @@ from app.services.storage import S3StorageService
 from app.models import Document, DocumentChunk, DocumentStatus
 from app.database import engine
 from sqlmodel import Session, select
-from datetime import datetime
+from datetime import datetime, timezone
 
 class IngestionService:
     """Service for processing and ingesting documents for RAG"""
@@ -164,11 +164,11 @@ class IngestionService:
                         "content": chunk_text,
                         "page_number": page_number,
                         "chunk_index": chunk_index,
-                        "token_count": len(chunk_words),
+                        "token_count": len(chunk_data),
                         "start_line": start_line,
                         "end_line": end_line,
                         "metadata": {
-                            "word_count": len(chunk_words),
+                            "word_count": len(chunk_data),
                             "start_word_index": i
                         }
                     })
@@ -246,7 +246,7 @@ class IngestionService:
             try:
                 # Update status
                 document.status = DocumentStatus.PROCESSING
-                document.processing_started = datetime.utcnow()
+                document.processing_started = datetime.now(timezone.utc)
                 session.add(document)
                 session.commit()
                 
@@ -267,7 +267,7 @@ class IngestionService:
                 
                 # Update document status
                 document.status = DocumentStatus.PROCESSED
-                document.processing_completed = datetime.utcnow()
+                document.processing_completed = datetime.now(timezone.utc)
                 session.add(document)
                 session.commit()
                 
