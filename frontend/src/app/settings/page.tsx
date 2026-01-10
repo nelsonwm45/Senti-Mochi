@@ -53,10 +53,10 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-3 gap-4">
                   <button
                     onClick={() => setTheme('light')}
-                    className={`flex items-center justify-center p-4 rounded-lg border-2 transition-all ${
+                    className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${
                       theme === 'light'
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400'
                     }`}
                   >
                     <Sun className="w-6 h-6 mb-2" />
@@ -64,10 +64,10 @@ export default function SettingsPage() {
                   </button>
                   <button
                     onClick={() => setTheme('dark')}
-                    className={`flex items-center justify-center p-4 rounded-lg border-2 transition-all ${
+                    className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${
                       theme === 'dark'
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400'
                     }`}
                   >
                     <Moon className="w-6 h-6 mb-2" />
@@ -75,10 +75,10 @@ export default function SettingsPage() {
                   </button>
                   <button
                     onClick={() => setTheme('system')}
-                    className={`flex items-center justify-center p-4 rounded-lg border-2 transition-all ${
+                    className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${
                       theme === 'system'
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400'
                     }`}
                   >
                     <Monitor className="w-6 h-6 mb-2" />

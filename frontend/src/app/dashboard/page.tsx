@@ -4,7 +4,11 @@ import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 import { useDocuments } from '@/hooks/useDocuments';
 import { FileText, MessageCircle, Database, TrendingUp, Clock, Upload, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, subDays, isSameDay, format } from 'date-fns';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend
+} from 'recharts';
 
 function DashboardContent() {
   const { data: documentsData, isLoading } = useDocuments();
@@ -14,7 +18,27 @@ function DashboardContent() {
   const totalDocuments = documents.length;
   const processedDocs = documents.filter((d) => d.status === 'PROCESSED').length;
   const processingDocs = documents.filter((d) => d.status === 'PROCESSING').length;
+  const failedDocs = documents.filter((d) => d.status === 'FAILED').length;
   const totalStorage = documents.reduce((acc, d) => acc + d.fileSize, 0);
+
+  // Activity Data (Last 7 days)
+  const activityData = Array.from({ length: 7 }).map((_, i) => {
+    const date = subDays(new Date(), 6 - i);
+    const count = documents.filter(d => 
+      isSameDay(new Date(d.uploadDate), date)
+    ).length;
+    return {
+      name: format(date, 'MMM dd'),
+      uploads: count,
+    };
+  });
+
+  // Status Distribution
+  const statusData = [
+    { name: 'Processed', value: processedDocs, color: '#10b981' },
+    { name: 'Processing', value: processingDocs, color: '#3b82f6' },
+    { name: 'Failed', value: failedDocs, color: '#ef4444' },
+  ].filter(d => d.value > 0);
 
   const formatBytes = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -106,6 +130,82 @@ function DashboardContent() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Analytics Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* Upload Activity */}
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Upload Activity</h3>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={activityData}>
+                  <defs>
+                    <linearGradient id="colorUploads" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.1} />
+                  <XAxis 
+                      dataKey="name" 
+                      stroke="#9CA3AF" 
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                  />
+                  <YAxis 
+                      stroke="#9CA3AF" 
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                  />
+                  <Tooltip 
+                      contentStyle={{ backgroundColor: '#1F2937', borderColor: '#374151', color: '#F3F4F6' }}
+                      itemStyle={{ color: '#F3F4F6' }}
+                      cursor={{ fill: 'transparent' }}
+                  />
+                  <Area type="monotone" dataKey="uploads" stroke="#3b82f6" fillOpacity={1} fill="url(#colorUploads)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Status Distribution */}
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Document Status</h3>
+            <div className="h-64 w-full">
+              {statusData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                      <Pie
+                      data={statusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                      >
+                      {statusData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                      </Pie>
+                      <Tooltip 
+                          contentStyle={{ backgroundColor: '#1F2937', borderColor: '#374151', color: '#F3F4F6' }}
+                          itemStyle={{ color: '#F3F4F6' }}
+                      />
+                      <Legend />
+                  </PieChart>
+                  </ResponsiveContainer>
+              ) : (
+                  <div className="h-full flex items-center justify-center text-gray-500">
+                      No data available
+                  </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Quick Actions */}
