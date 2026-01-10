@@ -3,12 +3,13 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Mail, Lock, UserPlus, ArrowRight } from 'lucide-react';
+import { Mail, Lock, UserPlus, ArrowRight, User } from 'lucide-react';
 import Link from 'next/link';
 
 import { setToken, getToken } from '@/lib/auth';
 
 export default function Signup() {
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -28,11 +29,11 @@ export default function Signup() {
     }
 
     try {
-      const formData = new FormData();
-      formData.append('username', email);
-      formData.append('password', password);
-      
-      const res = await axios.post('http://localhost:8000/auth/register', formData);
+      const res = await axios.post('http://localhost:8000/auth/signup', {
+        email: email,
+        password: password,
+        full_name: fullName
+      });
       setToken(res.data.access_token);
       
       router.push('/dashboard');
@@ -83,6 +84,23 @@ export default function Signup() {
         }}></div>
 
         <form onSubmit={handleSignup}>
+          {/* Full Name Field */}
+          <div className="form-group">
+            <label className="label">Full Name</label>
+            <div style={{ position: 'relative' }}>
+              <User size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', zIndex: 1 }} />
+              <input
+                type="text"
+                className="input-field enhanced-input"
+                style={{ paddingLeft: '2.75rem' }}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+                placeholder="John Doe"
+              />
+            </div>
+          </div>
+
           {/* Email Field */}
           <div className="form-group">
             <label className="label">Email</label>
@@ -111,6 +129,23 @@ export default function Signup() {
                 style={{ paddingLeft: '2.75rem' }}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+              />
+            </div>
+          </div>
+
+          {/* Confirm Password Field */}
+          <div className="form-group">
+            <label className="label">Confirm Password</label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', zIndex: 1 }} />
+              <input
+                type="password"
+                className="input-field enhanced-input"
+                style={{ paddingLeft: '2.75rem' }}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 placeholder="••••••••"
               />

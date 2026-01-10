@@ -25,6 +25,7 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True, index=True)
     hashed_password: str
     full_name: Optional[str] = None
+    avatar_url: Optional[str] = None
     role: UserRole = Field(default=UserRole.USER)
     tenant_id: Optional[UUID] = Field(default=None, index=True)
     is_active: bool = Field(default=True)

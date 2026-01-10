@@ -17,7 +17,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
-@router.post("/signup", response_model=User)
+@router.post("/signup", response_model=Token)
 def signup(user: UserCreate, session: Session = Depends(get_session)):
     db_user = session.exec(select(User).where(User.email == user.email)).first()
     if db_user:
@@ -28,7 +28,10 @@ def signup(user: UserCreate, session: Session = Depends(get_session)):
     session.add(new_user)
     session.commit()
     session.refresh(new_user)
-    return new_user
+    
+    # Create and return access token
+    access_token = create_access_token(data={"sub": new_user.email})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/token", response_model=Token)
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
