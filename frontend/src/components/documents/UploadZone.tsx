@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileText, AlertCircle } from 'lucide-react';
+import { Upload, FileText, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { useUploadDocument } from '@/hooks/useDocuments';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -18,20 +18,47 @@ interface UploadZoneProps {
   onUploadSuccess?: (documentId: string) => void;
 }
 
+interface UploadingFile {
+  name: string;
+  status: 'uploading' | 'success' | 'error';
+  error?: string;
+}
+
 export default function UploadZone({ onUploadSuccess }: UploadZoneProps) {
+  const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const uploadMutation = useUploadDocument(onUploadSuccess);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    acceptedFiles.forEach((file) => {
-      uploadMutation.mutate(file);
-    });
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    // Initialize all files as uploading
+    setUploadingFiles(acceptedFiles.map(f => ({ name: f.name, status: 'uploading' })));
+
+    // Upload files sequentially to avoid overwhelming the server
+    for (let i = 0; i < acceptedFiles.length; i++) {
+      const file = acceptedFiles[i];
+      try {
+        await uploadMutation.mutateAsync(file);
+        setUploadingFiles(prev =>
+          prev.map((f, idx) => idx === i ? { ...f, status: 'success' } : f)
+        );
+      } catch (error: any) {
+        setUploadingFiles(prev =>
+          prev.map((f, idx) => idx === i ? { ...f, status: 'error', error: error?.message || 'Upload failed' } : f)
+        );
+      }
+    }
+
+    // Clear the upload status after 3 seconds
+    setTimeout(() => setUploadingFiles([]), 3000);
   }, [uploadMutation]);
+
+  const isUploading = uploadingFiles.some(f => f.status === 'uploading');
 
   const { getRootProps, getInputProps, isDragActive, fileRejections } = useDropzone({
     onDrop,
     accept: ACCEPTED_TYPES,
     maxSize: MAX_FILE_SIZE,
     multiple: true,
+    disabled: isUploading,
   });
 
   return (
@@ -73,16 +100,44 @@ export default function UploadZone({ onUploadSuccess }: UploadZoneProps) {
             </p>
           </div>
 
-          {uploadMutation.isPending && (
-            <div className="w-full max-w-md">
-              <div className="bg-blue-100 dark:bg-blue-900/30 rounded-lg p-4">
-                <div className="flex items-center space-x-3">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-                  <span className="text-sm text-blue-700 dark:text-blue-300">
-                    Uploading...
-                  </span>
+          {uploadingFiles.length > 0 && (
+            <div className="w-full max-w-md space-y-2">
+              {uploadingFiles.map((file, idx) => (
+                <div
+                  key={idx}
+                  className={`rounded-lg p-3 ${
+                    file.status === 'uploading'
+                      ? 'bg-blue-100 dark:bg-blue-900/30'
+                      : file.status === 'success'
+                      ? 'bg-green-100 dark:bg-green-900/30'
+                      : 'bg-red-100 dark:bg-red-900/30'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    {file.status === 'uploading' && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                    )}
+                    {file.status === 'success' && (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    )}
+                    {file.status === 'error' && (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                    <span className={`text-sm truncate ${
+                      file.status === 'uploading'
+                        ? 'text-blue-700 dark:text-blue-300'
+                        : file.status === 'success'
+                        ? 'text-green-700 dark:text-green-300'
+                        : 'text-red-700 dark:text-red-300'
+                    }`}>
+                      {file.name}
+                      {file.status === 'uploading' && ' - Uploading...'}
+                      {file.status === 'success' && ' - Done'}
+                      {file.status === 'error' && ` - ${file.error}`}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
           )}
         </div>
