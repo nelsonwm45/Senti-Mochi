@@ -3,7 +3,7 @@ from sqlmodel import Field, SQLModel
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column, Text, JSON
 from uuid import UUID, uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 # Enums
@@ -29,8 +29,8 @@ class User(SQLModel, table=True):
     role: UserRole = Field(default=UserRole.USER)
     tenant_id: Optional[UUID] = Field(default=None, index=True)
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ClientProfile(SQLModel, table=True):
     __tablename__ = "client_profiles"
@@ -55,7 +55,7 @@ class Document(SQLModel, table=True):
     metadata_: dict = Field(default={}, sa_column=Column(JSON))
     version: int = Field(default=1)
     is_deleted: bool = Field(default=False)
-    upload_date: datetime = Field(default_factory=datetime.utcnow)
+    upload_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     processing_started: Optional[datetime] = None
     processing_completed: Optional[datetime] = None
     error_message: Optional[str] = None
@@ -73,7 +73,7 @@ class DocumentChunk(SQLModel, table=True):
     end_line: Optional[int] = None
     embedding: list[float] = Field(sa_column=Column(Vector(384)))  # Local SentenceTransformer
     metadata_: dict = Field(default={}, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # AuditLog Model
 class AuditLog(SQLModel, table=True):
@@ -85,7 +85,7 @@ class AuditLog(SQLModel, table=True):
     resource_id: Optional[UUID] = None
     ip_address: Optional[str] = None
     metadata_: dict = Field(default={}, sa_column=Column(JSON))
-    timestamp: datetime = Field(default_factory=datetime.utcnow, index=True)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)
 
 # ChatMessage Model
 class ChatMessage(SQLModel, table=True):
@@ -97,4 +97,4 @@ class ChatMessage(SQLModel, table=True):
     content: str = Field(sa_column=Column(Text))
     citations: dict = Field(default={}, sa_column=Column(JSON))
     token_count: Optional[int] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

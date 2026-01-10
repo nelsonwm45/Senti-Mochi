@@ -7,7 +7,8 @@ from app.ai_service import get_financial_advice
 from pydantic import BaseModel
 import boto3
 import os
-from datetime import datetime
+from datetime import datetime, timezone
+from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -44,7 +45,7 @@ def read_users_me(current_user: User = Depends(get_current_user)):
 def update_user(user_data: UserUpdate, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     """Update user's display name"""
     current_user.full_name = user_data.full_name
-    current_user.updated_at = datetime.utcnow()
+    current_user.updated_at = datetime.now(timezone.utc)
     session.add(current_user)
     session.commit()
     session.refresh(current_user)
@@ -67,7 +68,7 @@ async def upload_avatar(
         raise HTTPException(status_code=400, detail="File size must be less than 5MB")
     
     # Generate unique filename
-    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
     file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
     s3_key = f"{current_user.id}/{timestamp}.{file_extension}"
     
@@ -86,14 +87,16 @@ async def upload_avatar(
             ContentType=file.content_type
         )
         
-        # Generate public URL for Minio
-        # Get the external endpoint (accessible from frontend)
-        external_endpoint = os.getenv('S3_PUBLIC_ENDPOINT', 'http://localhost:9000')
-        avatar_url = f"{external_endpoint}/{BUCKET_NAME}/{s3_key}"
+        # Use proxy URL
+        # Assuming the backend is accessible at the same host, we return a relative URL or absolute if needed.
+        # Here we construct a path that points to the new get_avatar endpoint.
+        # We need an absolute URL because the frontend is on a different port (3000 vs 8000)
+        base_url = os.getenv('API_BASE_URL', 'http://localhost:8000')
+        avatar_url = f"{base_url}/users/avatars/{current_user.id}/{timestamp}.{file_extension}"
         
         # Update user record
         current_user.avatar_url = avatar_url
-        current_user.updated_at = datetime.utcnow()
+        current_user.updated_at = datetime.now(timezone.utc)
         session.add(current_user)
         session.commit()
         session.refresh(current_user)
@@ -132,3 +135,17 @@ def get_ai_advice(current_user: User = Depends(get_current_user), session: Sessi
     summary = f"Goals: {profile.financial_goals}, Risk: {profile.risk_tolerance}, Assets: ${profile.assets_value}"
     advice = get_financial_advice(summary)
     return {"advice": advice}
+
+
+@router.get("/avatars/{user_id}/{filename}")
+async def get_avatar(user_id: str, filename: str):
+    """Proxy avatar images from S3"""
+    try:
+        s3_key = f"{user_id}/{filename}"
+        response = s3_client.get_object(Bucket=BUCKET_NAME, Key=s3_key)
+        return StreamingResponse(
+            response['Body'].iter_chunks(),
+            media_type=response.get('ContentType', 'image/jpeg')
+        )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail="Avatar not found")
