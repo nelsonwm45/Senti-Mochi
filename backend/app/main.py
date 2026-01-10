@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.database import create_db_and_tables
-from app.routers import auth, users, google_auth, documents, chat, health
+from app.middleware.tenant_isolation import TenantMiddleware
+from app.routers import auth, users, google_auth, documents, chat, health, webhooks
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
@@ -8,6 +9,8 @@ app = FastAPI(
     description="Secure finance API with document ingestion and RAG-powered chat",
     version="1.0.0"
 )
+
+# ... (app init)
 
 origins = [
     "http://localhost:3000",
@@ -22,6 +25,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add Tenant Isolation Middleware
+app.add_middleware(TenantMiddleware)
+
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
@@ -33,6 +39,8 @@ app.include_router(google_auth.router)
 app.include_router(documents.router)  # New: Document management
 app.include_router(chat.router)       # New: RAG chat
 app.include_router(health.router)     # New: Health checks
+app.include_router(webhooks.router, prefix="/webhooks", tags=["Webhooks"]) # New: Feature 3.4
+
 
 @app.get("/")
 def read_root():
