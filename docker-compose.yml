@@ -35,7 +35,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://user:password@db:5432/finance_db
       - S3_PUBLIC_ENDPOINT=http://localhost:9000
-      - TZ=Asia/Shanghai
+      - TZ=Asia/Kuala_Lumpur
     depends_on:
       - db
       - redis
@@ -57,7 +57,7 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=finance_db
-      - TZ=Asia/Shanghai
+      - TZ=Asia/Kuala_Lumpur
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -73,7 +73,7 @@ services:
     ports:
       - "6379:6379"
     environment:
-      - TZ=Asia/Shanghai
+      - TZ=Asia/Kuala_Lumpur
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -90,7 +90,7 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
-      TZ: Asia/Shanghai
+      TZ: Asia/Kuala_Lumpur
     volumes:
       - minio_data:/data
     healthcheck:
@@ -119,7 +119,7 @@ services:
       - S3_ENDPOINT=http://minio:9000
       - S3_ACCESS_KEY=minioadmin
       - S3_SECRET_KEY=minioadmin
-      - TZ=Asia/Shanghai
+      - TZ=Asia/Kuala_Lumpur
 
 volumes:
   postgres_data:
