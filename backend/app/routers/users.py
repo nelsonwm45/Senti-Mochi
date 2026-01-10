@@ -1,12 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlmodel import Session, select
 from app.database import get_session
 from app.models import User, ClientProfile
 from app.auth import get_current_user
 from app.ai_service import get_financial_advice
 from pydantic import BaseModel
+import boto3
+import os
+from datetime import datetime
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+# Initialize S3 client (using Minio for local development)
+s3_endpoint = os.getenv('S3_ENDPOINT', 'http://minio:9000')
+s3_access_key = os.getenv('S3_ACCESS_KEY', 'minioadmin')
+s3_secret_key = os.getenv('S3_SECRET_KEY', 'minioadmin')
+
+s3_client = boto3.client(
+    's3',
+    endpoint_url=s3_endpoint,
+    aws_access_key_id=s3_access_key,
+    aws_secret_access_key=s3_secret_key,
+    region_name='us-east-1'
+)
+BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'avatars')
+
+class UserUpdate(BaseModel):
+    full_name: str
 
 class ProfileUpdate(BaseModel):
     financial_goals: str
@@ -19,6 +39,69 @@ class AdviceResponse(BaseModel):
 @router.get("/me", response_model=User)
 def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+@router.patch("/me", response_model=User)
+def update_user(user_data: UserUpdate, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    """Update user's display name"""
+    current_user.full_name = user_data.full_name
+    current_user.updated_at = datetime.utcnow()
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+    return current_user
+
+@router.post("/me/avatar", response_model=User)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """Upload and update user's avatar"""
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    # Validate file size (max 5MB)
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size must be less than 5MB")
+    
+    # Generate unique filename
+    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+    s3_key = f"{current_user.id}/{timestamp}.{file_extension}"
+    
+    try:
+        # Create bucket if it doesn't exist
+        try:
+            s3_client.head_bucket(Bucket=BUCKET_NAME)
+        except:
+            s3_client.create_bucket(Bucket=BUCKET_NAME)
+        
+        # Upload to S3/Minio
+        s3_client.put_object(
+            Bucket=BUCKET_NAME,
+            Key=s3_key,
+            Body=contents,
+            ContentType=file.content_type
+        )
+        
+        # Generate public URL for Minio
+        # Get the external endpoint (accessible from frontend)
+        external_endpoint = os.getenv('S3_PUBLIC_ENDPOINT', 'http://localhost:9000')
+        avatar_url = f"{external_endpoint}/{BUCKET_NAME}/{s3_key}"
+        
+        # Update user record
+        current_user.avatar_url = avatar_url
+        current_user.updated_at = datetime.utcnow()
+        session.add(current_user)
+        session.commit()
+        session.refresh(current_user)
+        
+        return current_user
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload avatar: {str(e)}")
+
 
 @router.get("/profile", response_model=ClientProfile | None)
 def get_profile(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
