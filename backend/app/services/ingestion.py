@@ -229,7 +229,7 @@ class IngestionService:
     def process_document(self, document_id: UUID):
         """
         Main processing pipeline for a document
-        
+
         Steps:
         1. Download from S3
         2. Extract text
@@ -242,39 +242,55 @@ class IngestionService:
             document = session.get(Document, document_id)
             if not document:
                 raise ValueError(f"Document {document_id} not found")
-            
+
+            # Store s3_key and content_type before any commits
+            s3_key = document.s3_key
+            content_type = document.content_type
+
             try:
                 # Update status
                 document.status = DocumentStatus.PROCESSING
                 document.processing_started = datetime.now(timezone.utc)
                 session.add(document)
                 session.commit()
-                
+
                 # Download file
-                file_bytes = self.storage.download_file(document.s3_key)
-                
+                file_bytes = self.storage.download_file(s3_key)
+
                 # Extract text
-                pages = self.extract_text(file_bytes, document.content_type)
-                
+                pages = self.extract_text(file_bytes, content_type)
+
+                # Check for empty document
+                if not pages or all(not p.get("content", "").strip() for p in pages):
+                    raise ValueError("No text could be extracted from the document. The file may be empty, corrupted, or contain only images without OCR-readable text.")
+
                 # Chunk text
                 chunks = self.chunk_text(pages)
-                
+
+                # Check for empty chunks
+                if not chunks:
+                    raise ValueError("Document text could not be chunked. The extracted content may be too short or contain only whitespace.")
+
                 # Generate embeddings
                 chunks_with_embeddings = self.generate_embeddings(chunks)
-                
+
                 # Save chunks
                 self.save_chunks(document_id, chunks_with_embeddings)
-                
-                # Update document status
-                document.status = DocumentStatus.PROCESSED
-                document.processing_completed = datetime.now(timezone.utc)
-                session.add(document)
-                session.commit()
-                
+
+                # Re-fetch document to avoid detachment issues
+                document = session.get(Document, document_id)
+                if document:
+                    document.status = DocumentStatus.PROCESSED
+                    document.processing_completed = datetime.now(timezone.utc)
+                    session.add(document)
+                    session.commit()
+
             except Exception as e:
-                # Update status to failed
-                document.status = DocumentStatus.FAILED
-                document.error_message = str(e)
-                session.add(document)
-                session.commit()
+                # Re-fetch document to avoid detachment issues
+                document = session.get(Document, document_id)
+                if document:
+                    document.status = DocumentStatus.FAILED
+                    document.error_message = str(e)[:500]  # Limit error message length
+                    session.add(document)
+                    session.commit()
                 raise

@@ -133,7 +133,14 @@ async def list_documents(
     )
     
     if status:
-        query = query.where(Document.status == status)
+        try:
+            status_enum = DocumentStatus(status)
+            query = query.where(Document.status == status_enum)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status: {status}. Must be one of: PENDING, PROCESSING, PROCESSED, FAILED"
+            )
     
     # Get total count
     total_query = select(func.count()).select_from(Document).where(

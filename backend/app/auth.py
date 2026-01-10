@@ -11,9 +11,7 @@ import os
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
-    # Fallback or raise error, strictly requested to hide credentials.
-    # Leaving strict error to ensure they are loaded from env.
-    pass 
+    raise ValueError("SECRET_KEY environment variable is required")
 
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440))

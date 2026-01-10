@@ -18,6 +18,17 @@ class DocumentStatus(str, Enum):
     PROCESSED = "PROCESSED"
     FAILED = "FAILED"
 
+# Tenant Model
+class Tenant(SQLModel, table=True):
+    __tablename__ = "tenants"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str
+    storage_quota_gb: int = Field(default=10)
+    monthly_token_limit: int = Field(default=100000)
+    is_active: bool = Field(default=True)
+    settings: dict = Field(default={}, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 # User Model (Enhanced)
 class User(SQLModel, table=True):
     __tablename__ = "users"
@@ -97,4 +108,15 @@ class ChatMessage(SQLModel, table=True):
     content: str = Field(sa_column=Column(Text))
     citations: dict = Field(default={}, sa_column=Column(JSON))
     token_count: Optional[int] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# Workflow Model
+class Workflow(SQLModel, table=True):
+    __tablename__ = "workflows"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    name: str
+    trigger: dict = Field(default={}, sa_column=Column(JSON)) # {"type": "DOCUMENT_UPLOADED", "filters": {...}}
+    actions: list[dict] = Field(default=[], sa_column=Column(JSON)) # [{"type": "EXTRACT_TOTAL"}, {"type": "WEBHOOK"}]
+    is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
