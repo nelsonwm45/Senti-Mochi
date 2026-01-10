@@ -1,4 +1,4 @@
-.PHONY: up down build logs clean restart prune
+.PHONY: up down stop dev build logs clean restart prune
 
 # Run the application in detached mode
 up:
@@ -7,6 +7,10 @@ up:
 # Stop the application
 down:
 	docker compose down
+
+# Stop the services only (without removing containers)
+stop:
+	docker compose stop
 
 # Build the images
 build: prune
@@ -26,3 +30,7 @@ clean:
 
 # Restart the application
 restart: down up
+
+# Run in development mode with file watching
+dev: build
+	docker compose watch
