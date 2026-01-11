@@ -21,7 +21,8 @@ Mochi is a modern, full-stack finance application that leverages AI to provide p
     *   **Celery**: Asynchronous task queue. Crucial for offloading long-running tasks like OCR (Tesseract) and PDF text extraction so the API remains responsive.
     *   **Redis**: High-performance message broker for Celery and caching layer.
 *   **MinIO (S3 Compatible)**: Object storage for user documents. chosen for its S3 compatibility (easy to migrate to AWS S3 later) and ease of local deployment via Docker.
-*   **Tesseract OCR / Pytesseract**: Optical Character Recognition engine to extract text from images (PNG, JPG), enabling the AI to "read" receipts and scanned documents.
+*   **PyMuPDF (fitz)**: Advanced PDF processing library that extracts both embedded text and images from PDF documents, enabling comprehensive document analysis.
+*   **Tesseract OCR / Pytesseract**: Optical Character Recognition engine to extract text from images (PNG, JPG) and images embedded within PDFs, enabling the AI to "read" receipts, scanned documents, and image-based PDFs.
 *   **Sentence Transformers (all-MiniLM-L6-v2)**: Local embedding model. Used to generate vector embeddings for RAG. It's fast, free, and runs locally without external API costs.
 *   **Groq API (Llama 3.3)**: High-performance inference engine for the LLM. Chosen for its incredible speed, making the chat experience feel real-time.
 

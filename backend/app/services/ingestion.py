@@ -7,6 +7,7 @@ import openai
 import os
 import pytesseract
 from PIL import Image
+import fitz  # PyMuPDF for extracting images from PDFs
 from app.services.storage import S3StorageService
 from app.models import Document, DocumentChunk, DocumentStatus
 from app.database import engine
@@ -28,25 +29,67 @@ class IngestionService:
     
     def extract_text_from_pdf(self, file_bytes: bytes) -> List[Dict]:
         """
-        Extract text from PDF file
-        
+        Extract text from PDF file, including OCR for images
+
+        Uses PyMuPDF (fitz) to extract both embedded text and images.
+        Images are processed with Tesseract OCR to extract text.
+
         Returns:
             List of dicts with 'page_number' and 'content'
         """
         try:
-            pdf_file = io.BytesIO(file_bytes)
-            reader = PdfReader(pdf_file)
-            
+            # Open PDF with PyMuPDF
+            pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
+
             pages = []
-            for page_num, page in enumerate(reader.pages, start=1):
-                text = page.extract_text()
-                if text.strip():
+            for page_num in range(len(pdf_document)):
+                page = pdf_document[page_num]
+                page_texts = []
+
+                # Extract regular text from page
+                regular_text = page.get_text("text")
+                if regular_text.strip():
+                    page_texts.append(regular_text)
+
+                # Extract images and perform OCR
+                image_list = page.get_images(full=True)
+                for img_index, img_info in enumerate(image_list):
+                    try:
+                        # Get the image xref
+                        xref = img_info[0]
+
+                        # Extract image bytes
+                        base_image = pdf_document.extract_image(xref)
+                        image_bytes = base_image["image"]
+
+                        # Open image with PIL
+                        image = Image.open(io.BytesIO(image_bytes))
+
+                        # Convert to RGB if necessary (handles CMYK, etc.)
+                        if image.mode not in ('L', 'RGB'):
+                            image = image.convert('RGB')
+
+                        # Perform OCR on the image
+                        ocr_text = pytesseract.image_to_string(image)
+
+                        if ocr_text.strip():
+                            page_texts.append(f"\n[Image {img_index + 1} OCR Text]\n{ocr_text}")
+
+                    except Exception as img_error:
+                        # Log but continue if individual image fails
+                        continue
+
+                # Combine all text from the page
+                combined_text = "\n".join(page_texts)
+                if combined_text.strip():
                     pages.append({
-                        "page_number": page_num,
-                        "content": text.replace("\x00", "")
+                        "page_number": page_num + 1,
+                        "content": combined_text.replace("\x00", "")
                     })
-            
+
+            pdf_document.close()
             return pages
+
         except Exception as e:
             # If PDF reading fails, might be empty or corrupted
             raise ValueError(f"Failed to extract text from PDF: {str(e)}")
