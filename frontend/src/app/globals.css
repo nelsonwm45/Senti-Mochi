@@ -1,35 +1,28 @@
+/* Import Glassmorphism Design System - must be before @tailwind */
+@import '../styles/glassmorphism.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-:root {
-  --background: #0f172a;
-  --foreground: #f8fafc;
-  --primary: #8b5cf6;
-  --primary-hover: #7c3aed;
-  --secondary: #64748b;
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  color-scheme: light dark;
+}
+
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: 'Inter', sans-serif;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   margin: 0;
   padding: 0;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(circle at 15% 50%, rgba(139, 92, 246, 0.15), transparent 25%),
-    radial-gradient(circle at 85% 30%, rgba(6, 182, 212, 0.15), transparent 25%);
-  background-color: #0f172a;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 @keyframes float {
@@ -67,10 +60,14 @@ body {
   align-items: center;
 }
 
+.bg-gradient-brand {
+  background-image: linear-gradient(to right, #34d399, #059669);
+}
+
 .nav-brand {
   font-size: 1.5rem;
   font-weight: 700;
-  background: linear-gradient(to right, #c084fc, #8b5cf6);
+  background: linear-gradient(to right, #34d399, #059669);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -237,11 +234,9 @@ a:hover {
 /* Enhanced Login Card Styles */
 .login-card {
   position: relative;
-  background: linear-gradient(
-    135deg,
-    rgba(30, 41, 59, 0.9) 0%,
-    rgba(30, 41, 59, 0.7) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(30, 41, 59, 0.9) 0%,
+      rgba(30, 41, 59, 0.7) 100%);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(139, 92, 246, 0.2);
@@ -252,12 +247,10 @@ a:hover {
 }
 
 .login-card::before {
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(139, 92, 246, 0.4),
-    transparent
-  );
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(139, 92, 246, 0.4),
+      transparent);
 }
 
 .login-card::after {
@@ -266,12 +259,10 @@ a:hover {
   inset: 0;
   border-radius: 1.5rem;
   padding: 1px;
-  background: linear-gradient(
-    135deg,
-    rgba(139, 92, 246, 0.3),
-    rgba(99, 102, 241, 0.1),
-    rgba(139, 92, 246, 0.3)
-  );
+  background: linear-gradient(135deg,
+      rgba(139, 92, 246, 0.3),
+      rgba(99, 102, 241, 0.1),
+      rgba(139, 92, 246, 0.3));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -319,11 +310,9 @@ a:hover {
 /* Enhanced Signup Card Styles */
 .signup-card {
   position: relative;
-  background: linear-gradient(
-    135deg,
-    rgba(30, 41, 59, 0.9) 0%,
-    rgba(30, 41, 59, 0.7) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(30, 41, 59, 0.9) 0%,
+      rgba(30, 41, 59, 0.7) 100%);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(139, 92, 246, 0.2);
@@ -334,12 +323,10 @@ a:hover {
 }
 
 .signup-card::before {
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(139, 92, 246, 0.4),
-    transparent
-  );
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(139, 92, 246, 0.4),
+      transparent);
 }
 
 .signup-card::after {
@@ -348,12 +335,10 @@ a:hover {
   inset: 0;
   border-radius: 1.5rem;
   padding: 1px;
-  background: linear-gradient(
-    135deg,
-    rgba(139, 92, 246, 0.3),
-    rgba(99, 102, 241, 0.1),
-    rgba(139, 92, 246, 0.3)
-  );
+  background: linear-gradient(135deg,
+      rgba(139, 92, 246, 0.3),
+      rgba(99, 102, 241, 0.1),
+      rgba(139, 92, 246, 0.3));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
