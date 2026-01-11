@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useDocuments } from '@/hooks/useDocuments';
 import DocumentCard from './DocumentCard';
 import { FileX, Loader2 } from 'lucide-react';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { motion } from 'framer-motion';
 
 export default function DocumentList() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
@@ -12,7 +14,9 @@ export default function DocumentList() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+        <div className="p-4 bg-glass-bg border border-glass-border rounded-full shadow-lg backdrop-blur-md">
+          <Loader2 className="w-8 h-8 text-accent animate-spin" />
+        </div>
       </div>
     );
   }
@@ -20,9 +24,11 @@ export default function DocumentList() {
   if (error) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-600 dark:text-red-400">
-          Failed to load documents. Please try again.
-        </p>
+        <GlassCard className="inline-block p-6 border-red-500/30 bg-red-500/5">
+          <p className="text-red-500 font-medium">
+            Failed to load documents. Please try again.
+          </p>
+        </GlassCard>
       </div>
     );
   }
@@ -32,37 +38,48 @@ export default function DocumentList() {
   return (
     <div className="space-y-6">
       {/* Filter Tabs */}
-      <div className="flex items-center space-x-2 border-b border-gray-200 dark:border-gray-700">
-        {['all', 'PROCESSED', 'PROCESSING', 'PENDING', 'FAILED'].map((status) => (
-          <button
-            key={status}
-            onClick={() => setStatusFilter(status === 'all' ? undefined : status)}
-            className={`
-              px-4 py-2 text-sm font-medium border-b-2 transition-colors
-              ${(statusFilter === status || (status === 'all' && !statusFilter))
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-              }
-            `}
-          >
-            {status === 'all' ? 'All' : status.charAt(0) + status.slice(1).toLowerCase()}
-          </button>
-        ))}
+      {/* Filter Tabs (Segmented Control) */}
+      <div className="bg-glass-border/30 dark:bg-glass-border/10 p-1.5 rounded-xl inline-flex relative w-full sm:w-auto overflow-hidden">
+        {['all', 'PROCESSED', 'PROCESSING', 'PENDING', 'FAILED'].map((status) => {
+          const isActive = statusFilter === status || (status === 'all' && !statusFilter);
+          return (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status === 'all' ? undefined : status)}
+              className={`
+                relative px-4 py-2 text-sm font-medium rounded-lg transition-all duration-300 z-10 flex-1 sm:flex-none text-center
+                ${isActive
+                  ? 'text-foreground font-semibold'
+                  : 'text-foreground-muted hover:text-foreground'
+                }
+              `}
+            >
+              {isActive && (
+                <motion.div
+                  className="absolute inset-0 bg-white dark:bg-slate-700 shadow-sm z-[-1] rounded-lg"
+                  layoutId="activeTab"
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
+              )}
+              {status === 'all' ? 'All' : status.charAt(0) + status.slice(1).toLowerCase()}
+            </button>
+          );
+        })}
       </div>
 
       {/* Document Grid */}
       {documents.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16">
-          <div className="p-6 bg-gray-100 dark:bg-gray-800 rounded-full mb-4">
-            <FileX className="w-12 h-12 text-gray-400" />
+        <GlassCard className="flex flex-col items-center justify-center py-16 text-center border-dashed">
+          <div className="p-6 bg-glass-bg rounded-full mb-4 shadow-inner">
+            <FileX className="w-12 h-12 text-foreground-muted opacity-50" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          <h3 className="text-lg font-bold text-foreground mb-2">
             No documents yet
           </h3>
-          <p className="text-gray-600 dark:text-gray-400 text-center max-w-md">
+          <p className="text-foreground-muted max-w-md">
             Upload your first document to get started with AI-powered analysis
           </p>
-        </div>
+        </GlassCard>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {documents.map((document) => (
@@ -73,7 +90,7 @@ export default function DocumentList() {
 
       {/* Document Count */}
       {documents.length > 0 && (
-        <div className="text-center text-sm text-gray-500 dark:text-gray-400">
+        <div className="text-center text-sm text-foreground-muted">
           Showing {documents.length} document{documents.length !== 1 ? 's' : ''}
         </div>
       )}

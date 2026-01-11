@@ -1,10 +1,11 @@
 'use client';
 
 import { Document } from '@/lib/api/documents';
-import { FileText, Download, Trash2, RefreshCw, Clock, CheckCircle, AlertCircle, Loader2, Eye } from 'lucide-react';
+import { FileText, Trash2, RefreshCw, Clock, CheckCircle, AlertCircle, Loader2, Eye } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useDeleteDocument, useReprocessDocument } from '@/hooks/useDocuments';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { GlassCard } from '@/components/ui/GlassCard';
 
 interface DocumentCardProps {
   document: Document;
@@ -12,9 +13,7 @@ interface DocumentCardProps {
 
 interface StatusConfigItem {
   icon: any;
-  color: string;
-  bg: string;
-  border: string;
+  className: string;
   label: string;
   spin?: boolean;
 }
@@ -22,31 +21,23 @@ interface StatusConfigItem {
 const STATUS_CONFIG: Record<string, StatusConfigItem> = {
   PENDING: {
     icon: Clock,
-    color: 'text-yellow-500',
-    bg: 'bg-yellow-50 dark:bg-yellow-950/20',
-    border: 'border-yellow-200 dark:border-yellow-800',
+    className: 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20',
     label: 'Pending',
   },
   PROCESSING: {
     icon: Loader2,
-    color: 'text-blue-500',
-    bg: 'bg-blue-50 dark:bg-blue-950/20',
-    border: 'border-blue-200 dark:border-blue-800',
+    className: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
     label: 'Processing',
     spin: true,
   },
   PROCESSED: {
     icon: CheckCircle,
-    color: 'text-green-500',
-    bg: 'bg-green-50 dark:bg-green-950/20',
-    border: 'border-green-200 dark:border-green-800',
+    className: 'text-green-500 bg-green-500/10 border-green-500/20',
     label: 'Processed',
   },
   FAILED: {
     icon: AlertCircle,
-    color: 'text-red-500',
-    bg: 'bg-red-50 dark:bg-red-950/20',
-    border: 'border-red-200 dark:border-red-800',
+    className: 'text-red-500 bg-red-500/10 border-red-500/20',
     label: 'Failed',
   },
 };
@@ -83,46 +74,51 @@ export default function DocumentCard({ document }: DocumentCardProps) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow duration-200">
+    <GlassCard className="p-6 h-full flex flex-col hover:shadow-lg hover:border-accent/30 transition-all duration-300 group">
       {/* Header with Icon and Status */}
       <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center space-x-3">
-          <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg">
+        <div className="flex items-center space-x-3 w-full">
+          <div className="p-3 bg-gradient-brand rounded-xl shadow-lg shadow-accent/10 flex-shrink-0">
             <FileText className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+            <h3 className="text-lg font-bold text-foreground truncate group-hover:text-accent transition-colors">
               {document.filename}
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-foreground-muted mt-1 font-mono">
               {formatFileSize(document.fileSize)} • {formatDistanceToNow(new Date(document.uploadDate), { addSuffix: true })}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Status Badge */}
-      <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg ${statusConfig.bg} ${statusConfig.border} border mb-4`}>
-        <StatusIcon className={`w-4 h-4 ${statusConfig.color} ${statusConfig.spin ? 'animate-spin' : ''}`} />
-        <span className={`text-sm font-medium ${statusConfig.color}`}>
-          {statusConfig.label}
-        </span>
+      <div className="flex-grow">
+        {/* Status Badge */}
+        <div className={`
+          inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg border backdrop-blur-sm mb-4
+          ${statusConfig.className}
+        `}>
+          <StatusIcon className={`w-4 h-4 ${statusConfig.spin ? 'animate-spin' : ''}`} />
+          <span className="text-sm font-medium">
+            {statusConfig.label}
+          </span>
+        </div>
+
+        {/* Error Message */}
+        {document.errorMessage && (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+            <p className="text-xs text-red-500">
+              {document.errorMessage}
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Error Message */}
-      {document.errorMessage && (
-        <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <p className="text-sm text-red-600 dark:text-red-400">
-            {document.errorMessage}
-          </p>
-        </div>
-      )}
-
       {/* Actions */}
-      <div className="flex items-center justify-end space-x-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-end space-x-2 pt-4 border-t border-glass-border mt-auto">
         <button
           onClick={handleView}
-          className="p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          className="p-2 text-foreground-muted hover:text-accent hover:bg-glass-bg rounded-lg transition-colors"
           title="View Content"
         >
           <Eye className="w-5 h-5" />
@@ -132,7 +128,7 @@ export default function DocumentCard({ document }: DocumentCardProps) {
           <button
             onClick={handleReprocess}
             disabled={reprocessMutation.isPending}
-            className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors disabled:opacity-50"
             title="Reprocess"
           >
             <RefreshCw className={`w-5 h-5 ${reprocessMutation.isPending ? 'animate-spin' : ''}`} />
@@ -142,12 +138,12 @@ export default function DocumentCard({ document }: DocumentCardProps) {
         <button
           onClick={handleDelete}
           disabled={deleteMutation.isPending}
-          className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors disabled:opacity-50"
+          className="p-2 text-foreground-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
           title="Delete"
         >
           <Trash2 className="w-5 h-5" />
         </button>
       </div>
-    </div>
+    </GlassCard>
   );
 }

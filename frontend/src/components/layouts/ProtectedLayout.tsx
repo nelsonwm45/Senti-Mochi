@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Sidebar from '@/components/navigation/Sidebar';
 import { getToken } from '@/lib/auth';
+import { AppLayout } from '@/components/layout/AppLayout';
 
 export default function ProtectedLayout({
   children,
@@ -12,6 +12,7 @@ export default function ProtectedLayout({
 }) {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const token = getToken();
@@ -20,18 +21,20 @@ export default function ProtectedLayout({
     } else {
       setIsAuthenticated(true);
     }
+    setIsLoading(false);
   }, [router]);
 
-  if (!isAuthenticated) {
-    return null; // Or a loading spinner
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent"></div>
+      </div>
+    );
   }
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-gray-900 text-white">
-      <Sidebar />
-      <main className="flex-1 overflow-auto bg-gradient-to-br from-gray-900 to-gray-800">
-        {children}
-      </main>
-    </div>
-  );
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  return <AppLayout>{children}</AppLayout>;
 }

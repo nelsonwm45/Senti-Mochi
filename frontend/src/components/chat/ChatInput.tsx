@@ -2,6 +2,7 @@
 
 import { useState, KeyboardEvent } from 'react';
 import { Send, Loader2 } from 'lucide-react';
+import { GlassCard } from '@/components/ui/GlassCard';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -31,11 +32,11 @@ export default function ChatInput({
   };
 
   return (
-    <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="relative flex items-end space-x-3">
+    <div className="p-2 md:p-4 bg-transparent w-full">
+      <div className="max-w-3xl mx-auto">
+        <GlassCard className="relative !p-1 flex !flex-row items-center !gap-2 overflow-visible min-h-[50px]">
           {/* Input */}
-          <div className="flex-1 relative">
+          <div className="flex-1 relative flex items-center">
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -43,22 +44,24 @@ export default function ChatInput({
               disabled={disabled}
               placeholder={placeholder}
               rows={1}
-              className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-2 bg-transparent text-foreground placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[150px] text-sm md:text-base leading-relaxed"
               style={{
-                minHeight: '48px',
-                maxHeight: '200px',
+                minHeight: '40px',
               }}
               onInput={(e) => {
                 const target = e.target as HTMLTextAreaElement;
                 target.style.height = 'auto';
                 target.style.height = `${target.scrollHeight}px`;
+                // If height > 40px, align parent to items-end to allow expansion upward/downward without jumping
+                if (target.scrollHeight > 44) {
+                     target.parentElement?.parentElement?.classList.replace('items-center', 'items-end');
+                     target.parentElement?.parentElement?.classList.add('pb-2');
+                } else {
+                     target.parentElement?.parentElement?.classList.replace('items-end', 'items-center');
+                     target.parentElement?.parentElement?.classList.remove('pb-2');
+                }
               }}
             />
-            
-            {/* Character count */}
-            <div className="absolute bottom-2 right-2 text-xs text-gray-400">
-              {message.length}
-            </div>
           </div>
 
           {/* Send Button */}
@@ -66,24 +69,31 @@ export default function ChatInput({
             onClick={handleSend}
             disabled={disabled || !message.trim()}
             className={`
-              flex-shrink-0 p-3 rounded-xl transition-all
+              flex-shrink-0 p-2.5 rounded-xl transition-all duration-300
               ${disabled || !message.trim()
-                ? 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed'
-                : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl'
+                ? 'bg-glass-border cursor-not-allowed opacity-50'
+                : 'bg-gradient-brand text-white shadow-lg shadow-accent/25 hover:shadow-accent/40 hover:scale-105 active:scale-95'
               }
             `}
           >
             {disabled ? (
-              <Loader2 className="w-5 h-5 text-white animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              <Send className="w-5 h-5 text-white" />
+              <Send className="w-5 h-5" />
             )}
           </button>
-        </div>
+        </GlassCard>
 
         {/* Hints */}
-        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
-          Press <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Enter</kbd> to send, <kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Shift+Enter</kbd> for new line
+        <div className="mt-2 text-[10px] md:text-xs text-foreground-muted text-center flex items-center justify-center gap-4 opacity-70">
+          <span>
+            <kbd className="px-1.5 py-0.5 bg-glass-bg border border-glass-border rounded-md mr-1.5 font-sans font-medium">Enter</kbd>
+            to send
+          </span>
+          <span>
+            <kbd className="px-1.5 py-0.5 bg-glass-bg border border-glass-border rounded-md mr-1.5 font-sans font-medium">Shift + Enter</kbd>
+            for new line
+          </span>
         </div>
       </div>
     </div>

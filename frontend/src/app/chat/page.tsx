@@ -1,18 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Menu, MessageSquare, Trash2 } from 'lucide-react';
 import AgenticThought from '@/components/chat/AgenticThought';
 import MessageBubble from '@/components/chat/MessageBubble';
 import ChatInput from '@/components/chat/ChatInput';
 import CitationPanel from '@/components/chat/CitationPanel';
+import ChatSidebar from '@/components/chat/ChatSidebar';
 import { useChat } from '@/hooks/useChat';
-import { MessageCircle, FileText, Trash2 } from 'lucide-react';
-
+import { GlassButton } from '@/components/ui/GlassButton';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 
 export default function ChatPage() {
   const { messages, agentState, isLoading, currentCitations, sendMessage, clearMessages } = useChat();
   const [citationPanelOpen, setCitationPanelOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeCitationId, setActiveCitationId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -39,57 +41,70 @@ export default function ChatPage() {
 
   return (
     <ProtectedLayout>
-      <div className="h-full flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-        {/* Header */}
-        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
-                <MessageCircle className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  AI Chat Assistant
+      <div className="h-[calc(100vh-theme(spacing.20))] flex overflow-hidden rounded-2xl border border-glass-border bg-glass-bg shadow-2xl relative">
+        {/* Background Gradients */}
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
+        </div>
+
+        {/* Sidebar */}
+        <ChatSidebar 
+          onNewChat={clearMessages}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
+
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col min-w-0 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm relative">
+          
+          {/* Header */}
+          <div className="flex-shrink-0 px-6 py-4 border-b border-glass-border flex items-center justify-between bg-glass-bg backdrop-blur-xl">
+            <div className="flex items-center gap-3">
+              <button 
+                className="lg:hidden p-2 -ml-2 hover:bg-white/10 rounded-lg transition-colors"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <Menu size={20} />
+              </button>
+              <div className="flex flex-col">
+                <h1 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  Mochi Assistant
                 </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Ask questions about your financial documents
-                </p>
+                <p className="text-xs text-foreground-muted">Use natural language to query your docs</p>
               </div>
             </div>
 
             {messages.length > 0 && (
-              <button
+              <GlassButton
+                variant="ghost"
+                size="sm"
                 onClick={clearMessages}
-                className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                title="Clear chat"
+                className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                leftIcon={<Trash2 size={16} />}
               >
-                <Trash2 className="w-5 h-5" />
-              </button>
+                Clear
+              </GlassButton>
             )}
           </div>
-        </div>
 
-        {/* Main Chat Area */}
-        <div className="flex-1 overflow-hidden flex relative">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto">
+          {/* Messages Scroll Area */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar relative">
             <div className="max-w-4xl mx-auto px-6 py-8">
-              {/* Agentic Thought Visualization */}
-              <AgenticThought state={agentState} />
-
-              {/* Messages */}
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <div className="p-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-6">
-                    <MessageCircle className="w-16 h-16 text-white" />
+                  <div className="w-20 h-20 bg-gradient-brand rounded-3xl flex items-center justify-center mb-6 shadow-lg shadow-accent/20">
+                    <MessageSquare className="w-10 h-10 text-white" />
                   </div>
-                  <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-3">
+                  <h2 className="text-2xl font-bold text-foreground mb-3">
                     Start a Conversation
                   </h2>
-                  <p className="text-gray-600 dark:text-gray-400 max-w-md mb-6">
-                    Ask me anything about your financial documents. I'll search through them and provide accurate answers with citations.
+                  <p className="text-foreground-muted max-w-md mb-8">
+                    I can help you analyze documents, summarize reports, and answer questions about your financial data.
                   </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl">
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
                     {[
                       'What was the Q1 Revenue?',
                       'Summarize the risk assessment',
@@ -100,20 +115,17 @@ export default function ChatPage() {
                         key={index}
                         onClick={() => handleSend(suggestion)}
                         disabled={isLoading}
-                        className="px-4 py-3 text-left bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-600 transition-colors disabled:opacity-50"
+                        className="text-left p-4 rounded-xl border border-glass-border bg-glass-bg hover:bg-white/5 hover:border-accent/30 hover:shadow-lg transition-all duration-300 group"
                       >
-                        <div className="flex items-center space-x-2">
-                          <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                          <span className="text-sm text-gray-700 dark:text-gray-300">
-                            {suggestion}
-                          </span>
-                        </div>
+                        <span className="text-sm font-medium text-foreground group-hover:text-accent transition-colors">
+                          {suggestion}
+                        </span>
                       </button>
                     ))}
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6 pb-4">
                   {messages.map((message, index) => (
                     <MessageBubble
                       key={index}
@@ -121,41 +133,39 @@ export default function ChatPage() {
                       content={message.content}
                       timestamp={message.timestamp}
                       citations={message.citations?.map(c => c.sourceNumber)}
-                      onCitationClick={(num) => {
-                        handleCitationClick(num);
-                      }}
+                      onCitationClick={handleCitationClick}
                     />
                   ))}
+                  
+                  <AgenticThought state={agentState} />
+                  
                   <div ref={messagesEndRef} />
                 </div>
               )}
             </div>
           </div>
 
-          {/* Citation Panel */}
-          <CitationPanel
-            citations={currentCitations}
-            isOpen={citationPanelOpen}
-            onClose={() => {
-                setCitationPanelOpen(false);
-                setActiveCitationId(null);
-            }}
-            activeCitationId={activeCitationId}
-            onCitationClick={(citation) => {
-              console.log('Navigate to:', citation);
-            }}
+          {/* Input Area */}
+          <ChatInput
+            onSend={handleSend}
+            disabled={isLoading}
+            placeholder={
+              isLoading
+                ? 'Processing your request...'
+                : 'Ask a question about your documents...'
+            }
           />
         </div>
 
-        {/* Input Area */}
-        <ChatInput
-          onSend={handleSend}
-          disabled={isLoading}
-          placeholder={
-            isLoading
-              ? 'Please wait...'
-              : 'Ask a question about your documents...'
-          }
+        {/* Citation Panel */}
+        <CitationPanel
+          citations={currentCitations}
+          isOpen={citationPanelOpen}
+          onClose={() => {
+              setCitationPanelOpen(false);
+              setActiveCitationId(null);
+          }}
+          activeCitationId={activeCitationId}
         />
       </div>
     </ProtectedLayout>

@@ -7,7 +7,13 @@ import { Toaster } from 'react-hot-toast';
 
 import { ThemeProvider } from 'next-themes';
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ 
+  children,
+  forcedTheme 
+}: { 
+  children: React.ReactNode;
+  forcedTheme?: string;
+}) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -22,7 +28,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <ThemeProvider 
+        attribute="class" 
+        defaultTheme="system" 
+        enableSystem
+        forcedTheme={forcedTheme}
+      >
         {children}
       </ThemeProvider>
       <Toaster
