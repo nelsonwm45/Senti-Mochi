@@ -120,3 +120,4 @@ class Workflow(SQLModel, table=True):
     actions: list[dict] = Field(default=[], sa_column=Column(JSON)) # [{"type": "EXTRACT_TOTAL"}, {"type": "WEBHOOK"}]
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+

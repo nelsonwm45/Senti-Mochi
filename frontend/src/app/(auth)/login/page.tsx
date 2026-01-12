@@ -40,7 +40,8 @@ export default function Login() {
       const res = await axios.post('http://localhost:8000/auth/token', formData);
       setToken(res.data.access_token);
       
-      router.push('/dashboard');
+      // Use window.location to force a full refresh and update auth state in Sidebar
+      window.location.href = '/dashboard';
     } catch (err) {
       console.error(err);
       setError('Invalid email or password. Please try again.');

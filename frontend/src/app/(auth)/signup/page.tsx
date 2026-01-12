@@ -45,7 +45,8 @@ export default function Signup() {
       });
       setToken(res.data.access_token);
       
-      router.push('/dashboard');
+      // Use window.location to force a full refresh and update auth state in Sidebar
+      window.location.href = '/dashboard';
     } catch (err) {
       console.error(err);
       setError('Signup failed. Please try again.');
