@@ -24,6 +24,7 @@ export interface QueryResponse {
 	response: string;
 	citations: CitationInfo[];
 	sessionId: string;
+	messageId: string;
 	tokensUsed?: number;
 }
 
@@ -55,7 +56,8 @@ export const chatApi = {
 	 * Send a query and get a streaming response
 	 */
 	async *queryStream(request: QueryRequest): AsyncGenerator<string> {
-		const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/chat/query`, {
+		const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+		const response = await fetch(`${baseUrl}/api/v1/chat/query`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -105,9 +107,6 @@ export const chatApi = {
 	 * Submit feedback on a chat response
 	 */
 	async feedback(messageId: string, rating: number): Promise<void> {
-		await apiClient.post('/api/v1/chat/feedback', {
-			message_id: messageId,
-			rating,
-		});
+		await apiClient.post(`/api/v1/chat/feedback?message_id=${messageId}&rating=${rating}`);
 	},
 };

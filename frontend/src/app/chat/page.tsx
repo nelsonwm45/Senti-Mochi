@@ -9,6 +9,7 @@ import CitationPanel from '@/components/chat/CitationPanel';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import { useChat } from '@/hooks/useChat';
 import { GlassButton } from '@/components/ui/GlassButton';
+import { chatApi } from '@/lib/api/chat';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 
 export default function ChatPage() {
@@ -37,6 +38,15 @@ export default function ChatPage() {
   const handleCitationClick = (citationNumber: number) => {
     setActiveCitationId(citationNumber);
     setCitationPanelOpen(true);
+  };
+
+  const handleFeedback = async (messageId: string, rating: number) => {
+    try {
+      await chatApi.feedback(messageId, rating);
+      console.log('Feedback submitted:', messageId, rating);
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+    }
   };
 
   return (
@@ -129,11 +139,13 @@ export default function ChatPage() {
                   {messages.map((message, index) => (
                     <MessageBubble
                       key={index}
+                      id={message.id}
                       role={message.role}
                       content={message.content}
                       timestamp={message.timestamp}
                       citations={message.citations?.map(c => c.sourceNumber)}
                       onCitationClick={handleCitationClick}
+                      onFeedback={handleFeedback}
                     />
                   ))}
                   

@@ -7,6 +7,8 @@ import { Toaster } from 'react-hot-toast';
 
 import { ThemeProvider } from 'next-themes';
 
+import { AuthProvider } from '@/contexts/AuthContext';
+
 export function Providers({ 
   children,
   forcedTheme 
@@ -34,7 +36,9 @@ export function Providers({
         enableSystem
         forcedTheme={forcedTheme}
       >
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </ThemeProvider>
       <Toaster
         position="top-right"

@@ -24,6 +24,9 @@ import { motion } from 'framer-motion';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { FAB } from '@/components/layout/FAB';
+import { MarketTicker } from '@/components/dashboard/MarketTicker';
+import { PortfolioChart } from '@/components/dashboard/PortfolioChart';
+import { HighImpactNews } from '@/components/dashboard/HighImpactNews';
 
 function DashboardContent() {
   const router = useRouter();
@@ -132,7 +135,11 @@ function DashboardContent() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
+      {/* Header & Ticker */}
+      <div className="-mx-4 md:-mx-8 -mt-8 mb-8">
+         <MarketTicker />
+      </div>
+
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-accent mb-1">{currentDate}</p>
@@ -140,7 +147,7 @@ function DashboardContent() {
             <span className="gradient-text">Welcome back!</span>
           </h1>
           <p className="text-foreground-muted mt-2">
-            Here's what's happening with your documents today.
+            Market overview and document insights.
           </p>
         </div>
       </div>
@@ -178,60 +185,69 @@ function DashboardContent() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content Column (Charts) */}
         <div className="lg:col-span-2 space-y-8">
-          {/* Upload Activity Chart */}
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-foreground">Upload Activity</h3>
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 gap-8">
+            <PortfolioChart />
+            
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+               <HighImpactNews />
+               
+               {/* Upload Activity (Smaller/Secondary) */}
+               <GlassCard className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-foreground">Upload Activity</h3>
+                </div>
+                <div className="h-[250px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={activityData}>
+                      <defs>
+                        <linearGradient id="colorUploads" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="#94a3b8" 
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                        dy={10}
+                      />
+                      <YAxis 
+                        stroke="#94a3b8" 
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                        allowDecimals={false}
+                        dx={-10}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'rgba(17, 24, 39, 0.8)', 
+                          borderColor: 'rgba(255, 255, 255, 0.1)', 
+                          backdropFilter: 'blur(12px)',
+                          borderRadius: '12px',
+                          color: '#fff' 
+                        }}
+                        itemStyle={{ color: '#e2e8f0' }}
+                        cursor={{ stroke: 'rgba(139, 92, 246, 0.5)', strokeWidth: 2 }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="uploads" 
+                        stroke="#8b5cf6" 
+                        strokeWidth={3}
+                        fillOpacity={1} 
+                        fill="url(#colorUploads)" 
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </GlassCard>
             </div>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={activityData}>
-                  <defs>
-                    <linearGradient id="colorUploads" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
-                  <XAxis 
-                    dataKey="name" 
-                    stroke="#94a3b8" 
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                    dy={10}
-                  />
-                  <YAxis 
-                    stroke="#94a3b8" 
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                    allowDecimals={false}
-                    dx={-10}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(17, 24, 39, 0.8)', 
-                      borderColor: 'rgba(255, 255, 255, 0.1)', 
-                      backdropFilter: 'blur(12px)',
-                      borderRadius: '12px',
-                      color: '#fff' 
-                    }}
-                    itemStyle={{ color: '#e2e8f0' }}
-                    cursor={{ stroke: 'rgba(139, 92, 246, 0.5)', strokeWidth: 2 }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="uploads" 
-                    stroke="#8b5cf6" 
-                    strokeWidth={3}
-                    fillOpacity={1} 
-                    fill="url(#colorUploads)" 
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </GlassCard>
+          </div>
 
           {/* Quick Actions */}
           <div>

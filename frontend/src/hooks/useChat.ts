@@ -5,6 +5,7 @@ import { chatApi, QueryResponse, CitationInfo } from '@/lib/api/chat';
 import { AgentState } from '@/components/chat/AgenticThought';
 
 interface ChatMessage {
+	id?: string;
 	role: 'user' | 'assistant';
 	content: string;
 	timestamp: string;
@@ -20,6 +21,7 @@ export function useChat() {
 	const sendMessage = async (content: string, stream = true) => {
 		// Add user message
 		const userMessage: ChatMessage = {
+			id: crypto.randomUUID(),
 			role: 'user',
 			content,
 			timestamp: new Date().toISOString(),
@@ -36,6 +38,7 @@ export function useChat() {
 		} catch (error) {
 			console.error('Chat error:', error);
 			const errorMessage: ChatMessage = {
+				id: crypto.randomUUID(),
 				role: 'assistant',
 				content: error instanceof Error && error.message.includes('No relevant information')
 					? 'I couldn\'t find relevant information in your documents to answer this question.'
@@ -60,6 +63,7 @@ export function useChat() {
 
 		let accumulatedContent = '';
 		const assistantMessage: ChatMessage = {
+			id: crypto.randomUUID(), // Temp ID for streaming
 			role: 'assistant',
 			content: '',
 			timestamp: new Date().toISOString(),
@@ -74,8 +78,12 @@ export function useChat() {
 				accumulatedContent += chunk;
 				setMessages((prev) => {
 					const newMessages = [...prev];
+					const lastMsg = newMessages[newMessages.length - 1];
+					// If backend sends ID in stream (not implemented yet), we would update it here.
+					// For now, streaming doesn't return message_id. 
+					// This is a limitation for feedback on streaming responses.
 					newMessages[newMessages.length - 1] = {
-						...assistantMessage,
+						...lastMsg,
 						content: accumulatedContent,
 					};
 					return newMessages;
@@ -101,6 +109,7 @@ export function useChat() {
 		const response: QueryResponse = await chatApi.query({ query, stream: false });
 
 		const assistantMessage: ChatMessage = {
+			id: response.messageId,
 			role: 'assistant',
 			content: response.response,
 			timestamp: new Date().toISOString(),

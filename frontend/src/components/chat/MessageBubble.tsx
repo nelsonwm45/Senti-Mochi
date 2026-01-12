@@ -1,27 +1,32 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { User, Bot, Copy, Check } from 'lucide-react';
+import { User, Bot, Copy, Check, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { GlassCard } from '@/components/ui/GlassCard';
 
 interface MessageBubbleProps {
+  id?: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp?: string;
   citations?: number[];
   onCitationClick?: (citationNumber: number) => void;
+  onFeedback?: (messageId: string, rating: number) => void;
 }
 
 export default function MessageBubble({
+  id,
   role,
   content,
   timestamp,
   citations = [],
   onCitationClick,
+  onFeedback,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState<number | null>(null);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(content);
@@ -29,8 +34,18 @@ export default function MessageBubble({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleFeedback = (rating: number) => {
+    if (feedback === rating) return; // Prevent duplicate
+    setFeedback(rating);
+    if (id && onFeedback) {
+      onFeedback(id, rating);
+    }
+  };
+
+  // ... (renderContent code remains same)
   // Process content to make citations clickable
   const renderContent = () => {
+    // ... (same as before)
     if (role === 'user' || citations.length === 0) {
       return <p className="whitespace-pre-wrap">{content}</p>;
     }
@@ -111,17 +126,33 @@ export default function MessageBubble({
             )}
             
             {!isUser && (
-              <button
-                onClick={handleCopy}
-                className="p-1.5 hover:bg-white/10 rounded-lg transition-colors ml-1"
-                title="Copy message"
-              >
-                {copied ? (
-                  <Check className="w-3.5 h-3.5 text-green-500" />
-                ) : (
-                  <Copy className="w-3.5 h-3.5" />
-                )}
-              </button>
+              <>
+                <button
+                  onClick={handleCopy}
+                  className="p-1.5 hover:bg-white/10 rounded-lg transition-colors ml-1"
+                  title="Copy message"
+                >
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5 text-green-500" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </button>
+                <div className="flex items-center gap-1 border-l border-white/10 pl-2 ml-1">
+                   <button
+                     onClick={() => handleFeedback(1)}
+                     className={`p-1.5 rounded-lg transition-colors ${feedback === 1 ? 'text-green-500 bg-green-500/10' : 'hover:bg-white/10'}`}
+                   >
+                     <ThumbsUp className="w-3.5 h-3.5" />
+                   </button>
+                   <button
+                     onClick={() => handleFeedback(-1)}
+                     className={`p-1.5 rounded-lg transition-colors ${feedback === -1 ? 'text-red-500 bg-red-500/10' : 'hover:bg-white/10'}`}
+                   >
+                     <ThumbsDown className="w-3.5 h-3.5" />
+                   </button>
+                </div>
+              </>
             )}
           </div>
         </div>
