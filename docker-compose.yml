@@ -106,8 +106,6 @@ services:
       dockerfile: Dockerfile
     container_name: finance_celery
     command: celery -A app.celery_app worker --loglevel=info
-    volumes:
-      - ./backend:/app
     env_file:
       - ./backend/.env
     depends_on:

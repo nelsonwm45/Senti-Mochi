@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, Relationship
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column, Text, JSON
 from uuid import UUID, uuid4
@@ -53,11 +53,25 @@ class ClientProfile(SQLModel, table=True):
     # Embedding for AI analysis (using pgvector)
     embedding: Optional[list[float]] = Field(default=None, sa_column=Column(Vector(384)))
 
+class Company(SQLModel, table=True):
+    __tablename__ = "companies"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str
+    ticker: str = Field(unique=True, index=True)
+    sector: Optional[str] = None
+    sub_sector: Optional[str] = None
+    website_url: Optional[str] = None
+    
+    # Relationships
+    documents: list["Document"] = Relationship(back_populates="company")
+
 # Document Model
 class Document(SQLModel, table=True):
     __tablename__ = "documents"
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", index=True)
+    company_id: Optional[UUID] = Field(default=None, foreign_key="companies.id", index=True)
+    company: Optional[Company] = Relationship(back_populates="documents")
     filename: str
     content_type: str
     file_size: int
@@ -120,3 +134,4 @@ class Workflow(SQLModel, table=True):
     actions: list[dict] = Field(default=[], sa_column=Column(JSON)) # [{"type": "EXTRACT_TOTAL"}, {"type": "WEBHOOK"}]
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
