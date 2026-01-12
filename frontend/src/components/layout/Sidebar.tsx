@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   FileText,
+  Newspaper,
   User,
   Settings,
   ChevronLeft,
@@ -23,8 +24,9 @@ interface SidebarItem {
 }
 
 const menuItems: SidebarItem[] = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
+  { icon: LayoutDashboard, label: 'Dashboardaaaaa', href: '/dashboard' },
   { icon: MessageSquare, label: 'Chat', href: '/chat' },
+  { icon: Newspaper, label: 'Market News', href: '/news' },
   { icon: FileText, label: 'Documents', href: '/documents' },
   { icon: User, label: 'Profile', href: '/profile' },
   { icon: Settings, label: 'Settings', href: '/settings' },
