@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from app.database import create_db_and_tables
 from app.middleware.tenant_isolation import TenantMiddleware
 from app.middleware.audit import AuditMiddleware
-from app.routers import auth, users, google_auth, documents, chat, health, webhooks, company, watchlist
+from app.routers import auth, users, google_auth, documents, chat, health, webhooks, company, watchlist, news
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
@@ -45,6 +45,7 @@ app.include_router(company.router)    # New: Company 360
 app.include_router(health.router)     # New: Health checks
 app.include_router(webhooks.router, prefix="/webhooks", tags=["Webhooks"]) # New: Feature 3.4
 app.include_router(watchlist.router)
+app.include_router(news.router)
 
 
 @app.get("/")
