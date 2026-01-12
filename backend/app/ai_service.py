@@ -88,3 +88,41 @@ def analyze_financial_sentiment(text: str) -> dict:
         return response
     except Exception as e:
         return {"score": "Neutral", "confidence": 0.0, "rationale": f"Error: {str(e)}"}
+
+def summarize_article(text: str) -> str:
+    """
+    Summarizes a news article into a short paragraph.
+    """
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
+        return "Summary unavailable (API Key missing)."
+
+    llm = ChatOpenAI(
+        temperature=0.5,
+        model_name="llama-3.3-70b-versatile",
+        openai_api_key=groq_api_key,
+        openai_api_base="https://api.groq.com/openai/v1"
+    )
+
+    template = """
+    You are a professional news editor. Summarize the following news article into a concise, 2-3 sentence summary. Capture the main event and its impact.
+    
+    Article:
+    {text}
+    
+    Summary:
+    """
+    
+    prompt = PromptTemplate(
+        input_variables=["text"],
+        template=template,
+    )
+    
+    chain = prompt | llm | StrOutputParser()
+    
+    try:
+        # Truncate to avoid context limit
+        safe_text = text[:6000]
+        return chain.invoke({"text": safe_text})
+    except Exception as e:
+        return f"Error generating summary: {str(e)}"

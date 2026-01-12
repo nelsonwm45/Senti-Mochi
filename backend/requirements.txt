@@ -29,3 +29,5 @@ Pillow
 beautifulsoup4
 requests
 lxml
+newspaper3k
+lxml_html_clean

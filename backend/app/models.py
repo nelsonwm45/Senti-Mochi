@@ -168,6 +168,8 @@ class NewsArticle(SQLModel, table=True):
     url: str = Field(unique=True)
     published_at: datetime
     content: str = Field(sa_column=Column(Text))
+    article_content: Optional[str] = Field(default=None, sa_column=Column(Text))
+    summary: Optional[str] = Field(default=None, sa_column=Column(Text))
     sentiment_score: Optional[float] = None # Denormalized for quick access
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

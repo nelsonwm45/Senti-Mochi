@@ -27,39 +27,147 @@ class NewsScraper:
 
 class TheEdgeScraper(NewsScraper):
     def __init__(self):
-        super().__init__("The Edge Markets", "https://theedgemalaysia.com")
+        super().__init__("Google News (Malaysia)", "https://news.google.com/rss/search?q=Malaysia+Stock+Market+Business&hl=en-MY&gl=MY&ceid=MY:en")
 
     def scrape(self) -> List[Dict]:
-        self.logger.info("Scraping The Edge...")
-        # Simulated scraping logic
-        # In reality: response = requests.get(self.base_url, headers=self.headers)
-        # soup = BeautifulSoup(response.text, 'lxml')
-        # ... parse logic
-        
-        # Returning mock data for MVP
-        return [
-            {
-                "id": self._generate_id("https://theedgemalaysia.com/article/mock-1"),
-                "source": self.source_name,
-                "title": "Bursa Malaysia closes higher on strong buying support",
-                "url": "https://theedgemalaysia.com/article/mock-1",
-                "published_at": datetime.now(),
-                "content": "KUALA LUMPUR (Jan 12): Bursa Malaysia ended the trading week on a positive note..."
-            },
-            {
-                "id": self._generate_id("https://theedgemalaysia.com/article/mock-2"),
-                "source": self.source_name,
-                "title": "Maybank records higher net profit in Q4",
-                "url": "https://theedgemalaysia.com/article/mock-2",
-                "published_at": datetime.now(),
-                "content": "Malayan Banking Bhd (Maybank) posted a net profit of..."
-            }
-        ]
+        self.logger.info("Fetching Google News RSS...")
+        try:
+            response = requests.get(self.base_url, headers=self.headers, timeout=10)
+            soup = BeautifulSoup(response.content, 'xml')
+            
+            articles = []
+            for item in soup.find_all('item'):
+                title = item.title.text
+                link = item.link.text
+                pub_date_str = item.pubDate.text
+                description = item.description.text if item.description else ""
+                
+                # Parse Date (e.g., "Mon, 12 Jan 2026 08:00:00 GMT")
+                try:
+                    pub_date = datetime.strptime(pub_date_str, "%a, %d %b %Y %H:%M:%S %Z")
+                except:
+                    pub_date = datetime.now()
+
+                # Deduplicate
+                if any(a['url'] == link for a in articles):
+                    continue
+
+                if title:
+                    articles.append({
+                        "id": self._generate_id(link),
+                        "source": "Google News", # Or parse source from title if available
+                        "title": title,
+                        "url": link,
+                        "published_at": pub_date,
+                        "content": title,
+                        "description": description # Pass raw description
+                    })
+                
+                if len(articles) >= 15:
+                    break
+            
+            self.logger.info(f"Scraped {len(articles)} articles from RSS.")
+            return articles
+
+        except Exception as e:
+            self.logger.error(f"Error scraping RSS: {e}")
+            return []
 
 class TheStarScraper(NewsScraper):
     def __init__(self):
-        super().__init__("The Star", "https://www.thestar.com.my/business")
+        super().__init__("The Star", "https://www.thestar.com.my/rss/Business")
 
     def scrape(self) -> List[Dict]:
-        self.logger.info("Scraping The Star...")
-        return []
+        self.logger.info("Scraping The Star RSS...")
+        try:
+            response = requests.get(self.base_url, headers=self.headers, timeout=10)
+            soup = BeautifulSoup(response.content, 'xml')
+
+            articles = []
+            for item in soup.find_all('item')[:15]:
+                title = item.title.text if item.title else ""
+                link = item.link.text if item.link else ""
+                pub_date_str = item.pubDate.text if item.pubDate else ""
+                description = item.description.text if item.description else ""
+
+                # Clean description (remove HTML)
+                if description:
+                    desc_soup = BeautifulSoup(description, 'html.parser')
+                    description = desc_soup.get_text(strip=True)
+
+                # Parse Date
+                try:
+                    pub_date = datetime.strptime(pub_date_str, "%a, %d %b %Y %H:%M:%S %z")
+                except:
+                    pub_date = datetime.now()
+
+                if title and link:
+                    articles.append({
+                        "id": self._generate_id(link),
+                        "source": "The Star",
+                        "title": title,
+                        "url": link,
+                        "published_at": pub_date,
+                        "content": description,  # Use description as content
+                        "description": description
+                    })
+
+            self.logger.info(f"Scraped {len(articles)} articles from The Star.")
+            return articles
+
+        except Exception as e:
+            self.logger.error(f"Error scraping The Star: {e}")
+            return []
+
+
+class FMTScraper(NewsScraper):
+    """Free Malaysia Today scraper"""
+    def __init__(self):
+        super().__init__("Free Malaysia Today", "https://www.freemalaysiatoday.com/category/business/feed/")
+
+    def scrape(self) -> List[Dict]:
+        self.logger.info("Scraping Free Malaysia Today RSS...")
+        try:
+            response = requests.get(self.base_url, headers=self.headers, timeout=10)
+            soup = BeautifulSoup(response.content, 'xml')
+
+            articles = []
+            for item in soup.find_all('item')[:15]:
+                title = item.title.text if item.title else ""
+                link = item.link.text if item.link else ""
+                pub_date_str = item.pubDate.text if item.pubDate else ""
+
+                # Get content from content:encoded or description
+                content_tag = item.find('content:encoded')
+                if content_tag:
+                    content_html = content_tag.text
+                    content_soup = BeautifulSoup(content_html, 'html.parser')
+                    content = content_soup.get_text(strip=True)
+                else:
+                    description = item.description.text if item.description else ""
+                    desc_soup = BeautifulSoup(description, 'html.parser')
+                    content = desc_soup.get_text(strip=True)
+
+                # Parse Date
+                try:
+                    pub_date = datetime.strptime(pub_date_str, "%a, %d %b %Y %H:%M:%S %z")
+                except:
+                    pub_date = datetime.now()
+
+                if title and link and content:
+                    articles.append({
+                        "id": self._generate_id(link),
+                        "source": "FMT",
+                        "title": title,
+                        "url": link,
+                        "published_at": pub_date,
+                        "content": content,
+                        "description": content[:500]
+                    })
+
+            self.logger.info(f"Scraped {len(articles)} articles from FMT.")
+            return articles
+
+        except Exception as e:
+            self.logger.error(f"Error scraping FMT: {e}")
+            return []
