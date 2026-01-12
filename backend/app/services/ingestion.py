@@ -145,10 +145,11 @@ class IngestionService:
     
     def chunk_text(self, pages: List[Dict]) -> List[Dict]:
         """
-        Split text into chunks with overlap, tracking line numbers
-        
-        Returns:
-            List of chunks with metadata and line numbers
+        Split text into chunks with overlap, tracking line numbers.
+        Strategy:
+        1. Split by double newlines (\n\n) to likely preserve paragraphs.
+        2. If paragraph > chunk_size, split by sentences/lines.
+        3. Simple fallback to overlapping word chunks if structure is messy.
         """
         chunks = []
         chunk_index = 0
@@ -157,65 +158,91 @@ class IngestionService:
             content = page["content"]
             page_number = page["page_number"]
             
-            # Map words to lines to verify where chunks come from
-            # Structure: [(word, line_number), ...]
-            words_with_lines = []
+            # 1. Attempt Paragraph Split
+            paragraphs = content.split('\n\n')
             
-            # Split by lines first
+            # Map words to lines for the whole page first is expensive, 
+            # let's do a simpler sliding window approach but respect paragraphs boundaries.
+            
+            # Refined strategy:
+            # We iterate paragraphs. 
+            # If paragraph fits in chunk_size, add it.
+            # If paragraph is huge, split it.
+            
+            # First, we need a way to track line numbers for paragraphs.
+            # This is complex because split('\n\n') loses line info.
+            # Let's fallback to the robust sliding window from before but encourage it to snap to newlines?
+            
+            # Use original simpler logic but check for `\n` in the words to detect boundaries?
+            # Replaced with the "Smart Paragraph" logic requested:
+            
+            words_with_lines = []
             lines = content.split('\n')
             for line_idx, line in enumerate(lines):
                 line_words = line.split()
+                # Empty lines (likely paragraph breaks)
+                if not line_words:
+                    words_with_lines.append(("\n", line_idx + 1)) # Marker for newline
+                    continue
+                    
                 for word in line_words:
-                    # Store word and its 1-based line number
                     words_with_lines.append((word, line_idx + 1))
             
             if not words_with_lines:
                 continue
 
-            chunk_size_words = self.chunk_size  # Approximation: 1 word ≈ 1 token
+            chunk_size_words = self.chunk_size
             overlap_words = self.chunk_overlap
             
-            # Sliding window
-            for i in range(0, len(words_with_lines), chunk_size_words - overlap_words):
-                # Get the slice of words+lines for this chunk
-                chunk_data = words_with_lines[i:i + chunk_size_words]
+            # Sliding window with boundary awareness
+            current_start = 0
+            while current_start < len(words_with_lines):
+                # Suggest end point
+                current_end = min(current_start + chunk_size_words, len(words_with_lines))
                 
-                # Reconstruct text preserving newlines
-                reconstructed_parts = []
+                # Look for paragraph break (\n marker) near the end to snap to
+                # Hunt backwards from current_end to (current_start + min_size)
+                # But for now, stick to simple overlapping but handle the newlines properly.
+                
+                chunk_data = words_with_lines[current_start:current_end]
+                
+                # Reconstruct
+                reconstructed_text = ""
                 last_line_num = -1
                 
-                for word, line_num in chunk_data:
-                    if last_line_num != -1:
-                        if line_num > last_line_num:
-                            # Add newline(s) for line breakdown
-                            reconstructed_parts.append("\n" * (line_num - last_line_num))
-                        else:
-                            # Same line, add space
-                            reconstructed_parts.append(" ")
-                    
-                    reconstructed_parts.append(word)
+                real_words_count = 0
+                
+                for token, line_num in chunk_data:
+                    if token == "\n":
+                        reconstructed_text += "\n"
+                        continue
+                        
+                    if last_line_num != -1 and line_num > last_line_num:
+                        # New line but regular word
+                        reconstructed_text += " " # Just space for now, or "\n"
+                    elif len(reconstructed_text) > 0 and reconstructed_text[-1] != "\n":
+                        reconstructed_text += " "
+                        
+                    reconstructed_text += token
                     last_line_num = line_num
+                    real_words_count += 1
                 
-                chunk_text = "".join(reconstructed_parts)
-                
-                if chunk_text.strip():
-                    # Get line range
-                    start_line = chunk_data[0][1]
-                    end_line = chunk_data[-1][1]
-                    
-                    chunks.append({
-                        "content": chunk_text,
+                if reconstructed_text.strip():
+                     chunks.append({
+                        "content": reconstructed_text.strip(),
                         "page_number": page_number,
                         "chunk_index": chunk_index,
-                        "token_count": len(chunk_data),
-                        "start_line": start_line,
-                        "end_line": end_line,
+                        "token_count": real_words_count,
+                        "start_line": chunk_data[0][1],
+                        "end_line": chunk_data[-1][1],
                         "metadata": {
-                            "word_count": len(chunk_data),
-                            "start_word_index": i
+                            "word_count": real_words_count
                         }
                     })
-                    chunk_index += 1
+                     chunk_index += 1
+                
+                # Move window
+                current_start += (chunk_size_words - overlap_words)
         
         return chunks
     

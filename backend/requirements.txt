@@ -26,3 +26,6 @@ prometheus-client
 sentence-transformers
 pytesseract
 Pillow
+beautifulsoup4
+requests
+lxml

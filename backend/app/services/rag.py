@@ -36,22 +36,53 @@ class RAGService:
         query_embedding: List[float],
         user_id: UUID,
         document_ids: Optional[List[UUID]] = None,
+        filters: Optional[Dict] = None, # New: {"company_id": "...", "date_from": "..."}
         limit: int = 5,
         threshold: float = 0.4
     ) -> List[Dict]:
         """
-        Perform vector similarity search
-        
-        CRITICAL: Ensures user can only access their own documents (security check)
+        Perform vector similarity search with metadata filtering
         """
         with Session(engine) as session:
             # Build query with vector similarity
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
             
-            # Log the query for debugging
-            print(f"Vector search query: {embedding_str[:50]}... User: {user_id}")
+            # Base join
+            from_clause = """
+                FROM document_chunks dc
+                JOIN documents d ON dc.document_id = d.id
+                LEFT JOIN filings f ON f.document_id = d.id
+                LEFT JOIN news_articles n ON n.id::text = d.metadata_->>'article_id'
+            """
+            
+            # Dynamic Where
+            where_clauses = [
+                f"d.user_id = '{str(user_id)}'",
+                "d.is_deleted = false"
+            ]
+            
+            if document_ids:
+                doc_ids_str = ",".join([f"'{str(did)}'" for did in document_ids])
+                where_clauses.append(f"d.id IN ({doc_ids_str})")
 
-            # Base query with security check - MUST filter by user_id
+            # Apply specific filters
+            if filters:
+                if filters.get("company_id"):
+                    # Check both filings and news if linked? 
+                    # For MVP, assume filings have explicit company_id
+                    where_clauses.append(f"f.company_id = '{filters['company_id']}'")
+                
+                if filters.get("date_from"):
+                    where_clauses.append(f"f.publication_date >= '{filters['date_from']}'")
+                
+                if filters.get("date_to"):
+                    where_clauses.append(f"f.publication_date <= '{filters['date_to']}'")
+                
+                if filters.get("type"): # e.g. ANNUAL_REPORT
+                     where_clauses.append(f"f.type = '{filters['type']}'")
+
+            where_str = " AND ".join(where_clauses)
+            
             query_sql = f"""
                 SELECT 
                     dc.id,
@@ -65,17 +96,13 @@ class RAGService:
                     1 - (dc.embedding <=> '{embedding_str}'::vector) as similarity,
                     dc.start_line,
                     dc.end_line
-                FROM document_chunks dc
-                JOIN documents d ON dc.document_id = d.id
-                WHERE d.user_id = '{str(user_id)}'
-                  AND d.is_deleted = false
-                  -- AND 1 - (dc.embedding <=> '{embedding_str}'::vector) >= {0.4}
+                {from_clause}
+                WHERE {where_str}
                 ORDER BY similarity DESC
                 LIMIT {limit}
             """
             
             results = session.execute(text(query_sql)).fetchall()
-            print(f"Found {len(results)} chunks. Scores: {[row[8] for row in results]}")
             
             # Format results
             chunks = []

@@ -11,6 +11,9 @@ class UserRole(str, Enum):
     USER = "USER"
     ADMIN = "ADMIN"
     AUDITOR = "AUDITOR"
+    RM = "RM"
+    ANALYST = "ANALYST"
+    RISK = "RISK"
 
 class DocumentStatus(str, Enum):
     PENDING = "PENDING"
@@ -108,6 +111,8 @@ class ChatMessage(SQLModel, table=True):
     content: str = Field(sa_column=Column(Text))
     citations: dict = Field(default={}, sa_column=Column(JSON))
     token_count: Optional[int] = None
+    feedback_score: int = Field(default=0) # 0=None, 1=Up, -1=Down
+    feedback_text: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # Workflow Model
@@ -119,4 +124,88 @@ class Workflow(SQLModel, table=True):
     trigger: dict = Field(default={}, sa_column=Column(JSON)) # {"type": "DOCUMENT_UPLOADED", "filters": {...}}
     actions: list[dict] = Field(default=[], sa_column=Column(JSON)) # [{"type": "EXTRACT_TOTAL"}, {"type": "WEBHOOK"}]
     is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# --- Financial Platform Models ---
+
+class Company(SQLModel, table=True):
+    __tablename__ = "companies"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str = Field(index=True)
+    ticker: str = Field(unique=True, index=True)
+    sector: Optional[str] = None
+    sub_sector: Optional[str] = None
+    market_cap: Optional[float] = None
+    summary: Optional[str] = Field(sa_column=Column(Text))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# Enum for Filing Types
+class FilingType(str, Enum):
+    ANNUAL_REPORT = "ANNUAL_REPORT"
+    QUARTERLY_REPORT = "QUARTERLY_REPORT"
+    FINANCIAL_STATEMENT = "FINANCIAL_STATEMENT"
+    GENERAL_ANNOUNCEMENT = "GENERAL_ANNOUNCEMENT"
+    OTHER = "OTHER"
+
+class Filing(SQLModel, table=True):
+    __tablename__ = "filings"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    company_id: UUID = Field(foreign_key="companies.id", index=True)
+    document_id: Optional[UUID] = Field(foreign_key="documents.id", default=None)  # Link to existing Document for storage/chunks
+    type: FilingType = Field(default=FilingType.GENERAL_ANNOUNCEMENT)
+    publication_date: datetime
+    content_summary: Optional[str] = Field(sa_column=Column(Text))
+    pdf_url: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class NewsArticle(SQLModel, table=True):
+    __tablename__ = "news_articles"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    company_id: Optional[UUID] = Field(foreign_key="companies.id", default=None, index=True)
+    source_name: str
+    title: str
+    url: str = Field(unique=True)
+    published_at: datetime
+    content: str = Field(sa_column=Column(Text))
+    sentiment_score: Optional[float] = None # Denormalized for quick access
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class SentimentAnalysis(SQLModel, table=True):
+    __tablename__ = "sentiment_analysis"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    # Polymorphic linking could be done via separate nullable FKs or a generic content_type/object_id approach.
+    # For simplicity/speed in Postgres, individual FKs are often cleaner.
+    news_article_id: Optional[UUID] = Field(foreign_key="news_articles.id", default=None)
+    filing_id: Optional[UUID] = Field(foreign_key="filings.id", default=None)
+    
+    score: str # "Positive", "Neutral", "Adverse"
+    confidence_score: float
+    rationale: str = Field(sa_column=Column(Text))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class FinancialRatio(SQLModel, table=True):
+    __tablename__ = "financial_ratios"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    company_id: UUID = Field(foreign_key="companies.id", index=True)
+    filing_id: Optional[UUID] = Field(foreign_key="filings.id", default=None)
+    period: str # e.g. "2023 Q4", "2024 FY"
+    ratio_name: str # e.g. "Current Ratio"
+    value: float
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class Alert(SQLModel, table=True):
+    __tablename__ = "alerts"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    condition: dict = Field(default={}, sa_column=Column(JSON)) # e.g. {"sentiment": "Adverse", "keyword": "Resignation"}
+    is_active: bool = Field(default=True)
+    last_triggered_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class Watchlist(SQLModel, table=True):
+    __tablename__ = "watchlists"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True)
+    company_id: UUID = Field(foreign_key="companies.id", index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

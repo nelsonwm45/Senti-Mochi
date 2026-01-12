@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlmodel import Session, select
 from app.database import get_session
-from app.models import User, ClientProfile
-from app.auth import get_current_user
+from app.models import User, ClientProfile, UserRole
+from app.auth import get_current_user, require_role
 from app.ai_service import get_financial_advice
 from pydantic import BaseModel
 import boto3
@@ -149,3 +149,8 @@ async def get_avatar(user_id: str, filename: str):
         )
     except Exception as e:
         raise HTTPException(status_code=404, detail="Avatar not found")
+
+@router.get("/admin/users", response_model=list[User])
+def list_all_users(admin: User = Depends(require_role(UserRole.ADMIN)), session: Session = Depends(get_session)):
+    """Admin only: List all users"""
+    return session.exec(select(User)).all()

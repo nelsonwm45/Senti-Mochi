@@ -16,6 +16,7 @@ router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 class QueryRequest(BaseModel):
     query: str
     documentIds: Optional[List[str]] = None
+    filters: Optional[dict] = None # {"company_id": "...", "type": "..."}
     maxResults: int = 5
     stream: bool = False
 
@@ -33,6 +34,7 @@ class QueryResponse(BaseModel):
     response: str
     citations: List[CitationInfo]
     sessionId: str
+    messageId: str
     tokensUsed: Optional[int] = None
 
 class ChatHistoryResponse(BaseModel):
@@ -78,6 +80,7 @@ async def query(
         query_embedding=query_embedding,
         user_id=current_user.id,  # Critical security parameter
         document_ids=document_ids,
+        filters=request.filters,
         limit=request.maxResults
     )
     
@@ -156,6 +159,7 @@ async def query(
             response=result["response"],
             citations=citations,
             sessionId=str(session_id),
+            messageId=str(assistant_message.id),
             tokensUsed=result.get("tokens_used")
         )
 
@@ -217,6 +221,11 @@ async def submit_feedback(
     # Security check
     if message.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Update message feedback
+    message.feedback_score = rating
+    # message.feedback_text = ... (if passed in future)
+    session.add(message)
     
     # Log feedback as audit event
     audit_log = AuditLog(
