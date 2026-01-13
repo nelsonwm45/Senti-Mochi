@@ -43,8 +43,14 @@ export default function Login() {
       // Use window.location to force a full refresh and update auth state in Sidebar
       window.location.href = '/dashboard';
     } catch (err) {
-      console.error(err);
-      setError('Invalid email or password. Please try again.');
+      if (axios.isAxiosError(err) && err.response?.status === 401) {
+          // Expected error for invalid credentials
+          setError('Invalid email or password. Please try again.');
+      } else {
+          // Unexpected errors
+          console.error(err);
+          setError('Something went wrong. Please try again later.');
+      }
     } finally {
       setIsLoading(false);
     }
