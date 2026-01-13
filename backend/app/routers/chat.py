@@ -103,19 +103,34 @@ async def query(
     from app.services.company_service import company_service
     companies = company_service.find_companies_by_text(request.query, session)
     
-    # Context Lookback: If no companies found, check previous user message
-    # This handles follow-up questions like "Which one is better?"
-    if not companies:
-         last_msg = session.exec(
-             select(ChatMessage)
-             .where(ChatMessage.session_id == session_id)
-             .where(ChatMessage.role == "user")
-             .order_by(ChatMessage.created_at.desc())
-         ).first()
+    # Context Lookback: Check previous user message for additional context
+    # This handles comparison questions like "How does it compare to Y?" (where X was previous)
+    
+    last_msg = session.exec(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .where(ChatMessage.role == "user")
+        .order_by(ChatMessage.created_at.desc())
+    ).first()
+    
+    if last_msg:
+         # We found a previous message. Let's see if it had companies.
+         print(f"Context Lookback: Checking previous message '{last_msg.content[:50]}...'")
+         prev_companies = company_service.find_companies_by_text(last_msg.content, session)
          
-         if last_msg:
-             print(f"Context Lookback: Checking previous message '{last_msg.content[:50]}...'")
-             companies = company_service.find_companies_by_text(last_msg.content, session)
+         if prev_companies:
+             print(f"Context Lookback: Found previous companies: {[c.name for c in prev_companies]}")
+             
+             # Initialize companies list if None
+             if companies is None:
+                 companies = []
+                 
+             # Merge lists, avoiding duplicates
+             existing_ids = {c.id for c in companies}
+             for prev_comp in prev_companies:
+                 if prev_comp.id not in existing_ids:
+                     companies.append(prev_comp)
+                     existing_ids.add(prev_comp.id)
     
     company_ids = [c.id for c in companies] if companies else None
     
@@ -161,12 +176,7 @@ async def query(
     
     # Fetch recent chat history for context
     # Limit to last 10 messages to avoid overflowing context window
-    history_msgs = session.exec(
-        select(ChatMessage)
-        .where(ChatMessage.session_id == session_id)
-        .order_by(ChatMessage.created_at.asc()) # Get oldest first? No, we need time order.
-        # But for limiting, we want the *last* 10. So order desc, limit, then reverse.
-    ).all()
+
     
     # Sort by time asc for conversation flow
     # If we fetch all, just sort. If we limit, use subquery or Python slice.

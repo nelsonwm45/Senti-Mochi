@@ -25,7 +25,7 @@ export default function ChatPage() {
     deleteSession
   } = useChat();
   const [citationPanelOpen, setCitationPanelOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeCitationId, setActiveCitationId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -77,8 +77,9 @@ export default function ChatPage() {
           <div className="flex-shrink-0 px-6 py-4 border-b border-glass-border flex items-center justify-between bg-glass-bg backdrop-blur-xl">
             <div className="flex items-center gap-3">
               <button 
-                className="lg:hidden p-2 -ml-2 hover:bg-white/10 rounded-lg transition-colors"
-                onClick={() => setSidebarOpen(true)}
+                className="p-2 -ml-2 hover:bg-white/10 rounded-lg transition-colors text-foreground/80 hover:text-foreground"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
               >
                 <Menu size={20} />
               </button>
