@@ -29,12 +29,19 @@ class NewsService:
         return []
 
     @staticmethod
+    def get_recent_articles(company_id: str, session: Session, limit: int = 5) -> list[NewsArticle]:
+        """
+        Retrieve recent news articles object list.
+        """
+        stmt = select(NewsArticle).where(NewsArticle.company_id == company_id).order_by(NewsArticle.published_at.desc()).limit(limit)
+        return session.exec(stmt).all()
+
+    @staticmethod
     def get_company_news_context(company_id: str, session: Session, limit: int = 5) -> str:
         """
         Retrieve recent news for a company formatted for LLM context.
         """
-        stmt = select(NewsArticle).where(NewsArticle.company_id == company_id).order_by(NewsArticle.published_at.desc()).limit(limit)
-        articles = session.exec(stmt).all()
+        articles = NewsService.get_recent_articles(company_id, session, limit)
         
         if not articles:
             return ""
@@ -43,7 +50,10 @@ class NewsService:
         for article in articles:
             date_str = article.published_at.strftime("%Y-%m-%d")
             summary += f"- [{date_str}] {article.title} (Source: {article.source})\n"
-            # Optional: Add content snippet if available and useful
+            
+            # Add content/summary if available
+            if article.content:
+                summary += f"  Summary: {article.content}\n"
             
         return summary + "\n"
     

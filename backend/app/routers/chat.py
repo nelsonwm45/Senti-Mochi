@@ -55,10 +55,12 @@ async def query(
     - Generates LLM response with citations
     - Optionally streams response
     """
+    # Instead, we will buffer the stream, re-index, and then yield the result.
+    
     rag_service = RAGService()
     
     # Generate/Resolve session ID early for context lookback
-    if request.sessionId:
+    if request.sessionId and request.sessionId != "null" and request.sessionId != "undefined":
         try:
             session_id = UUID(request.sessionId)
         except ValueError:
@@ -111,6 +113,7 @@ async def query(
         .where(ChatMessage.session_id == session_id)
         .where(ChatMessage.role == "user")
         .order_by(ChatMessage.created_at.desc())
+        .limit(1)
     ).first()
     
     if last_msg:
@@ -150,15 +153,7 @@ async def query(
     # Build structured chunks from DB (Financials, News)
     # These effectively act as "Source 1", "Source 2" etc.
     try:
-        # Pass companies directly if we have them, otherwise query
         if companies:
-            # We already have the companies, lets fetch chunks for them directly
-            # But get_structured_chunks takes query. 
-            # Let's refactor get_structured_chunks or just pass the query?
-            # Passing the original query "Which is better" won't work if we used lookback.
-            # We should pass the NAMES of the found companies or update get_structured_chunks to accept companies list.
-            # For minimal change, let's construct a synthetic query or update the service.
-            # Updating service is cleaner.
             structured_chunks = rag_service.get_structured_chunks_for_companies(companies, session)
         else:
              structured_chunks = []
@@ -217,15 +212,39 @@ async def query(
                 chat_history=chat_history
             ):
                 full_response += chunk
-                yield chunk
+                # We buffer everything, do not yield partial chunks yet if we want to reindex
+                # If we yielded here, we couldn't change "Source 15" to "Source 1" later in the stream easily
             
-            # Save assistant message after streaming completes
+            # Reindex citations (modifies full_response and reorders all_chunks)
+            # This logic was previously only in the non-streaming block
+            new_text, reordered_chunks = rag_service.reindex_citations(full_response, all_chunks)
+            
+            # Yield the full re-indexed text
+            yield new_text
+            
+            # Save assistant message AFTER streaming completes
+            # Note: We must save the *reordered* chunks in the citations
+            
+            # Format citations for storage
+            citations = []
+            for i, chunk in enumerate(reordered_chunks):
+                citations.append(CitationInfo(
+                    sourceNumber=i + 1,
+                    filename=chunk["filename"],
+                    pageNumber=chunk["page_number"],
+                    chunkId=str(chunk["id"]),
+                    similarity=chunk["similarity"],
+                    text=chunk["content"],
+                    startLine=chunk.get("start_line"),
+                    endLine=chunk.get("end_line")
+                ))
+
             assistant_message = ChatMessage(
                 user_id=current_user.id,
                 session_id=session_id,
                 role="assistant",
-                content=full_response,
-                citations={"chunks": [str(c["id"]) for c in all_chunks]}
+                content=new_text,
+                citations={"sources": [c.dict() for c in citations]}
             )
             session.add(assistant_message)
             session.commit()
@@ -240,6 +259,10 @@ async def query(
             context, 
             chat_history=chat_history
         )
+        
+        # Reindex citations to be sequential (1, 2, 3...)
+        # This reorders all_chunks so that the first cited source becomes Source 1 (chunks[0])
+        result["response"], all_chunks = rag_service.reindex_citations(result["response"], all_chunks)
         
         # Format citations
         citations = []
