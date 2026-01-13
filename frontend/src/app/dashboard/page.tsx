@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 import apiClient from '@/lib/apiClient';
 import { bursaCompanies } from '@/lib/bursaCompanies';
+import { sentimentApi, SentimentResult } from '@/lib/api/sentiment';
 import {
   FileText,
   AlertTriangle,
@@ -15,7 +16,8 @@ import {
   Minus,
   TrendingDown,
   Newspaper,
-  Download
+  Download,
+  Sparkles
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import {
@@ -84,6 +86,7 @@ interface UnifiedFeedItem {
   companyCode?: string;
   description?: string;
   source: string;
+  sentiment?: SentimentResult;
 }
 
 // Utility function to decode HTML entities
@@ -155,6 +158,7 @@ function DashboardContent() {
   const [watchlistCompanies, setWatchlistCompanies] = useState<WatchlistCompany[]>([]);
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set());
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [analyzingSentiment, setAnalyzingSentiment] = useState(false);
   const [stats, setStats] = useState({
     bursa: 0,
     star: 0,
@@ -198,6 +202,11 @@ function DashboardContent() {
           nst: nstResponse.length,
           total: combinedFeed.length
         });
+        
+        // Automatically analyze sentiment for all articles
+        if (combinedFeed.length > 0) {
+          analyzeSentimentForFeed(combinedFeed);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch watchlist');
         console.error('Error fetching watchlist:', err);
@@ -208,6 +217,45 @@ function DashboardContent() {
 
     fetchWatchlist();
   }, []);
+
+  // Analyze sentiment for all feed items (excluding Bursa announcements)
+  const analyzeSentimentForFeed = async (feed: UnifiedFeedItem[]) => {
+    setAnalyzingSentiment(true);
+    try {
+      // Filter to only analyze The Star and NST articles (exclude Bursa)
+      const articlesForAnalysis = feed
+        .filter(item => item.type === 'star' || item.type === 'nst')
+        .map(item => ({
+          id: item.id,
+          title: item.title,
+          company: item.company || 'Unknown',
+          description: item.description,
+          url: item.link,
+          source: item.source
+        }));
+
+      if (articlesForAnalysis.length === 0) {
+        setAnalyzingSentiment(false);
+        return;
+      }
+
+      // Call batch sentiment API
+      const sentimentResults = await sentimentApi.analyzeBatch(articlesForAnalysis);
+
+      // Update feed with sentiment data (only for Star and NST)
+      setUnifiedFeed(prevFeed => 
+        prevFeed.map(item => ({
+          ...item,
+          sentiment: sentimentResults[item.id] || item.sentiment
+        }))
+      );
+    } catch (err) {
+      console.error('Error analyzing sentiment:', err);
+      // Don't show error to user, sentiment is optional
+    } finally {
+      setAnalyzingSentiment(false);
+    }
+  };
 
   // Fetch Bursa Malaysia announcements for multiple companies
   const fetchBursaAnnouncements = async (companies: WatchlistCompany[]): Promise<UnifiedFeedItem[]> => {
@@ -437,6 +485,36 @@ function DashboardContent() {
     }
   };
 
+  // Get sentiment badge styling
+  const getSentimentBadge = (sentiment: 'positive' | 'neutral' | 'negative') => {
+    switch (sentiment) {
+      case 'positive':
+        return {
+          label: 'Positive',
+          color: 'text-green-400',
+          bg: 'bg-green-500/10',
+          icon: TrendingUp,
+          borderColor: 'border-green-500/30'
+        };
+      case 'negative':
+        return {
+          label: 'Negative',
+          color: 'text-red-400',
+          bg: 'bg-red-500/10',
+          icon: TrendingDown,
+          borderColor: 'border-red-500/30'
+        };
+      case 'neutral':
+        return {
+          label: 'Neutral',
+          color: 'text-gray-400',
+          bg: 'bg-gray-500/10',
+          icon: Minus,
+          borderColor: 'border-gray-500/30'
+        };
+    }
+  };
+
   // Stats data
   const statsData = [
     {
@@ -612,11 +690,15 @@ function DashboardContent() {
                 unifiedFeed.map((item) => {
                   const badge = getSourceBadge(item.type);
                   const BadgeIcon = badge.icon;
+                  const sentimentBadge = item.sentiment ? getSentimentBadge(item.sentiment.sentiment) : null;
+                  const SentimentIcon = sentimentBadge?.icon;
 
                   return (
                     <GlassCard
                       key={item.id}
-                      className="p-6 relative overflow-hidden group hover:border-emerald-500/30 transition-colors"
+                      className={`p-6 relative overflow-hidden group hover:border-emerald-500/30 transition-colors ${
+                        sentimentBadge ? sentimentBadge.borderColor : ''
+                      }`}
                     >
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex-1">
@@ -633,6 +715,27 @@ function DashboardContent() {
                                 {item.company} {item.companyCode && `(${item.companyCode})`}
                               </span>
                             )}
+                            {/* Sentiment Badge */}
+                            {analyzingSentiment && !item.sentiment && (
+                              <div className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-gray-500/10 text-gray-400">
+                                <Sparkles size={12} className="animate-pulse" />
+                                Analyzing...
+                              </div>
+                            )}
+                            {sentimentBadge && SentimentIcon && (
+                              <div 
+                                className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded ${sentimentBadge.bg} ${sentimentBadge.color}`}
+                                title={item.sentiment?.reasoning}
+                              >
+                                <SentimentIcon size={12} />
+                                {sentimentBadge.label}
+                                {item.sentiment?.confidence && (
+                                  <span className="opacity-70 ml-1">
+                                    ({Math.round(item.sentiment.confidence * 100)}%)
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <span className="text-sm text-foreground-muted flex items-center gap-1 ml-4 whitespace-nowrap">
@@ -644,6 +747,15 @@ function DashboardContent() {
                         <p className="text-foreground-secondary text-sm leading-relaxed mb-4 line-clamp-2">
                           {item.description}
                         </p>
+                      )}
+                      
+                      {/* Sentiment Reasoning */}
+                      {item.sentiment?.reasoning && (
+                        <div className="mb-4 p-3 rounded-lg bg-white/5 border border-white/10">
+                          <p className="text-xs text-foreground-muted italic">
+                            <span className="font-semibold">AI Analysis:</span> {item.sentiment.reasoning}
+                          </p>
+                        </div>
                       )}
 
                       <div className="flex justify-end gap-3">
