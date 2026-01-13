@@ -75,11 +75,18 @@ async def query(
     if request.documentIds:
         document_ids = [UUID(doc_id) for doc_id in request.documentIds]
     
+    # Detect Company for context filtering
+    from app.services.company_service import company_service
+    company = company_service.find_company_by_text(request.query, session)
+    company_id = company.id if company else None
+    
     # Vector search with SECURITY CHECK - only user's documents
+    # And optional company filtering
     chunks = rag_service.vector_search(
         query_embedding=query_embedding,
         user_id=current_user.id,  # Critical security parameter
         document_ids=document_ids,
+        company_id=company_id,
         limit=request.maxResults
     )
     

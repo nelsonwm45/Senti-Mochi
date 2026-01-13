@@ -36,6 +36,7 @@ class RAGService:
         query_embedding: List[float],
         user_id: UUID,
         document_ids: Optional[List[UUID]] = None,
+        company_id: Optional[UUID] = None,
         limit: int = 5,
         threshold: float = 0.4
     ) -> List[Dict]:
@@ -49,9 +50,14 @@ class RAGService:
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
             
             # Log the query for debugging
-            print(f"Vector search query: {embedding_str[:50]}... User: {user_id}")
+            print(f"Vector search query user: {user_id}, company: {company_id}")
 
             # Base query with security check - MUST filter by user_id
+            # Also filter by company_id if provided (include global docs with null company_id)
+            company_filter = ""
+            if company_id:
+                company_filter = f"AND (d.company_id = '{str(company_id)}' OR d.company_id IS NULL)"
+
             query_sql = f"""
                 SELECT 
                     dc.id,
@@ -69,6 +75,7 @@ class RAGService:
                 JOIN documents d ON dc.document_id = d.id
                 WHERE d.user_id = '{str(user_id)}'
                   AND d.is_deleted = false
+                  {company_filter}
                   -- AND 1 - (dc.embedding <=> '{embedding_str}'::vector) >= {0.4}
                 ORDER BY similarity DESC
                 LIMIT {limit}
