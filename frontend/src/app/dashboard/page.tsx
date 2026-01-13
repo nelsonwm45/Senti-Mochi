@@ -177,6 +177,7 @@ function DashboardContent() {
         for (const item of items.slice(0, 5)) {
           const published_at = new Date(item.pubdateunix * 1000).toISOString();
 
+          // Use title as placeholder - content will be enriched by backend
           articles.push({
             company_id: company.id,
             source: 'star',
@@ -184,7 +185,7 @@ function DashboardContent() {
             title: item.title,
             url: item.link,
             published_at,
-            content: item.description || item.summary
+            content: item.title  // Backend will enrich with full content
           });
         }
       } catch (err) {
@@ -216,6 +217,7 @@ function DashboardContent() {
         for (const item of items.slice(0, 5)) {
           const published_at = new Date(item.created * 1000).toISOString();
 
+          // Use title as placeholder - content will be enriched by backend
           articles.push({
             company_id: company.id,
             source: 'nst',
@@ -223,7 +225,7 @@ function DashboardContent() {
             title: item.title,
             url: item.url,
             published_at,
-            content: item.field_article_lead
+            content: item.title  // Backend will enrich with full content
           });
         }
       } catch (err) {
@@ -279,6 +281,18 @@ function DashboardContent() {
           ]);
 
           const allArticles = [...bursaArticles, ...starArticles, ...nstArticles];
+
+          // Log sample of articles with content for debugging
+          if (allArticles.length > 0) {
+            console.log('[NEWS] Sample articles with content:', 
+              allArticles.slice(0, 2).map(a => ({
+                source: a.source,
+                title: a.title.substring(0, 50),
+                contentLength: a.content?.length || 0,
+                contentPreview: a.content?.substring(0, 100)
+              }))
+            );
+          }
 
           // Send articles to backend for storage
           if (allArticles.length > 0) {
@@ -654,7 +668,7 @@ function DashboardContent() {
                       </div>
 
                       {item.description && (
-                        <p className="text-foreground-secondary text-sm leading-relaxed mb-4 line-clamp-2">
+                        <p className="text-foreground-secondary text-sm leading-relaxed mb-4 whitespace-pre-wrap">
                           {item.description}
                         </p>
                       )}
