@@ -115,6 +115,7 @@ def get_news_feed(
     for article, company in results:
         article_dict = {
             "id": str(article.id),
+            "companyId": str(company.id),  # Add company ID for filtering
             "type": article.source, # Frontend expects 'type'
             "title": article.title,
             "link": article.url,

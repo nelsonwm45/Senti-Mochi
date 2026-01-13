@@ -9,6 +9,7 @@ export interface SentimentData {
 
 export interface UnifiedFeedItem {
 	id: string;
+	companyId: string;  // Company UUID for filtering
 	type: 'bursa' | 'star' | 'nst';
 	title: string;
 	link: string;

@@ -42,6 +42,8 @@ function DashboardContent() {
   const [error, setError] = useState<string | null>(null);
   const [watchlistEmpty, setWatchlistEmpty] = useState(false);
   const [watchlistCompanies, setWatchlistCompanies] = useState<WatchlistCompany[]>([]);
+  const [activeTab, setActiveTab] = useState<'all' | 'alerts' | 'positive' | 'negative' | 'neutral'>('all');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('all');
   const [stats, setStats] = useState({
     bursa: 0,
     star: 0,
@@ -249,7 +251,9 @@ function DashboardContent() {
         // Step 1: Load existing news from database first (fast)
         const cachedNewsData = await newsApi.getFeed(50, watchlistHasCompanies);
 
-        setUnifiedFeed(cachedNewsData);
+        // Filter out Bursa announcements from display
+        const filteredCachedNews = cachedNewsData.filter(i => i.type !== 'bursa');
+        setUnifiedFeed(filteredCachedNews);
 
         // Calculate stats from cached data
         const cachedBursaCount = cachedNewsData.filter(i => i.type === 'bursa').length;
@@ -260,7 +264,7 @@ function DashboardContent() {
           bursa: cachedBursaCount,
           star: cachedStarCount,
           nst: cachedNstCount,
-          total: cachedNewsData.length
+          total: filteredCachedNews.length
         });
 
         setLoading(false); // Show cached data immediately
@@ -284,7 +288,9 @@ function DashboardContent() {
               // Step 3: Refresh feed with newly stored articles
               const updatedNewsData = await newsApi.getFeed(50, watchlistHasCompanies);
 
-              setUnifiedFeed(updatedNewsData);
+              // Filter out Bursa announcements from display
+              const filteredUpdatedNews = updatedNewsData.filter(i => i.type !== 'bursa');
+              setUnifiedFeed(filteredUpdatedNews);
 
               // Update stats with fresh data
               const updatedBursaCount = updatedNewsData.filter(i => i.type === 'bursa').length;
@@ -295,7 +301,7 @@ function DashboardContent() {
                 bursa: updatedBursaCount,
                 star: updatedStarCount,
                 nst: updatedNstCount,
-                total: updatedNewsData.length
+                total: filteredUpdatedNews.length
               });
             } catch (storeErr) {
               console.warn('Failed to store articles:', storeErr);
@@ -347,7 +353,7 @@ function DashboardContent() {
     {
       label: 'Total Items',
       value: stats.total.toString(),
-      change: 'All sources',
+      change: 'News articles',
       changeColor: 'text-emerald-500',
       icon: FileText,
       iconColor: 'text-emerald-500',
@@ -356,8 +362,8 @@ function DashboardContent() {
     },
     {
       label: 'News Sources',
-      value: '3',
-      change: `${stats.bursa} Bursa, ${stats.star} Star, ${stats.nst} NST`,
+      value: '2',
+      change: `${stats.star} Star, ${stats.nst} NST`,
       changeColor: 'text-blue-500',
       icon: Newspaper,
       iconColor: 'text-blue-500',
@@ -376,9 +382,28 @@ function DashboardContent() {
     }
   ];
 
-  // Calculate sentiment distribution from unified feed
+  // Filter feed based on active tab and selected company
+  const filteredFeed = unifiedFeed.filter(item => {
+    // Company filter
+    if (selectedCompanyId !== 'all' && item.companyId !== selectedCompanyId) {
+      return false;
+    }
+
+    // Sentiment filter
+    if (activeTab === 'all') return true;
+    if (activeTab === 'alerts') return item.sentiment?.label?.toLowerCase() === 'negative';
+    return item.sentiment?.label?.toLowerCase() === activeTab;
+  });
+
+  // Calculate sentiment counts
+  const sentimentCounts = {
+    positive: unifiedFeed.filter(i => i.sentiment?.label?.toLowerCase() === 'positive').length,
+    negative: unifiedFeed.filter(i => i.sentiment?.label?.toLowerCase() === 'negative').length,
+    neutral: unifiedFeed.filter(i => i.sentiment?.label?.toLowerCase() === 'neutral').length,
+  };
+
+  // Calculate sentiment distribution from unified feed (excluding Bursa)
   const sentimentData = [
-    { name: 'Bursa', value: stats.bursa, color: '#10b981' }, // emerald-500
     { name: 'The Star', value: stats.star, color: '#3b82f6' }, // blue-500
     { name: 'NST', value: stats.nst, color: '#a855f7' }  // purple-500
   ];
@@ -415,10 +440,85 @@ function DashboardContent() {
         {/* Intelligence Feed - Now showing unified news from all sources */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">Intelligence Feed</h2>
+            <h2 className="text-xl font-semibold text-foreground">Market Intelligence Feed</h2>
             <span className="text-sm text-foreground-muted">
-              {loading ? 'Loading...' : watchlistEmpty ? 'No companies in watchlist' : `Showing ${unifiedFeed.length} items from all sources`}
+              {loading ? 'Loading...' : watchlistEmpty ? 'No companies in watchlist' : `${unifiedFeed.length} announcements • Real-time Bursa filings`}
             </span>
+          </div>
+
+          {/* Company Filter Dropdown */}
+          {!watchlistEmpty && watchlistCompanies.length > 0 && (
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-foreground-muted">Filter by company:</label>
+              <select
+                value={selectedCompanyId}
+                onChange={(e) => setSelectedCompanyId(e.target.value)}
+                className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-foreground text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/50 hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <option value="all" className="bg-gray-900 text-foreground">All Companies</option>
+                {watchlistCompanies.map((company) => (
+                  <option key={company.id} value={company.id} className="bg-gray-900 text-foreground">
+                    {company.name} ({company.ticker})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Sentiment Filter Tabs */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'all'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-white/5 text-foreground-muted hover:bg-white/10'
+                }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setActiveTab('alerts')}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${activeTab === 'alerts'
+                ? 'bg-red-500 text-white'
+                : 'bg-white/5 text-foreground-muted hover:bg-white/10'
+                }`}
+            >
+              <AlertTriangle size={16} />
+              Alerts
+              {sentimentCounts.negative > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${activeTab === 'alerts' ? 'bg-white/20' : 'bg-red-500/20 text-red-400'
+                  }`}>
+                  {sentimentCounts.negative}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('positive')}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'positive'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-white/5 text-foreground-muted hover:bg-white/10'
+                }`}
+            >
+              Positive
+            </button>
+            <button
+              onClick={() => setActiveTab('negative')}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'negative'
+                ? 'bg-red-500 text-white'
+                : 'bg-white/5 text-foreground-muted hover:bg-white/10'
+                }`}
+            >
+              Negative
+            </button>
+            <button
+              onClick={() => setActiveTab('neutral')}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'neutral'
+                ? 'bg-amber-500 text-white'
+                : 'bg-white/5 text-foreground-muted hover:bg-white/10'
+                }`}
+            >
+              Neutral
+            </button>
           </div>
 
           {error && (
@@ -452,12 +552,17 @@ function DashboardContent() {
             </GlassCard>
           ) : (
             <div className="space-y-4">
-              {unifiedFeed.length === 0 ? (
+              {filteredFeed.length === 0 ? (
                 <GlassCard className="p-6">
-                  <p className="text-center text-foreground-muted">No news items found for your watched companies</p>
+                  <p className="text-center text-foreground-muted">
+                    {unifiedFeed.length === 0
+                      ? 'No news items found for your watched companies'
+                      : `No ${activeTab === 'alerts' ? 'negative' : activeTab} sentiment items found`
+                    }
+                  </p>
                 </GlassCard>
               ) : (
-                unifiedFeed.map((item) => {
+                filteredFeed.map((item) => {
                   const badge = getSourceBadge(item.type);
                   const BadgeIcon = badge.icon;
 
@@ -615,7 +720,7 @@ function DashboardContent() {
             </div>
             <div className="mt-6 space-y-3">
               <p className="text-sm text-foreground-muted text-center">
-                News items from {stats.bursa} Bursa, {stats.star} The Star, and {stats.nst} NST
+                News items from {stats.star} The Star and {stats.nst} NST
               </p>
             </div>
           </GlassCard>
