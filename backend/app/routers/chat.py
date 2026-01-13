@@ -60,7 +60,7 @@ async def query(
     rag_service = RAGService()
     
     # Generate/Resolve session ID early for context lookback
-    if request.sessionId:
+    if request.sessionId and request.sessionId != "null" and request.sessionId != "undefined":
         try:
             session_id = UUID(request.sessionId)
         except ValueError:
