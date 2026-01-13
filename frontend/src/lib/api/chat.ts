@@ -32,6 +32,7 @@ export interface QueryRequest {
 	documentIds?: string[];
 	maxResults?: number;
 	stream?: boolean;
+	sessionId?: string; // Add session ID support
 }
 
 export interface ChatHistoryResponse {

@@ -1,14 +1,22 @@
 'use client';
 
-import { useState } from 'react';
-import { chatApi, QueryResponse, CitationInfo } from '@/lib/api/chat';
+import { useState, useEffect, useCallback } from 'react';
+import { chatApi, QueryResponse, CitationInfo, ChatMessage as ApiChatMessage } from '@/lib/api/chat';
 import { AgentState } from '@/components/chat/AgenticThought';
 
-interface ChatMessage {
+// Extend the local ChatMessage to match our needs
+export interface ChatMessage {
 	role: 'user' | 'assistant';
 	content: string;
 	timestamp: string;
 	citations?: CitationInfo[];
+}
+
+export interface ChatSession {
+	id: string;
+	title: string;
+	date: string;
+	messages: ChatMessage[];
 }
 
 export function useChat() {
@@ -16,6 +24,93 @@ export function useChat() {
 	const [agentState, setAgentState] = useState<AgentState>('idle');
 	const [isLoading, setIsLoading] = useState(false);
 	const [currentCitations, setCurrentCitations] = useState<CitationInfo[]>([]);
+	
+	// Session Management
+	const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+	const [sessions, setSessions] = useState<ChatSession[]>([]);
+
+	// Initial Load: Fetch History
+	const fetchHistory = useCallback(async () => {
+		try {
+			const history = await chatApi.history({ limit: 100 });
+			
+			// Group messages by sessionId
+			const sessionsMap = new Map<string, ChatMessage[]>();
+			
+			// Sort messages by creation time first just in case
+			const sortedMessages = history.messages.sort((a, b) => 
+				new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+			);
+
+			sortedMessages.forEach(msg => {
+				const sid = msg.sessionId;
+				if (!sid) return;
+				
+				if (!sessionsMap.has(sid)) {
+					sessionsMap.set(sid, []);
+				}
+				
+				sessionsMap.get(sid)?.push({
+					role: msg.role,
+					content: msg.content,
+					timestamp: msg.createdAt,
+					// Safely handle citations: 
+					// 1. If it's already an array (future proof)
+					// 2. If it's wrapped in 'sources' (my planned backend change)
+					// 3. Else empty (fallback for current simple dict format)
+					citations: Array.isArray(msg.citations) ? msg.citations : (msg.citations?.sources || [])
+				});
+			});
+
+			// Create Session objects
+			const loadedSessions: ChatSession[] = Array.from(sessionsMap.entries()).map(([id, msgs]) => {
+				// Title is the first user message, or "New Chat"
+				const firstUserMsg = msgs.find(m => m.role === 'user');
+				const title = firstUserMsg ? firstUserMsg.content.slice(0, 30) + (firstUserMsg.content.length > 30 ? '...' : '') : 'New Chat';
+                
+                // Date from last message
+                const lastMsg = msgs[msgs.length - 1];
+                const date = new Date(lastMsg.timestamp).toLocaleDateString();
+
+				return {
+					id,
+					title,
+					date,
+					messages: msgs
+				};
+			});
+            
+            // Sort sessions by most recent (using the timestamp of the last message in the session)
+            loadedSessions.sort((a, b) => {
+                 const lastA = new Date(a.messages[a.messages.length - 1].timestamp).getTime();
+                 const lastB = new Date(b.messages[b.messages.length - 1].timestamp).getTime();
+                 return lastB - lastA;
+            });
+
+			setSessions(loadedSessions);
+		} catch (error) {
+			console.error("Failed to load chat history:", error);
+		}
+	}, []);
+
+	useEffect(() => {
+		fetchHistory();
+	}, [fetchHistory]);
+
+	const loadSession = (session: ChatSession) => {
+		setCurrentSessionId(session.id);
+		setMessages(session.messages);
+		
+		// Reset other states
+		setAgentState('idle');
+		// Maybe load citations from the last message if available?
+		const lastMsg = session.messages[session.messages.length - 1];
+		if (lastMsg?.citations) {
+			setCurrentCitations(lastMsg.citations);
+		} else {
+			setCurrentCitations([]);
+		}
+	};
 
 	const sendMessage = async (content: string, stream = true) => {
 		// Add user message
@@ -46,6 +141,9 @@ export function useChat() {
 			setAgentState('complete');
 		} finally {
 			setIsLoading(false);
+            // Refresh history to pick up the new session/messages
+            // We delay slightly to let the backend index? Or just re-fetch
+            setTimeout(fetchHistory, 1000); 
 		}
 	};
 
@@ -68,9 +166,19 @@ export function useChat() {
 		setMessages((prev) => [...prev, assistantMessage]);
 
 		try {
-			const stream = chatApi.queryStream({ query, stream: true });
+			// Pass currentSessionId if it exists
+			const stream = chatApi.queryStream({ 
+				query, 
+				stream: true, 
+				sessionId: currentSessionId || undefined 
+			});
 
 			for await (const chunk of stream) {
+                // If it's the first chunk and we didn't have a session ID, we might want to capture it from response headers?
+                // But the stream generator currently only yields strings (content).
+                // For now, we rely on the backend reusing the session if we pass it, or creating a new "implicit" one.
+                // Re-fetching history after will clarify the session ID.
+                
 				accumulatedContent += chunk;
 				setMessages((prev) => {
 					const newMessages = [...prev];
@@ -98,7 +206,16 @@ export function useChat() {
 
 		setAgentState('generating');
 
-		const response: QueryResponse = await chatApi.query({ query, stream: false });
+		const response: QueryResponse = await chatApi.query({ 
+			query, 
+			stream: false,
+			sessionId: currentSessionId || undefined
+		});
+        
+        // Update current session ID if we started a new one
+        if (response.sessionId && !currentSessionId) {
+            setCurrentSessionId(response.sessionId);
+        }
 
 		const assistantMessage: ChatMessage = {
 			role: 'assistant',
@@ -118,6 +235,7 @@ export function useChat() {
 		setMessages([]);
 		setCurrentCitations([]);
 		setAgentState('idle');
+		setCurrentSessionId(null); // Reset session to start a fresh one
 	};
 
 	return {
@@ -127,5 +245,8 @@ export function useChat() {
 		currentCitations,
 		sendMessage,
 		clearMessages,
+        sessions,
+        loadSession,
+        currentSessionId
 	};
 }

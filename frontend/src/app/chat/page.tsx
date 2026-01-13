@@ -12,7 +12,17 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 
 export default function ChatPage() {
-  const { messages, agentState, isLoading, currentCitations, sendMessage, clearMessages } = useChat();
+  const { 
+    messages, 
+    agentState, 
+    isLoading, 
+    currentCitations, 
+    sendMessage, 
+    clearMessages,
+    sessions,
+    currentSessionId,
+    loadSession
+  } = useChat();
   const [citationPanelOpen, setCitationPanelOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeCitationId, setActiveCitationId] = useState<number | null>(null);
@@ -53,6 +63,9 @@ export default function ChatPage() {
           onNewChat={clearMessages}
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
+          sessions={sessions}
+          currentSessionId={currentSessionId}
+          onSelectSession={loadSession}
         />
 
         {/* Main Chat Area */}
