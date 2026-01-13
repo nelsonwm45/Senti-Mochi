@@ -50,8 +50,14 @@ export default function Signup() {
     } catch (err: any) {
       console.error(err);
       // Extract specific error message from backend response
-      const errorMessage = err.response?.data?.detail || 'Signup failed. Please try again.';
-      setError(errorMessage);
+      const backendError = err.response?.data?.detail || 'Signup failed. Please try again.';
+      
+      // If it's the "Email already registered" error, customize it with the email
+      if (backendError === 'Email already registered') {
+        setError(`"${email}" is already registered. Please use a different email or log in.`);
+      } else {
+        setError(backendError);
+      }
     } finally {
       setIsLoading(false);
     }
