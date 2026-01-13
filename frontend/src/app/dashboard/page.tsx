@@ -84,6 +84,8 @@ interface UnifiedFeedItem {
   source: string;
 }
 
+const ALERT_KEYWORDS = ['challenge', 'bribe', 'currupt'];
+
 // Utility function to decode HTML entities
 const decodeHtml = (html: string): string => {
   const txt = document.createElement('textarea');
@@ -151,6 +153,7 @@ function DashboardContent() {
   const [error, setError] = useState<string | null>(null);
   const [watchlistEmpty, setWatchlistEmpty] = useState(false);
   const [watchlistCompanies, setWatchlistCompanies] = useState<WatchlistCompany[]>([]);
+  const [filterAlerts, setFilterAlerts] = useState(false);
   const [stats, setStats] = useState({
     bursa: 0,
     star: 0,
@@ -473,6 +476,23 @@ function DashboardContent() {
     { name: 'NST', value: stats.nst, color: '#a855f7' }  // purple-500
   ];
 
+  // Helper function to check if item is an alert
+  const isItemAlert = (item: UnifiedFeedItem) => {
+    const normalizedTitle = item.title?.toLowerCase() || '';
+    const normalizedDescription = item.description?.toLowerCase() || '';
+    return ALERT_KEYWORDS.some(keyword =>
+      normalizedTitle.includes(keyword) || normalizedDescription.includes(keyword)
+    );
+  };
+
+  // Filter feed based on alert filter
+  const filteredFeed = filterAlerts
+    ? unifiedFeed.filter(isItemAlert)
+    : unifiedFeed;
+
+  // Count alerts
+  const alertCount = unifiedFeed.filter(isItemAlert).length;
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -505,9 +525,38 @@ function DashboardContent() {
         {/* Intelligence Feed - Now showing unified news from all sources */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">Intelligence Feed</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold text-foreground">Intelligence Feed</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setFilterAlerts(false)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${!filterAlerts
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-white/5 text-foreground-muted hover:bg-white/10'
+                    }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setFilterAlerts(true)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${filterAlerts
+                      ? 'bg-red-500 text-white'
+                      : 'bg-white/5 text-foreground-muted hover:bg-white/10'
+                    }`}
+                >
+                  <AlertTriangle size={16} />
+                  Alerts
+                  {alertCount > 0 && (
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${filterAlerts ? 'bg-white/20' : 'bg-red-500/20 text-red-500'
+                      }`}>
+                      {alertCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
             <span className="text-sm text-foreground-muted">
-              {loading ? 'Loading...' : watchlistEmpty ? 'No companies in watchlist' : `Showing ${unifiedFeed.length} items from all sources`}
+              {loading ? 'Loading...' : watchlistEmpty ? 'No companies in watchlist' : `Showing ${filteredFeed.length} items from all sources`}
             </span>
           </div>
 
@@ -542,36 +591,50 @@ function DashboardContent() {
             </GlassCard>
           ) : (
             <div className="space-y-4">
-              {unifiedFeed.length === 0 ? (
+              {filteredFeed.length === 0 ? (
                 <GlassCard className="p-6">
-                  <p className="text-center text-foreground-muted">No news items found for your watched companies</p>
+                  <p className="text-center text-foreground-muted">
+                    {filterAlerts ? 'No alert items found' : 'No news items found for your watched companies'}
+                  </p>
                 </GlassCard>
               ) : (
-                unifiedFeed.map((item) => {
+                filteredFeed.map((item) => {
                   const badge = getSourceBadge(item.type);
                   const BadgeIcon = badge.icon;
+                  const normalizedTitle = item.title?.toLowerCase() || '';
+                  const normalizedDescription = item.description?.toLowerCase() || '';
+                  const isAlert = ALERT_KEYWORDS.some(keyword =>
+                    normalizedTitle.includes(keyword) || normalizedDescription.includes(keyword)
+                  );
 
                   return (
                     <GlassCard
                       key={item.id}
-                      className="p-6 relative overflow-hidden group hover:border-emerald-500/30 transition-colors"
+                      className="p-5 relative overflow-hidden group hover:border-emerald-500/30 transition-colors"
                     >
                       <div className="flex justify-between items-start mb-4">
-                        <div className="flex-1">
-                          <div className="flex items-baseline gap-2 mb-2">
-                            <h3 className="text-lg font-bold text-foreground">{item.title}</h3>
-                          </div>
-                          <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {item.company && (
+                              <div className="flex items-baseline gap-2">
+                                <h3 className="text-xl font-semibold text-foreground leading-tight">{item.company}</h3>
+                                {item.companyCode && (
+                                  <span className="text-xs font-medium text-foreground-muted">({item.companyCode})</span>
+                                )}
+                              </div>
+                            )}
                             <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded ${badge.bg} ${badge.color} uppercase tracking-wider`}>
                               <BadgeIcon size={12} />
                               {badge.label}
                             </div>
-                            {item.company && (
-                              <span className="text-xs font-medium px-2 py-1 rounded bg-white/5 text-foreground-muted">
-                                {item.company} {item.companyCode && `(${item.companyCode})`}
-                              </span>
+                            {isAlert && (
+                              <div className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded bg-red-500/10 text-red-500 uppercase tracking-wider">
+                                <AlertTriangle size={12} />
+                                Alert
+                              </div>
                             )}
                           </div>
+                          <p className="text-base font-semibold text-foreground leading-snug">{item.title}</p>
                         </div>
                         <span className="text-sm text-foreground-muted flex items-center gap-1 ml-4 whitespace-nowrap">
                           <Clock size={14} /> {item.date}
