@@ -197,11 +197,13 @@ class NewsService:
             # Optional: Add content snippet if available and useful
             
         return summary + "\n"
-
+    
     @staticmethod
-    def sync_news(session: Session = None):
+    def sync_news(company_id: int = None, session: Session = None):
         """
-        Main method to sync news for all companies.
+        Main method to sync news for companies.
+        If company_id is provided, sync only that company.
+        Otherwise, sync all companies.
         """
         local_session = False
         if not session:
@@ -209,9 +211,21 @@ class NewsService:
             local_session = True
             
         try:
-            companies = session.exec(select(Company)).all()
+            # Get companies to sync
+            if company_id:
+                # Sync single company
+                company = session.get(Company, company_id)
+                if not company:
+                    print(f"Company ID {company_id} not found")
+                    return 0
+                companies = [company]
+            else:
+                # Sync all companies
+                companies = session.exec(select(Company)).all()
+            
             print(f"Syncing news for {len(companies)} companies...")
             
+            total_saved = 0
             for company in companies:
                 new_articles = []
                 # Fetch from all sources
@@ -233,7 +247,10 @@ class NewsService:
                 if count > 0:
                     session.commit()
                     print(f"Saved {count} new articles for {company.name}")
-                    
+                    total_saved += count
+            
+            return total_saved
+                
         finally:
             if local_session:
                 session.close()

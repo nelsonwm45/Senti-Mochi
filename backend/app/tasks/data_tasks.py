@@ -31,4 +31,31 @@ def update_all_financials_task():
         for company in companies:
             if company.ticker:
                 finance_service.sync_financials(company.ticker, session)
-    print("Automated financials update completed.")
+    print(f"Automated financial data update completed.")
+
+@celery_app.task(name="update_company_news_task")
+def update_company_news_task(ticker: str):
+    """
+    Fetch and store news for a single company.
+    Called when user adds a company to their watchlist for immediate news.
+    """
+    print(f"[NEWS] Fetching news for {ticker}...")
+    
+    with Session(engine) as session:
+        # Find the company
+        company = session.exec(
+            select(Company).where(Company.ticker == ticker)
+        ).first()
+        
+        if not company:
+            print(f"[NEWS] Company {ticker} not found in database")
+            return
+        
+        # Sync news for this company
+        try:
+            count = news_service.sync_news(company.id, session)
+            print(f"[NEWS] Fetched {count} articles for {company.name} ({ticker})")
+        except Exception as e:
+            print(f"[NEWS] Error fetching news for {ticker}: {e}")
+    
+    return None

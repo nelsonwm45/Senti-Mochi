@@ -56,16 +56,16 @@ function DashboardContent() {
         const response = await apiClient.get('/api/v1/watchlist/my-watchlist');
         const companies = response.data;
 
-        if (companies.length === 0) {
-          setWatchlistEmpty(true);
-          setLoading(false);
-          return;
+        const watchlistHasCompanies = companies.length > 0;
+        setWatchlistEmpty(!watchlistHasCompanies);
+        
+        if (watchlistHasCompanies) {
+          setWatchlistCompanies(companies);
         }
 
-        setWatchlistCompanies(companies);
-
         // Fetch news from backend (persisted data)
-        const newsData = await newsApi.getFeed(50, true);
+        // If watchlist is empty, show all news. Otherwise, show only watchlist news.
+        const newsData = await newsApi.getFeed(50, watchlistHasCompanies);
         
         setUnifiedFeed(newsData);
         
