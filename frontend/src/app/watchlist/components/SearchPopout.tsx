@@ -122,10 +122,15 @@ export function SearchPopout({ isOpen, onClose, userId }: SearchPopoutProps) {
               </div>
               
               <div className="flex-1 overflow-y-auto p-2">
-                  {results.length === 0 ? (
+                  {loading && results.length === 0 ? (
+                      <div className="text-center py-12">
+                          <Loader2 className="animate-spin text-accent mx-auto mb-3" size={32} />
+                          <p className="text-gray-400">Loading companies...</p>
+                      </div>
+                  ) : results.length === 0 ? (
                       <div className="text-center py-8 text-gray-400">
                           <p className="mb-4">
-                              {query && !loading ? "No companies found." : "Start typing to search..."}
+                              {query ? "No companies found." : "No companies available yet."}
                           </p>
                           {query && !loading && (
                               <button
