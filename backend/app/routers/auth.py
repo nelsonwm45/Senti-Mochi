@@ -33,11 +33,15 @@ def signup(user: UserCreate, session: Session = Depends(get_session)):
     try:
         from app.services.company_service import company_service
         from app.tasks.company_tasks import seed_companies_task
+        from app.tasks.data_tasks import update_all_news_task
         
         count = company_service.get_company_count(session)
         if count == 0:
             print("No companies found. Triggering automated seeding task...")
             seed_companies_task.delay()
+            # Also trigger news sync after companies are seeded
+            print("Triggering initial news sync...")
+            update_all_news_task.delay()
     except Exception as e:
         print(f"Failed to trigger auto-seeding: {e}")
     
@@ -60,11 +64,15 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), ses
     try:
         from app.services.company_service import company_service
         from app.tasks.company_tasks import seed_companies_task
+        from app.tasks.data_tasks import update_all_news_task
         
         count = company_service.get_company_count(session)
         if count == 0:
             print("No companies found. Triggering automated seeding task...")
             seed_companies_task.delay()
+            # Also trigger news sync after companies are seeded
+            print("Triggering initial news sync...")
+            update_all_news_task.delay()
     except Exception as e:
         print(f"Failed to trigger auto-seeding: {e}")
 
