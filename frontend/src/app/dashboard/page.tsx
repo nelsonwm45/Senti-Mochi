@@ -98,7 +98,7 @@ function DashboardContent() {
 
     for (const company of companies) {
       const bursaCode = company.ticker.split('.')[0];
-      const url = `https://www.bursamalaysia.com/api/v1/announcements/search?ann_type=company&company=${bursaCode}&per_page=5&page=0`;
+      const url = `https://www.bursamalaysia.com/api/v1/announcements/search?ann_type=company&company=${bursaCode}&cat=AR,ARCO&per_page=5&page=0`;
 
       try {
         const response = await fetch(url, {
@@ -461,6 +461,43 @@ function DashboardContent() {
                   const badge = getSourceBadge(item.type);
                   const BadgeIcon = badge.icon;
 
+                  // Get sentiment badge styles
+                  const getSentimentBadge = (sentiment: any) => {
+                    if (!sentiment) return null;
+
+                    const label = sentiment.label.toLowerCase();
+                    const score = sentiment.score || 0;
+
+                    let bgColor = 'bg-gray-500/20';
+                    let textColor = 'text-gray-300';
+                    let icon = '◆';
+                    let ariaLabel = 'Neutral sentiment';
+
+                    if (label === 'positive') {
+                      bgColor = 'bg-emerald-500/20';
+                      textColor = 'text-emerald-400';
+                      icon = '↑';
+                      ariaLabel = 'Positive sentiment';
+                    } else if (label === 'negative') {
+                      bgColor = 'bg-red-500/20';
+                      textColor = 'text-red-400';
+                      icon = '↓';
+                      ariaLabel = 'Negative sentiment';
+                    }
+
+                    return {
+                      label,
+                      score,
+                      bgColor,
+                      textColor,
+                      icon,
+                      ariaLabel,
+                      confidence: sentiment.confidence || 0
+                    };
+                  };
+
+                  const sentimentBadge = getSentimentBadge(item.sentiment);
+
                   return (
                     <GlassCard
                       key={item.id}
@@ -480,6 +517,29 @@ function DashboardContent() {
                               <span className="text-xs font-medium px-2 py-1 rounded bg-white/5 text-foreground-muted">
                                 {item.company} {item.companyCode && `(${item.companyCode})`}
                               </span>
+                            )}
+                            {/* Show sentiment badge if available, or "analyzing" if not (but skip Bursa) */}
+                            {item.type !== 'bursa' && (
+                              sentimentBadge ? (
+                                <div
+                                  className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded ${sentimentBadge.bgColor} ${sentimentBadge.textColor} uppercase tracking-wider group/sentiment relative`}
+                                  title={`${sentimentBadge.label.charAt(0).toUpperCase() + sentimentBadge.label.slice(1)} (${sentimentBadge.score.toFixed(2)}) - Confidence: ${(sentimentBadge.confidence * 100).toFixed(0)}%`}
+                                >
+                                  <span>{sentimentBadge.icon}</span>
+                                  <span>{sentimentBadge.label}</span>
+                                  <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black/80 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/sentiment:opacity-100 transition-opacity pointer-events-none">
+                                    Score: {sentimentBadge.score.toFixed(2)} | Confidence: {(sentimentBadge.confidence * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                              ) : (
+                                <div
+                                  className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wider"
+                                  title="Sentiment analysis in progress"
+                                >
+                                  <span className="animate-pulse">⟳</span>
+                                  <span>Analyzing</span>
+                                </div>
+                              )
                             )}
                           </div>
                         </div>
