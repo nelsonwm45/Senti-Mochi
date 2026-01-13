@@ -47,9 +47,11 @@ export default function Signup() {
       
       // Use window.location to force a full refresh and update auth state in Sidebar
       window.location.href = '/dashboard';
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError('Signup failed. Please try again.');
+      // Extract specific error message from backend response
+      const errorMessage = err.response?.data?.detail || 'Signup failed. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
