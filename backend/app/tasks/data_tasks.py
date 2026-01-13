@@ -52,7 +52,6 @@ def update_company_news_task(ticker: str):
             return
         
         # Sync news for this company
-        news_service = NewsService()
         try:
             count = news_service.sync_news(company.id, session)
             print(f"[NEWS] Fetched {count} articles for {company.name} ({ticker})")
