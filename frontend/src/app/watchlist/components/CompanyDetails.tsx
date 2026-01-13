@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, FileText, Upload, PieChart, BarChart3, TrendingUp, Loader2 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { getKeyMetrics, formatValue, formatPercent } from '../utils';
 
 interface CompanyDetailsProps {
   ticker: string;
@@ -17,10 +18,7 @@ const tabs = [
   { id: 'cf', label: 'Cash Flow', icon: TrendingUp },
 ];
 
-const formatValue = (val: number) => {
-    if (val === undefined || val === null) return '-';
-    return val.toLocaleString(); // Always show full number with commas
-};
+
 
 // Recommended order for financial statements
 const IS_ORDER = [
@@ -86,27 +84,30 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
   // Helper to get latest values for metrics
   const getMetrics = (category: string) => {
       const cat = company[category];
-      if (!cat) return {};
+      if (!cat) return { metrics: {}, date: 'N/A' };
       const dates = Object.keys(cat).sort().reverse();
       const latestDate = dates[0];
-      if (!latestDate) return {};
+      if (!latestDate) return { metrics: {}, date: 'N/A' };
       
       const metrics = cat[latestDate] as Record<string, number>;
-      return metrics;
+      return { metrics, date: latestDate };
   };
 
-  const incomeStatement = getMetrics('income_statement');
-  const balanceSheet = getMetrics('balance_sheet');
-  const cashFlow = getMetrics('cash_flow');
-  const latestReportDate = company.income_statement ? Object.keys(company.income_statement).sort().reverse()[0] : 'N/A';
+  const { metrics: incomeStatement, date: isDate } = getMetrics('income_statement');
+  const { metrics: balanceSheet, date: bsDate } = getMetrics('balance_sheet');
+  const { metrics: cashFlow, date: cfDate } = getMetrics('cash_flow');
+  const latestReportDate = isDate;
 
-  const renderFinancialSection = (title: string, data: Record<string, number>, order: string[]) => {
+  const renderFinancialSection = (title: string, data: Record<string, number>, order: string[], date: string) => {
       const sortedKeys = sortFinancialKeys(Object.keys(data), order);
       
       return (
         <div className="bg-white/5 p-4 rounded-xl border border-white/10">
             <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-white">{title}</h3>
+                <div className="flex items-baseline gap-3">
+                    <h3 className="text-lg font-semibold text-white">{title}</h3>
+                    <span className="text-sm text-gray-400 font-mono">{date !== 'N/A' ? `Last updated: ${date}` : ''}</span>
+                </div>
                 <span className="text-xs text-gray-500">All numbers in base currency</span>
             </div>
             <div className="space-y-1">
@@ -141,7 +142,10 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                 {company.ticker[0]}
             </div>
             <div>
-                 <h1 className="text-2xl font-bold text-white leading-tight">{company.name}</h1>
+                 <div className="flex items-baseline gap-3">
+                    <h1 className="text-2xl font-bold text-white leading-tight">{company.name}</h1>
+                    <span className="text-sm text-gray-400 font-mono">{latestReportDate !== 'N/A' ? `Last updated: ${latestReportDate}` : ''}</span>
+                 </div>
                  <div className="flex gap-2 text-sm text-gray-400">
                     <span>{company.ticker}</span>
                     <span>•</span>
@@ -182,13 +186,60 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                         {company.name} is a company in the {company.sector} sector ({company.sub_sector}).
                         {company.website_url && <a href={company.website_url} target="_blank" rel="noopener noreferrer" className="block mt-2 text-indigo-400 hover:text-indigo-300">Visit Website &rarr;</a>}
                      </p>
-                     
-                     <div className="grid grid-cols-2 gap-4 mt-6">
-                         <div className="p-4 rounded-xl bg-white/5 border border-white/5">
-                            <div className="text-sm text-gray-400 mb-1">Latest Reporting</div>
-                            <div className="text-xl font-mono text-white">{latestReportDate}</div>
-                         </div>
-                     </div>
+
+                     {/* Key Metrics Summary */}
+                     {(() => {
+                         const metrics = getKeyMetrics(company);
+                         const rows = [
+                             { label: 'Total Revenue', value: metrics.totalRevenue },
+                             { label: 'Net Income', value: metrics.netIncome },
+                             { label: 'Net Profit Margin', value: metrics.netProfitMargin, isPercent: true },
+                             { label: 'Diluted EPS', value: metrics.dilutedEPS },
+                             { label: 'Cash & Equivalents', value: metrics.cashAndEquivalents },
+                             { label: 'Total Debt', value: metrics.totalDebt },
+                             { label: 'Op. Cash Flow', value: metrics.operatingCashFlow },
+                             { label: 'Free Cash Flow', value: metrics.freeCashFlow },
+                         ];
+                         
+                         return (
+                            <div className="mt-8 pt-8 border-t border-white/10">
+                                <div className="flex justify-between items-end mb-6">
+                                    <div>
+                                        <h4 className="text-xl font-bold text-white flex items-center gap-2">
+                                            <BarChart3 className="text-indigo-400" size={24} />
+                                            Key Financial Metrics
+                                        </h4>
+                                        <div className="text-xs text-gray-400 mt-1 pl-8">Snapshot of latest available data</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">Latest Report</div>
+                                        <div className="text-sm font-mono text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
+                                            {latestReportDate || 'N/A'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {rows.map(row => {
+                                        let colorClass = "text-white";
+                                        if (row.value !== null && row.value !== undefined) {
+                                            if (row.value > 0) colorClass = "text-emerald-400";
+                                            if (row.value < 0) colorClass = "text-rose-400";
+                                        }
+                                        if (row.label === 'Total Debt') colorClass = "text-gray-200";
+
+                                        return (
+                                        <div key={row.label} className="group relative p-5 rounded-2xl bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/5 hover:border-white/10 transition-all hover:bg-white/[0.05] hover:shadow-lg hover:shadow-black/20 hover:-translate-y-0.5">
+                                            <div className="text-[10px] text-gray-500 mb-2 font-bold tracking-widest uppercase opacity-70 group-hover:opacity-100 transition-opacity">{row.label}</div>
+                                            <div className={`text-xl font-mono font-bold ${colorClass} tracking-tight`}>
+                                                {row.isPercent ? formatPercent(row.value) : formatValue(row.value)}
+                                            </div>
+                                        </div>
+                                    )})}
+                                </div>
+                            </div>
+                         );
+                     })()}
                 </GlassCard>
             )}
 
@@ -200,9 +251,9 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
             )}
 
             {/* Financials */}
-            {activeTab === 'is' && renderFinancialSection('Income Statement', incomeStatement, IS_ORDER)}
-            {activeTab === 'bs' && renderFinancialSection('Balance Sheet', balanceSheet, BS_ORDER)}
-            {activeTab === 'cf' && renderFinancialSection('Cash Flow', cashFlow, CF_ORDER)}
+            {activeTab === 'is' && renderFinancialSection('Income Statement', incomeStatement, IS_ORDER, isDate)}
+            {activeTab === 'bs' && renderFinancialSection('Balance Sheet', balanceSheet, BS_ORDER, bsDate)}
+            {activeTab === 'cf' && renderFinancialSection('Cash Flow', cashFlow, CF_ORDER, cfDate)}
        </div>
     </div>
   );
