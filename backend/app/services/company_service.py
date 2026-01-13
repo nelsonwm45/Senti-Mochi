@@ -4,15 +4,86 @@ from sqlmodel import Session, select, func
 from app.models import Company
 from app.database import engine
 
-# Initial list of Bursa Malaysia tickers (from frontend/src/lib/bursaCompanies.ts + additions)
+# Expanded list of major Bursa Malaysia companies (~70 companies)
+# Includes FBMKLCI constituents, FBM100, and other major stocks
 INITIAL_TICKERS = [
-    '1155.KL', '1295.KL', '1023.KL', '5347.KL', '5183.KL',
-    '5225.KL', '6947.KL', '5819.KL', '8869.KL', '3816.KL',
-    '1961.KL', '4197.KL', '6012.KL', '1066.KL', '3182.KL',
-    '4715.KL', '1015.KL', '7277.KL', '5398.KL', '4707.KL',
-    '2445.KL', '4065.KL', '6033.KL', '5014.KL', '4863.KL',
-    '7084.KL', '5296.KL', '4677.KL', '6742.KL', '0166.KL',
-    '2488.KL', '5185.KL', '5258.KL', '1082.KL'
+    # FBMKLCI Top 30
+    '1155.KL',  # Maybank
+    '1295.KL',  # Public Bank
+    '1023.KL',  # CIMB
+    '5347.KL',  # Tenaga Nasional
+    '5183.KL',  # PetChem
+    '5225.KL',  # IHH Healthcare
+    '6947.KL',  # Celcomdigi
+    '5819.KL',  # Hong Leong Bank
+    '8869.KL',  # Press Metal
+    '3816.KL',  # MISC
+    '1961.KL',  # IOI Corp
+    '4197.KL',  # Sime Darby
+    '6012.KL',  # Maxis
+    '1066.KL',  # RHB Bank
+    '3182.KL',  # Genting
+    '4715.KL',  # Genting Malaysia
+    '1015.KL',  # AMMB Holdings (Ambank)
+    '7277.KL',  # Dialog
+    '5398.KL',  # Gamuda
+    '4707.KL',  # Nestle Malaysia
+    '2445.KL',  # KL Kepong
+    '4065.KL',  # PPB Group
+    '6033.KL',  # Petronas Gas
+    '5014.KL',  # Petronas Dagangan
+    '4863.KL',  # Telekom Malaysia
+    '7084.KL',  # QL Resources
+    '5296.KL',  # Mr DIY
+    '4677.KL',  # YTL Corp
+    '6742.KL',  # YTL Power
+    '0166.KL',  # Inari Amertron
+    
+    # Additional Banks & Finance
+    '2488.KL',  # Alliance Bank
+    '5185.KL',  # Affin Bank
+    '5258.KL',  # Bank Islam
+    '1082.KL',  # Hong Leong Financial
+    
+    # Telecom & Technology
+    '5168.KL',  # Axiata Group
+    '0012.KL',  # MY E.G. Services
+    '0097.KL',  # Globetronics
+    '7036.KL',  # Unisem
+    '0045.KL',  # Vitrox
+    
+    # Plantation
+    '2216.KL',  # Sime Darby Plantation
+    '5681.KL',  # Hap Seng Plantations
+    '2291.KL',  # TSH Resources
+    '5285.KL',  # IOI Properties
+    
+    # Property & Construction
+    '1597.KL',  # Sunway Construction
+    '2879.KL',  # UEM Sunrise
+    '3069.KL',  # WCT Holdings
+    '6475.KL',  # IJM Corp
+    '3336.KL',  # Eco World Development
+    
+    # Consumer & Retail
+    '5052.KL',  # British American Tobacco
+    '3034.KL',  # Fraser & Neave
+    '5602.KL',  # Padini Holdings
+    
+    # Healthcare & Gloves
+    '0156.KL',  # Top Glove
+    '7113.KL',  # Hartalega
+    '5284.KL',  # Kossan Rubber
+    '0034.KL',  # Supermax
+    
+    # Industrial & Others
+    '1818.KL',  # Bursa Malaysia
+    '4898.KL',  # Batu Kawan
+    '6399.KL',  # KLCCP Stapled Group
+    '1503.KL',  # Cahya Mata Sarawak
+    '5878.KL',  # Pavilion REIT
+    '5020.KL',  # Petronas Chemicals Group
+    '6888.KL',  # Axiata Group Bhd
 ]
 
 class CompanyService:
