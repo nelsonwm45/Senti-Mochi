@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
+from sqlalchemy import func
 from typing import List, Optional
 from uuid import UUID, uuid4
 from pydantic import BaseModel
@@ -18,6 +19,7 @@ class QueryRequest(BaseModel):
     documentIds: Optional[List[str]] = None
     maxResults: int = 5
     stream: bool = False
+    sessionId: Optional[str] = None
 
 class CitationInfo(BaseModel):
     sourceNumber: int
@@ -87,8 +89,19 @@ async def query(
     # Build context
     context = rag_service.build_context(chunks)
     
-    # Generate session ID for this conversation
-    session_id = uuid4()
+    # Generate session ID for this conversation if not provided
+    if request.sessionId:
+        try:
+            session_id = UUID(request.sessionId)
+        except ValueError:
+             # Fallback if invalid UUID passed, or just raise error. 
+             # For robustness let's create new one or fail? 
+             # Failing is better to avoid split brain.
+             # but to be safe let's just make a new one if it fails parsing?
+             # No, let's assume valid UUID or make new one.
+             session_id = uuid4()
+    else:
+        session_id = uuid4()
     
     # Save user message
     user_message = ChatMessage(
@@ -126,18 +139,6 @@ async def query(
         # Non-streaming response
         result = rag_service.generate_response(request.query, context)
         
-        # Save assistant message
-        assistant_message = ChatMessage(
-            user_id=current_user.id,
-            session_id=session_id,
-            role="assistant",
-            content=result["response"],
-            citations={"chunks": [str(c["id"]) for c in chunks]},
-            token_count=result.get("tokens_used")
-        )
-        session.add(assistant_message)
-        session.commit()
-        
         # Format citations
         citations = []
         for i, chunk in enumerate(chunks):
@@ -151,6 +152,21 @@ async def query(
                 startLine=chunk.get("start_line"),
                 endLine=chunk.get("end_line")
             ))
+
+        # Save assistant message
+        assistant_message = ChatMessage(
+            user_id=current_user.id,
+            session_id=session_id,
+            role="assistant",
+            content=result["response"],
+            # Save full citation details for history reconstruction
+            citations={"sources": [c.dict() for c in citations]}, 
+            token_count=result.get("tokens_used")
+        )
+        session.add(assistant_message)
+        session.commit()
+        
+        # Format citations (already done above)
         
         return QueryResponse(
             response=result["response"],

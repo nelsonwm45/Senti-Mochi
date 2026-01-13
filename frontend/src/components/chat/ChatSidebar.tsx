@@ -5,25 +5,25 @@ import { Plus, MessageSquare, Menu } from 'lucide-react';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
+import { ChatSession } from '@/hooks/useChat';
 
 interface ChatSidebarProps {
   onNewChat: () => void;
   isOpen: boolean;
   onClose: () => void;
+  sessions: ChatSession[];
+  currentSessionId: string | null;
+  onSelectSession: (session: ChatSession) => void;
 }
 
 export default function ChatSidebar({
   onNewChat,
   isOpen,
   onClose,
+  sessions,
+  currentSessionId,
+  onSelectSession,
 }: ChatSidebarProps) {
-  // Mock conversations for now
-  const [conversations, setConversations] = useState([
-    { id: 1, title: 'Q1 Financial Report Analysis', date: '2 hours ago' },
-    { id: 2, title: 'Risk Assessment Summary', date: 'Yesterday' },
-    { id: 3, title: 'Account Balances Inquiry', date: '2 days ago' },
-  ]);
-
   return (
     <>
       {/* Mobile Backdrop */}
@@ -61,24 +61,45 @@ export default function ChatSidebar({
             Recent Conversations
           </div>
           
-          {conversations.map((chat) => (
-            <button
-              key={chat.id}
-              className="w-full text-left p-3 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors group"
-            >
-              <div className="flex items-center gap-3">
-                <MessageSquare className="w-4 h-4 text-foreground-muted group-hover:text-accent transition-colors" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate group-hover:text-accent transition-colors">
-                    {chat.title}
-                  </p>
-                  <p className="text-xs text-foreground-muted truncate">
-                    {chat.date}
-                  </p>
+          {sessions.length === 0 ? (
+            <div className="text-sm text-foreground-muted px-4 py-2 italic text-center">
+              No recent conversations
+            </div>
+          ) : (
+            sessions.map((session) => (
+              <button
+                key={session.id}
+                onClick={() => {
+                    onSelectSession(session);
+                    if (window.innerWidth < 1024) onClose();
+                }}
+                className={cn(
+                  "w-full text-left p-3 rounded-xl transition-colors group",
+                  currentSessionId === session.id 
+                    ? "bg-accent/10 border border-accent/20" 
+                    : "hover:bg-white/5 active:bg-white/10"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <MessageSquare className={cn(
+                    "w-4 h-4 transition-colors",
+                    currentSessionId === session.id ? "text-accent" : "text-foreground-muted group-hover:text-accent"
+                  )} />
+                  <div className="flex-1 min-w-0">
+                    <p className={cn(
+                      "text-sm font-medium truncate transition-colors",
+                      currentSessionId === session.id ? "text-foreground" : "text-foreground group-hover:text-accent"
+                    )}>
+                      {session.title}
+                    </p>
+                    <p className="text-xs text-foreground-muted truncate">
+                      {session.date}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            ))
+          )}
         </div>
 
         {/* Footer */}
