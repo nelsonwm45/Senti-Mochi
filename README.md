@@ -20,8 +20,8 @@ Our product provides an end-to-end market intelligence workflow that helps bank 
 **Watchlists**
 Users add Bursa-listed companies to a watchlist so the system monitors only relevant entities.
 
-**Live Source Ingestion**
-News, announcements, and reports are continuously pulled from credible sources such as Bursa, NST, and The Star.
+**Source Ingestion**
+News, announcements, and reports are preiodically pulled from credible sources such as Bursa, NST, and The Star.
 
 **Processing & Storage**
 All documents are parsed, enriched (sentiment, entities), and stored in a vector database to support search, analysis, and traceability.
