@@ -180,6 +180,25 @@ class NewsService:
             return []
 
     @staticmethod
+    def get_company_news_context(company_id: str, session: Session, limit: int = 5) -> str:
+        """
+        Retrieve recent news for a company formatted for LLM context.
+        """
+        stmt = select(NewsArticle).where(NewsArticle.company_id == company_id).order_by(NewsArticle.published_at.desc()).limit(limit)
+        articles = session.exec(stmt).all()
+        
+        if not articles:
+            return ""
+            
+        summary = "Recent News Headlines:\n"
+        for article in articles:
+            date_str = article.published_at.strftime("%Y-%m-%d")
+            summary += f"- [{date_str}] {article.title} (Source: {article.source})\n"
+            # Optional: Add content snippet if available and useful
+            
+        return summary + "\n"
+
+    @staticmethod
     def sync_news(session: Session = None):
         """
         Main method to sync news for all companies.

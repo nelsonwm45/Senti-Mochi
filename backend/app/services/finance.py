@@ -127,4 +127,49 @@ class FinanceService:
             return result
 
 
+    @staticmethod
+    def get_financials_context(ticker: str) -> str:
+        """
+        Get financials formatted for LLM context.
+        """
+        data = FinanceService.get_financials(ticker)
+        if not data:
+            return ""
+            
+        summary = f"Financial Data for {ticker}:\n"
+        
+        # Helper to get latest year column
+        def get_latest(stmt_data):
+            if not stmt_data: return None, {}
+            # Sort keys (dates) descending
+            dates = sorted(stmt_data.keys(), reverse=True)
+            if not dates: return None, {}
+            return dates[0], stmt_data[dates[0]]
+
+        # Income Statement
+        date, inc = get_latest(data.get("income_statement"))
+        if date:
+            summary += f"[Income Statement {date}]\n"
+            keys = ["Total Revenue", "Net Income", "EBITDA", "Gross Profit"]
+            for k in keys:
+                if k in inc: summary += f"  {k}: {inc[k]}\n"
+        
+        # Balance Sheet
+        date, bal = get_latest(data.get("balance_sheet"))
+        if date:
+            summary += f"[Balance Sheet {date}]\n"
+            keys = ["Total Assets", "Total Liabilities Net Minority Interest", "Total Equity Gross Minority Interest", "Cash And Cash Equivalents"]
+            for k in keys:
+                if k in bal: summary += f"  {k}: {bal[k]}\n"
+
+        # Cash Flow
+        date, cf = get_latest(data.get("cash_flow"))
+        if date:
+            summary += f"[Cash Flow {date}]\n"
+            keys = ["Operating Cash Flow", "Free Cash Flow", "Capital Expenditure"]
+            for k in keys:
+                if k in cf: summary += f"  {k}: {cf[k]}\n"
+                
+        return summary + "\n"
+
 finance_service = FinanceService()

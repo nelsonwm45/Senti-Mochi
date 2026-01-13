@@ -86,8 +86,18 @@ async def query(
     # Proceed even if chunks is empty to allow for general chat
     # if not chunks: ... (removed strict check)
     
-    # Build context
-    context = rag_service.build_context(chunks)
+    # Build context from documents
+    rag_context = rag_service.build_context(chunks)
+    
+    # Build structured context from DB (Financials, News)
+    try:
+        structured_context = rag_service.get_structured_context(request.query)
+    except Exception as e:
+        print(f"Error fetching structured context: {e}")
+        structured_context = ""
+    
+    # Combine context
+    context = structured_context + "\n" + rag_context
     
     # Generate session ID for this conversation if not provided
     if request.sessionId:

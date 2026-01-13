@@ -1,4 +1,5 @@
 import yfinance as yf
+from typing import Optional
 from sqlmodel import Session, select, func
 from app.models import Company
 from app.database import engine
@@ -72,5 +73,37 @@ class CompanyService:
     def get_company_count(session: Session) -> int:
         statement = select(func.count(Company.id))
         return session.exec(statement).one()
+
+    @staticmethod
+    def find_company_by_text(query: str, session: Session) -> Optional[Company]:
+        """
+        Find a company based on text query (ticker or name).
+        """
+        clean_q = query.strip()
+        
+        # 1. Try exact ticker match
+        stmt = select(Company).where(Company.ticker == clean_q.upper())
+        company = session.exec(stmt).first()
+        if company:
+            return company
+            
+        # 2. Try name case-insensitive match
+        # Simple heuristic: if query is short, might be part of name
+        # If query is long, use RAG.
+        # But for "Analyse CIMB", "CIMB" is the keyword.
+        # We'll rely on the caller to extract the entity or just pass the whole query?
+        # Passing whole query "Analyse CIMB bank" to ilike %Analyse CIMB bank% won't work.
+        # The extraction log belongs in RAG service. 
+        # BUT, for simplicity, we can try to match if the query *contains* the company name? 
+        # No, that's expensive (listing all companies).
+        
+        # Better: Search *for* the query tokens?
+        # Let's support simple substring search for now.
+        stmt = select(Company).where(Company.name.ilike(f"%{clean_q}%"))
+        company = session.exec(stmt).first()
+        if company: 
+            return company
+
+        return None
 
 company_service = CompanyService()

@@ -94,6 +94,41 @@ class RAGService:
                 })
             
             return chunks
+
+    def get_structured_context(self, query: str) -> str:
+        """
+        Identify companies in query and fetch structured data (Financials/News).
+        """
+        # Lazy imports to avoid circular dependency
+        from app.services.company_service import company_service
+        from app.services.news_service import news_service
+        from app.services.finance import finance_service
+        
+        with Session(engine) as session:
+            # 1. Identify Company
+            company = company_service.find_company_by_text(query, session)
+            if not company:
+                return ""
+            
+            context_str = f"--- Structured Database Data for {company.name} ({company.ticker}) ---\n"
+            
+            # 2. Fetch Financials
+            try:
+                fin_ctx = finance_service.get_financials_context(company.ticker)
+                if fin_ctx:
+                    context_str += fin_ctx
+            except Exception as e:
+                print(f"Error fetching financials context: {e}")
+            
+            # 3. Fetch News
+            try:
+                news_ctx = news_service.get_company_news_context(company.id, session)
+                if news_ctx:
+                    context_str += news_ctx
+            except Exception as e:
+                print(f"Error fetching news context: {e}")
+                
+            return context_str + "\n"
     
     def build_context(self, chunks: List[Dict], max_tokens: int = 8000) -> str:
         """Build context string from retrieved chunks"""
