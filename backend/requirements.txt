@@ -26,3 +26,4 @@ prometheus-client
 sentence-transformers
 pytesseract
 Pillow
+yfinance

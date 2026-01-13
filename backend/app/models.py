@@ -42,6 +42,8 @@ class User(SQLModel, table=True):
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    watchlist: list["Watchlist"] = Relationship(back_populates="user")
 
 class ClientProfile(SQLModel, table=True):
     __tablename__ = "client_profiles"
@@ -64,6 +66,17 @@ class Company(SQLModel, table=True):
     
     # Relationships
     documents: list["Document"] = Relationship(back_populates="company")
+    watchlists: list["Watchlist"] = Relationship(back_populates="company")
+
+# Watchlist Model
+class Watchlist(SQLModel, table=True):
+    __tablename__ = "watchlists"
+    user_id: UUID = Field(foreign_key="users.id", primary_key=True)
+    company_id: UUID = Field(foreign_key="companies.id", primary_key=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    user: "User" = Relationship(back_populates="watchlist")
+    company: "Company" = Relationship(back_populates="watchlists")
 
 # Document Model
 class Document(SQLModel, table=True):
