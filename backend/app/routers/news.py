@@ -95,6 +95,17 @@ def store_articles(
             except Exception as e:
                 print(f"Smart Ingestion Error: {e}")
 
+            # SECONDARY DUPLICATE CHECK: URL + Company
+            # Native ID might change or be unstable from frontend. URL is usually stable.
+            existing_url = session.exec(select(NewsArticle).where(
+                NewsArticle.url == article_data.url,
+                NewsArticle.company_id == final_company_id
+            )).first()
+            
+            if existing_url:
+                print(f"[STORE] Skipped duplicate article by URL: {article_data.title[:50]}...")
+                continue
+
             # Create and save article
             article = NewsArticle(
                 company_id=final_company_id,
