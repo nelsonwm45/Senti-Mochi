@@ -78,32 +78,52 @@ class CompanyService:
     def find_company_by_text(query: str, session: Session) -> Optional[Company]:
         """
         Find a company based on text query (ticker or name).
+        Uses in-memory search over all companies (efficient for small N).
         """
-        clean_q = query.strip()
+        query_lower = query.lower()
         
-        # 1. Try exact ticker match
-        stmt = select(Company).where(Company.ticker == clean_q.upper())
-        company = session.exec(stmt).first()
-        if company:
-            return company
+        # Fetch all companies (id, ticker, name)
+        # For 40 companies this is negligible overhead
+        companies = session.exec(select(Company)).all()
+        
+        best_match = None
+        max_score = 0
+        
+        for company in companies:
+            score = 0
+            c_name = company.name.lower()
+            c_ticker = company.ticker.lower()
             
-        # 2. Try name case-insensitive match
-        # Simple heuristic: if query is short, might be part of name
-        # If query is long, use RAG.
-        # But for "Analyse CIMB", "CIMB" is the keyword.
-        # We'll rely on the caller to extract the entity or just pass the whole query?
-        # Passing whole query "Analyse CIMB bank" to ilike %Analyse CIMB bank% won't work.
-        # The extraction log belongs in RAG service. 
-        # BUT, for simplicity, we can try to match if the query *contains* the company name? 
-        # No, that's expensive (listing all companies).
-        
-        # Better: Search *for* the query tokens?
-        # Let's support simple substring search for now.
-        stmt = select(Company).where(Company.name.ilike(f"%{clean_q}%"))
-        company = session.exec(stmt).first()
-        if company: 
-            return company
-
-        return None
+            # 1. Exact Ticker in Query (high confidence)
+            if c_ticker in query_lower: # e.g. "1023.KL" in query
+                return company
+                
+            # 2. Ticker part (e.g. 1023)
+            ticker_num = c_ticker.split('.')[0]
+            if ticker_num in query_lower:
+                return company
+            
+            # 3. Name or Alias logic
+            # "CIMB Group Holdings Berhad" -> "cimb group holdings berhad"
+            if c_name in query_lower:
+                score = 100 # Exact name inside query
+            
+            # 4. First word match (e.g. "CIMB" from "CIMB Group...")
+            # Very effective for Malaysian banks/companies
+            first_word = c_name.split(' ')[0]
+            if len(first_word) > 2 and first_word in query_lower:
+                if score < 50: score = 50
+                
+            # 5. Handle "Maybank" alias specifically if not covered
+            if "maybank" in query_lower and "malayan banking" in c_name:
+                score = 80
+            if "public bank" in query_lower and "public bank" in c_name:
+                score = 80
+                
+            if score > max_score:
+                max_score = score
+                best_match = company
+                
+        return best_match if max_score > 0 else None
 
 company_service = CompanyService()
