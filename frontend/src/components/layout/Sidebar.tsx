@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  LineChart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,6 +25,7 @@ interface SidebarItem {
 
 const menuItems: SidebarItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
+  { icon: LineChart, label: 'Watchlist', href: '/watchlist' },
   { icon: MessageSquare, label: 'Chat', href: '/chat' },
   { icon: FileText, label: 'Documents', href: '/documents' },
   { icon: User, label: 'Profile', href: '/profile' },

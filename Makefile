@@ -33,4 +33,7 @@ restart: down up
 
 # Run in development mode with file watching
 dev: build
+	docker compose up -d
 	docker compose watch
+
+
