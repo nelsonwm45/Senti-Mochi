@@ -86,7 +86,7 @@ class NewsArticle(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     company_id: UUID = Field(foreign_key="companies.id", index=True)
     source: str # "bursa", "star", "nst"
-    native_id: str # Original ID from source
+    native_id: str = Field(unique=True, index=True) # Original ID from source - UNIQUE to prevent duplicates
     title: str
     url: str
     published_at: datetime

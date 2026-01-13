@@ -31,8 +31,12 @@ def store_articles(
     """
     Store news articles fetched from client-side APIs.
     Used for Bursa Malaysia and other APIs that can only be called from the browser.
+    Fetches full article content immediately before storing.
     """
+    from app.services.article_fetcher import article_fetcher_service
+    
     saved_count = 0
+    skipped_count = 0
     
     for article_data in articles:
         try:
@@ -42,6 +46,7 @@ def store_articles(
             )).first()
             
             if existing:
+                skipped_count += 1
                 continue
             
             # Parse ISO datetime string
@@ -50,7 +55,18 @@ def store_articles(
             except:
                 published_at = datetime.utcnow()
             
-            # Create and save article
+            # Fetch full article content immediately (skip Bursa)
+            full_content = article_data.content or article_data.title
+            if article_data.source.lower() != 'bursa' and article_data.url:
+                print(f"[STORE] Fetching full content for {article_data.title[:50]}...")
+                fetched_content = article_fetcher_service.fetch_article_content(article_data.url)
+                if fetched_content:
+                    full_content = fetched_content
+                    print(f"[STORE] Fetched {len(full_content)} chars of content")
+                else:
+                    print(f"[STORE] Failed to fetch content, using fallback")
+            
+            # Create and save article with full content
             article = NewsArticle(
                 company_id=article_data.company_id,
                 source=article_data.source,
@@ -58,44 +74,44 @@ def store_articles(
                 title=article_data.title,
                 url=article_data.url,
                 published_at=published_at,
-                content=article_data.content
+                content=full_content
             )
             session.add(article)
             saved_count += 1
         except Exception as e:
-            print(f"Error storing article: {e}")
+            # Catch duplicate key errors and other exceptions
+            if "unique constraint" in str(e).lower() or "duplicate" in str(e).lower():
+                print(f"Skipping duplicate article: {article_data.native_id}")
+                skipped_count += 1
+            else:
+                print(f"Error storing article: {e}")
             continue
     
     if saved_count > 0:
         session.commit()
         
-        # Get the newly saved articles for task queuing
+        # Get the newly saved articles for sentiment analysis
         newly_saved = session.exec(
             select(NewsArticle).where(
                 NewsArticle.native_id.in_([a.native_id for a in articles])
             )
         ).all()
         
-        # Queue tasks for newly saved articles
+        # Queue sentiment analysis for news articles (skip Bursa)
         for article in newly_saved:
             if article.source.lower() == "bursa":
-                # Skip Bursa articles for both sentiment and enrichment
                 continue
             
-            content_length = len(article.content) if article.content else 0
-            
-            if content_length < 500:
-                # Short content: Queue enrichment first, which will trigger sentiment after
-                from app.tasks.article_enrichment_tasks import enrich_article_content_task
-                enrich_article_content_task.delay(str(article.id))
-                print(f"[STORE] Queued content enrichment for article {article.id} ({content_length} chars)")
-            else:
-                # Substantial content: Queue sentiment analysis directly
-                if not article.analyzed_at:
-                    analyze_article_sentiment_task.delay(str(article.id))
-                    print(f"[STORE] Queued sentiment analysis for article {article.id}")
+            # Queue sentiment analysis directly since we already have full content
+            if not article.analyzed_at:
+                analyze_article_sentiment_task.delay(str(article.id))
+                print(f"[STORE] Queued sentiment analysis for article {article.id}")
     
-    return {"saved": saved_count, "total": len(articles)}
+    return {
+        "saved": saved_count, 
+        "skipped": skipped_count,
+        "total": len(articles)
+    }
 
 @router.get("/feed")
 def get_news_feed(

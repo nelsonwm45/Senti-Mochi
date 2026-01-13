@@ -1,7 +1,7 @@
 """
 Article content fetching service using newspaper3k
 """
-from newspaper import Article
+from newspaper import Article, Config
 import time
 from typing import Optional
 
@@ -19,14 +19,30 @@ class ArticleFetcherService:
             Full article text, or None if fetch fails
         """
         try:
-            article = Article(url)
+            # Configure newspaper3k for better extraction
+            config = Config()
+            config.browser_user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            config.request_timeout = timeout
+            config.fetch_images = False
+            config.memoize_articles = False
+            
+            article = Article(url, config=config)
             article.download()
             article.parse()
             
             # Return the full article text
             content = article.text
             
-            if content and len(content.strip()) > 0:
+            # Filter out common navigation/footer text
+            if content:
+                # Remove common footer patterns
+                lines = content.split('\n')
+                filtered_lines = [line for line in lines if line.strip() and 
+                                 line.strip().lower() not in ['what to read next', 'related articles', 
+                                                               'read more', 'share this article']]
+                content = '\n'.join(filtered_lines).strip()
+            
+            if content and len(content.strip()) > 50:  # Require at least 50 chars
                 return content.strip()
             
             return None
@@ -44,7 +60,13 @@ class ArticleFetcherService:
             Dictionary with article data
         """
         try:
-            article = Article(url)
+            # Configure newspaper3k for better extraction
+            config = Config()
+            config.browser_user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            config.fetch_images = False
+            config.memoize_articles = False
+            
+            article = Article(url, config=config)
             article.download()
             article.parse()
             
