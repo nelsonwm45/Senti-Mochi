@@ -41,6 +41,8 @@ services:
       - db
       - redis
       - minio
+    volumes:
+      - ./backend:/app
     develop:
       watch:
         - action: sync

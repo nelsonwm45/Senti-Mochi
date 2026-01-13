@@ -275,6 +275,64 @@ Answer (cite sources as [Source 1], [Source 2], etc.):"""
             "model": model,
             "tokens_used": response.usage.total_tokens if hasattr(response, 'usage') else None
         }
+
+    def reindex_citations(self, text: str, chunks: list[dict]) -> tuple[str, list[dict]]:
+        """
+        Renumber citations in the text to be sequential (1, 2, 3...) based on appearance order.
+        Also reorders the chunks list to match the new numbering.
+        """
+        import re
+        
+        # Find all current citations in the text, e.g. [Source 15], [Source 2]
+        # Regex: Case insensitive, allow optional text after number (e.g. [Source 15: News...])
+        pattern = r'\[Source\s*(\d+).*?\]'
+        matches = list(re.finditer(pattern, text, re.IGNORECASE))
+        
+        matches = list(re.finditer(pattern, text, re.IGNORECASE))
+        
+        if not matches:
+            return text, chunks
+            
+        # Map from Old Source Number (int) -> New Source Number (int)
+        old_to_new = {}
+        new_source_counter = 1
+        
+        # We must process matches in order of appearance
+        for m in matches:
+            old_num = int(m.group(1))
+            if old_num not in old_to_new:
+                old_to_new[old_num] = new_source_counter
+                new_source_counter += 1
+                
+        # 1. Replace in text
+        def replace_func(match):
+            old_num = int(match.group(1))
+            new_num = old_to_new[old_num]
+            return f"[Source {new_num}]"
+            
+        new_text = re.sub(pattern, replace_func, text, flags=re.IGNORECASE)
+        
+        # 2. Reorder chunks
+        reordered_chunks = []
+        used_indices = set()
+        
+        # Invert the mapping: New -> Old
+        new_to_old = {v: k for k, v in old_to_new.items()}
+        
+        for i in range(1, new_source_counter):
+            old_source_num = new_to_old[i]
+            # Source Num is 1-based, Chunk Index is 0-based
+            chunk_idx = old_source_num - 1
+            if 0 <= chunk_idx < len(chunks):
+                reordered_chunks.append(chunks[chunk_idx])
+                used_indices.add(chunk_idx)
+                
+        # Append unused chunks at the end - REMOVED per user request
+        # for i, chunk in enumerate(chunks):
+        #     if i not in used_indices:
+        #         reordered_chunks.append(chunk)
+                
+        return new_text, reordered_chunks
     
     async def generate_response_stream(
         self,
