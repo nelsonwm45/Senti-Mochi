@@ -20,6 +20,9 @@ build: prune
 prune:
 	docker image prune -f
 
+prune-all:
+	@docker system prune -af --volumes
+
 # View logs
 logs:
 	docker compose logs -f
