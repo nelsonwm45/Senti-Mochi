@@ -5,10 +5,64 @@ from app.models import NewsArticle, User, Watchlist, Company
 from app.auth import get_current_user
 from typing import List, Optional
 from datetime import datetime
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/news", tags=["news"])
 
 from sqlalchemy.orm import joinedload
+
+# Schema for storing articles from client
+class ClientNewsArticle(BaseModel):
+    company_id: str
+    source: str
+    native_id: str
+    title: str
+    url: str
+    published_at: datetime
+    content: Optional[str] = None
+
+@router.post("/store-articles")
+def store_articles(
+    articles: List[ClientNewsArticle],
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """
+    Store news articles fetched from client-side APIs.
+    Used for Bursa Malaysia and other APIs that can only be called from the browser.
+    """
+    saved_count = 0
+    
+    for article_data in articles:
+        try:
+            # Check if article already exists
+            existing = session.exec(select(NewsArticle).where(
+                NewsArticle.native_id == article_data.native_id
+            )).first()
+            
+            if existing:
+                continue
+            
+            # Create and save article
+            article = NewsArticle(
+                company_id=article_data.company_id,
+                source=article_data.source,
+                native_id=article_data.native_id,
+                title=article_data.title,
+                url=article_data.url,
+                published_at=article_data.published_at,
+                content=article_data.content
+            )
+            session.add(article)
+            saved_count += 1
+        except Exception as e:
+            print(f"Error storing article: {e}")
+            continue
+    
+    if saved_count > 0:
+        session.commit()
+    
+    return {"saved": saved_count, "total": len(articles)}
 
 @router.get("/feed")
 def get_news_feed(

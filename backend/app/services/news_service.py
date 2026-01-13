@@ -10,71 +10,11 @@ class NewsService:
     @staticmethod
     def fetch_bursa_news(company: Company):
         """
-        Fetch announcements from Bursa Malaysia for a specific company.
+        Fetch announcements from Bursa Malaysia via frontend API proxy.
+        Note: This is kept for backwards compatibility but should be called
+        from the frontend to avoid CORS issues.
         """
-        if not company.ticker:
-            return []
-            
-        bursa_code = company.ticker.split('.')[0]
-        url = f"https://www.bursamalaysia.com/api/v1/announcements/search?ann_type=company&company={bursa_code}&per_page=5&page=1"
-        
-        try:
-            response = requests.get(url, headers={'Accept': 'application/json'}, timeout=10)
-            if response.status_code != 200:
-                print(f"Bursa API error for {company.name}: {response.status_code}")
-                return []
-            
-            data = response.json()
-            if not data.get('data'):
-                return []
-
-            articles = []
-            for item in data['data']:
-                # Item format: [id, date_html, company_html, title_html]
-                # We need to parse this somewhat manually or use robust regex
-                # Ideally we want a cleaner API but this is what we have.
-                # For backend parsing, regex is safer than full HTML parser for simple snippets.
-                import re
-                
-                # Extract date
-                # <a href='/market_information/announcements/company_announcement/hunza-properties-berhad?ann_id=123'>15 Jan 2026...</a>
-                date_match = re.search(r'>([^<]+)</a>', item[1])
-                date_str = date_match.group(1).strip() if date_match else "Unknown Date"
-                
-                # Extract Title & Link
-                # <a href='/market...'>Title</a>
-                title_match = re.search(r"href='([^']+)'[^>]*>(.*?)</a>", item[3])
-                link_suffix = title_match.group(1) if title_match else ""
-                title = title_match.group(2).strip() if title_match else "Unknown Title"
-                
-                # Full link
-                link = f"https://www.bursamalaysia.com{link_suffix}" if link_suffix else ""
-                
-                # ID extraction from link usually safer: ann_id=3412702
-                id_match = re.search(r"ann_id=(\d+)", link)
-                native_id = f"bursa-{bursa_code}-{id_match.group(1)}" if id_match else f"bursa-{bursa_code}-{item[0]}"
-                
-                # Parse date
-                try:
-                    # Format: "13 Jan 2026, 05:44 pm"
-                    published_at = datetime.strptime(date_str, "%d %b %Y, %I:%M %p")
-                except:
-                    published_at = datetime.utcnow()
-
-                articles.append(NewsArticle(
-                    company_id=company.id,
-                    source="bursa",
-                    native_id=native_id,
-                    title=title,
-                    url=link,
-                    published_at=published_at,
-                    content=title # Saving title as content for now
-                ))
-            return articles
-
-        except Exception as e:
-            print(f"Error fetching Bursa for {company.name}: {e}")
-            return []
+        return []  # Disabled - use frontend API instead
 
     @staticmethod
     def fetch_star_news(company: Company):

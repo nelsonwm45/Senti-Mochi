@@ -30,6 +30,7 @@ interface WatchlistCompany {
   website_url?: string;
 }
 import { newsApi, UnifiedFeedItem } from '@/lib/api/news';
+import { fetchAndStoreBursaNews } from '@/lib/api/bursaNews';
 
 
 function DashboardContent() {
@@ -61,6 +62,14 @@ function DashboardContent() {
         
         if (watchlistHasCompanies) {
           setWatchlistCompanies(companies);
+          
+          // Fetch Bursa news from client-side API and store in backend
+          try {
+            await fetchAndStoreBursaNews(companies);
+          } catch (bursaError) {
+            console.warn('Failed to fetch Bursa news:', bursaError);
+            // Don't fail the whole dashboard, just log the error
+          }
         }
 
         // Fetch news from backend (persisted data)
