@@ -35,7 +35,10 @@ class FinanceService:
                 if df is None or df.empty:
                     return {}
                 # Handle NaN values which cause JSON error
-                df = df.fillna(0)
+                # Handle NaN values which cause JSON error
+                # Use where logic: keep value if not null, else replace with None. 
+                # Cast to object first so None is preserved and not cast back to NaN.
+                df = df.astype(object).where(df.notnull(), None)
                 # Convert timestamp keys to string strings for JSON serialization
                 return {k.strftime('%Y-%m-%d') if hasattr(k, 'strftime') else str(k): v for k, v in df.to_dict().items()}
 
