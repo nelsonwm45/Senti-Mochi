@@ -119,7 +119,21 @@ services:
       - S3_ACCESS_KEY=minioadmin
       - S3_SECRET_KEY=minioadmin
       - TZ=Asia/Kuala_Lumpur
-
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: finance_celery_beat
+    command: celery -A app.celery_app beat --loglevel=info
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/finance_db
+      - REDIS_URL=redis://redis:6379/0
+      - TZ=Asia/Kuala_Lumpur
 volumes:
   postgres_data:
   minio_data:

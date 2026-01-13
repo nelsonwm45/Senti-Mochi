@@ -67,6 +67,34 @@ class Company(SQLModel, table=True):
     # Relationships
     documents: list["Document"] = Relationship(back_populates="company")
     watchlists: list["Watchlist"] = Relationship(back_populates="company")
+    financials: list["FinancialStatement"] = Relationship(back_populates="company")
+    news_articles: list["NewsArticle"] = Relationship(back_populates="company")
+
+class FinancialStatement(SQLModel, table=True):
+    __tablename__ = "financial_statements"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    company_id: UUID = Field(foreign_key="companies.id", index=True)
+    period: str  # "2023-12-31"
+    statement_type: str  # "balance_sheet", "income_statement", "cash_flow"
+    data: dict = Field(default={}, sa_column=Column(JSON))
+    fetched_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    company: "Company" = Relationship(back_populates="financials")
+
+class NewsArticle(SQLModel, table=True):
+    __tablename__ = "news_articles"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    company_id: UUID = Field(foreign_key="companies.id", index=True)
+    source: str # "bursa", "star", "nst"
+    native_id: str # Original ID from source
+    title: str
+    url: str
+    published_at: datetime
+    content: Optional[str] = Field(sa_column=Column(Text))
+    sentiment_score: Optional[float] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    company: "Company" = Relationship(back_populates="news_articles")
 
 # Watchlist Model
 class Watchlist(SQLModel, table=True):
