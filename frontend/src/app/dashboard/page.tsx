@@ -14,7 +14,8 @@ import {
   TrendingUp,
   Minus,
   TrendingDown,
-  Newspaper
+  Newspaper,
+  Download
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import {
@@ -78,6 +79,7 @@ interface UnifiedFeedItem {
   link: string;
   date: string;
   timestamp: number;
+  disclosureId?: number;
   company?: string;
   companyCode?: string;
   description?: string;
@@ -151,6 +153,8 @@ function DashboardContent() {
   const [error, setError] = useState<string | null>(null);
   const [watchlistEmpty, setWatchlistEmpty] = useState(false);
   const [watchlistCompanies, setWatchlistCompanies] = useState<WatchlistCompany[]>([]);
+  const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set());
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [stats, setStats] = useState({
     bursa: 0,
     star: 0,
@@ -224,7 +228,7 @@ function DashboardContent() {
 
         // Extract numeric ID from ticker (e.g., "1155.KL" -> "1155")
         const bursaCode = bursaCompany.ticker.split('.')[0];
-        const url = `https://www.bursamalaysia.com/api/v1/announcements/search?ann_type=company&company=${bursaCode}&per_page=5&page=1`;
+        const url = `https://www.bursamalaysia.com/api/v1/announcements/search?ann_type=company&company=${bursaCode}&cat=AR,ARCO&per_page=5&page=1`;
 
         try {
           const response = await fetch(url, {
@@ -251,6 +255,7 @@ function DashboardContent() {
             link: ann.announcementLink || '',
             date: ann.date,
             timestamp: parseDateToTimestamp(ann.date),
+            disclosureId: ann.disclosureId,
             company: ann.companyName,
             companyCode: ann.companyCode,
             source: 'Bursa Malaysia'
@@ -473,6 +478,63 @@ function DashboardContent() {
     { name: 'NST', value: stats.nst, color: '#a855f7' }  // purple-500
   ];
 
+  // Handle Bursa PDF download
+  const handleDownloadBursaPDF = async (item: UnifiedFeedItem) => {
+    const disclosureId = item.disclosureId;
+
+    if (!disclosureId) {
+      alert('No disclosure ID found for this announcement');
+      return;
+    }
+
+    const downloadId = `bursa-${disclosureId}`;
+
+    try {
+      setDownloadingIds(prev => new Set(prev).add(downloadId));
+      setDownloadError(null);
+
+      // Fetch available PDFs for this disclosure
+      const disclosureResponse = await apiClient.get('/api/v1/bursa/fetch-disclosure', {
+        params: { disclosure_id: String(disclosureId) }
+      });
+
+      const pdfs = disclosureResponse.data.pdfs || [];
+
+      // Pick the first PDF (Bursa pages usually have a single primary PDF)
+      const targetPDF = pdfs[0];
+
+      if (!targetPDF) {
+        throw new Error('PDF not found in disclosure');
+      }
+
+      // Download the PDF via the backend scraper
+      const downloadResponse = await apiClient.post('/api/v1/bursa/download-pdf', {
+        disclosure_id: String(disclosureId),
+        pdf_url: targetPDF.url,
+        filename: targetPDF.name,
+        company_name: item.company || 'unknown'
+      });
+
+      if (downloadResponse.data.success) {
+        setDownloadError(null);
+        alert(`✅ Downloaded: ${targetPDF.name}\nSaved to Bursa downloads folder`);
+      } else {
+        throw new Error(downloadResponse.data.message || 'Download failed');
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to download PDF';
+      setDownloadError(errorMsg);
+      alert(`❌ Download failed: ${errorMsg}`);
+      console.error('Download error:', err);
+    } finally {
+      setDownloadingIds(prev => {
+        const updated = new Set(prev);
+        updated.delete(downloadId);
+        return updated;
+      });
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -584,7 +646,26 @@ function DashboardContent() {
                         </p>
                       )}
 
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-3">
+                        {item.type === 'bursa' && item.disclosureId && (
+                          <button
+                            onClick={() => handleDownloadBursaPDF(item)}
+                            disabled={downloadingIds.has(`bursa-${item.disclosureId}`)}
+                            className="text-blue-500 hover:text-blue-400 text-sm font-medium flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {downloadingIds.has(`bursa-${item.disclosureId}`) ? (
+                              <>
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500"></div>
+                                Downloading...
+                              </>
+                            ) : (
+                              <>
+                                <Download size={14} />
+                                Download PDF
+                              </>
+                            )}
+                          </button>
+                        )}
                         {item.link && (
                           <a
                             href={item.link}

@@ -10,8 +10,10 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=development
+      - SCRAPER_URL=http://scraper:5000
     depends_on:
       - backend
+      - scraper
 
     develop:
       watch:
@@ -37,10 +39,14 @@ services:
       - S3_ENDPOINT=http://minio:9000
       - S3_PUBLIC_ENDPOINT=http://localhost:9000
       - TZ=Asia/Kuala_Lumpur
+      - SCRAPER_URL=http://scraper:5000
+    volumes:
+      - bursa_downloads:/app/downloads
     depends_on:
       - db
       - redis
       - minio
+      - scraper
     develop:
       watch:
         - action: sync
@@ -100,6 +106,19 @@ services:
       timeout: 20s
       retries: 3
 
+  scraper:
+    build:
+      context: ./scraper
+      dockerfile: Dockerfile
+    container_name: bursa_scraper
+    ports:
+      - "5000:5000"
+    volumes:
+      - bursa_downloads:/app/downloads
+    environment:
+      - TZ=Asia/Kuala_Lumpur
+    restart: unless-stopped
+
   celery-worker:
     build:
       context: ./backend
@@ -123,3 +142,4 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  bursa_downloads:
