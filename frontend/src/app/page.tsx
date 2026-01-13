@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
@@ -41,8 +42,14 @@ export default function LandingPage() {
       >
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-primary rounded-xl flex items-center justify-center shadow-lg">
-              <span className="font-bold text-white text-lg">M</span>
+            <div className="relative w-10 h-10 flex-shrink-0">
+              <Image
+                src="/MochiTrio.png"
+                alt="Mochi Logo"
+                fill
+                className="object-contain"
+                priority
+              />
             </div>
             <span className="text-xl font-bold gradient-text">Mochi</span>
           </Link>
@@ -285,8 +292,13 @@ export default function LandingPage() {
       <footer className="py-12 px-6 border-t border-glass-border">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
-              <span className="font-bold text-white text-sm">M</span>
+            <div className="relative w-8 h-8 flex-shrink-0">
+              <Image
+                src="/MochiTrio.png"
+                alt="Mochi Logo"
+                fill
+                className="object-contain"
+              />
             </div>
             <span className="font-semibold text-foreground">Mochi</span>
           </div>

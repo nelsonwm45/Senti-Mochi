@@ -12,18 +12,41 @@ export interface ChatMessage {
 	citations?: CitationInfo[];
 }
 
+export type MochiVariant = 'green' | 'red' | 'purple';
+
 export interface ChatSession {
 	id: string;
 	title: string;
 	date: string;
 	messages: ChatMessage[];
+	mochiVariant: MochiVariant;
 }
+
+// Helper to get or assign a mochi variant
+const getMochiVariant = (sessionId: string): MochiVariant => {
+	if (typeof window === 'undefined') return 'green';
+
+	const storageKey = `mochi-variant-${sessionId}`;
+	const saved = localStorage.getItem(storageKey);
+
+	if (saved && ['green', 'red', 'purple'].includes(saved)) {
+		return saved as MochiVariant;
+	}
+
+	// Deterministic fallback based on hash if not explicitly saved
+	const hash = sessionId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+	const variants: MochiVariant[] = ['green', 'red', 'purple'];
+	return variants[hash % 3];
+};
 
 export function useChat() {
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [agentState, setAgentState] = useState<AgentState>('idle');
 	const [isLoading, setIsLoading] = useState(false);
 	const [currentCitations, setCurrentCitations] = useState<CitationInfo[]>([]);
+
+	// Mochi Variant State
+	const [currentMochiVariant, setCurrentMochiVariant] = useState<MochiVariant>('green');
 
 	// Session Management
 	const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -76,7 +99,8 @@ export function useChat() {
 					id,
 					title,
 					date,
-					messages: msgs
+					messages: msgs,
+					mochiVariant: getMochiVariant(id)
 				};
 			});
 
@@ -100,6 +124,7 @@ export function useChat() {
 	const loadSession = (session: ChatSession) => {
 		setCurrentSessionId(session.id);
 		setMessages(session.messages);
+		setCurrentMochiVariant(session.mochiVariant);
 
 		// Reset other states
 		setAgentState('idle');
@@ -215,6 +240,11 @@ export function useChat() {
 		// Update current session ID if we started a new one
 		if (response.sessionId && !currentSessionId) {
 			setCurrentSessionId(response.sessionId);
+
+			// Persist the current variant for this new session
+			if (typeof window !== 'undefined') {
+				localStorage.setItem(`mochi-variant-${response.sessionId}`, currentMochiVariant);
+			}
 		}
 
 		const assistantMessage: ChatMessage = {
@@ -236,6 +266,11 @@ export function useChat() {
 		setCurrentCitations([]);
 		setAgentState('idle');
 		setCurrentSessionId(null); // Reset session to start a fresh one
+
+		// Randomly select a new Mochi for the fresh session
+		const variants: MochiVariant[] = ['green', 'red', 'purple'];
+		const randomVariant = variants[Math.floor(Math.random() * variants.length)];
+		setCurrentMochiVariant(randomVariant);
 	};
 
 	const deleteSession = async (sessionId: string) => {
@@ -264,6 +299,7 @@ export function useChat() {
 		sessions,
 		loadSession,
 		currentSessionId,
+		activeMochiVariant: currentMochiVariant,
 		deleteSession
 	};
 }

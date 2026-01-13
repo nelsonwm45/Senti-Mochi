@@ -1,7 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { User, Bot, Copy, Check } from 'lucide-react';
+import { User, Copy, Check } from 'lucide-react';
+import Image from 'next/image';
 import { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -12,6 +13,8 @@ interface MessageBubbleProps {
   timestamp?: string;
   citations?: number[];
   onCitationClick?: (citationNumber: number) => void;
+  mochiVariant?: 'green' | 'red' | 'purple';
+  userAvatarUrl?: string; // New prop for user avatar
 }
 
 export default function MessageBubble({
@@ -20,6 +23,8 @@ export default function MessageBubble({
   timestamp,
   citations = [],
   onCitationClick,
+  mochiVariant = 'green',
+  userAvatarUrl, 
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
 
@@ -75,12 +80,33 @@ export default function MessageBubble({
         <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center shadow-lg ${
           isUser
             ? 'bg-gradient-brand'
-            : 'bg-glass-bg border border-glass-border backdrop-blur-md'
+            : 'bg-transparent overflow-hidden'
         }`}>
           {isUser ? (
-            <User className="w-5 h-5 text-white" />
+            userAvatarUrl ? (
+              <div className="relative w-full h-full overflow-hidden rounded-xl">
+                 <img 
+                    src={userAvatarUrl} 
+                    alt="User" 
+                    className="w-full h-full object-cover"
+                  />
+              </div>
+            ) : (
+              <User className="w-5 h-5 text-white" />
+            )
           ) : (
-            <Bot className="w-5 h-5 text-accent" />
+            <div className="relative w-full h-full">
+              <Image 
+                src={
+                  mochiVariant === 'red' ? '/MochiRed.png' :
+                  mochiVariant === 'purple' ? '/MochiPurple.png' :
+                  '/MochiGreen.png'
+                }
+                alt="Mochi Avatar" 
+                fill
+                className="object-cover"
+              />
+            </div>
           )}
         </div>
 

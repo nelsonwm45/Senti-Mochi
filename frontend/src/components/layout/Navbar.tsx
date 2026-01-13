@@ -82,10 +82,16 @@ export function Navbar({ sidebarCollapsed = false }: NavbarProps) {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-primary">
-                <span className="text-sm font-semibold text-white">
-                  {user?.name?.charAt(0).toUpperCase() || 'U'}
-                </span>
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-primary overflow-hidden relative">
+                {user?.avatar_url ? (
+                  <img 
+                    src={user.avatar_url} 
+                    alt={user.name || 'User'} 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <User size={18} className="text-white" />
+                )}
               </div>
               <span className="text-sm font-medium text-foreground hidden sm:block">
                 {user?.name || 'User'}
