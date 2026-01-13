@@ -29,6 +29,18 @@ def signup(user: UserCreate, session: Session = Depends(get_session)):
     session.commit()
     session.refresh(new_user)
     
+    # Check if companies need seeding (same as login)
+    try:
+        from app.services.company_service import company_service
+        from app.tasks.company_tasks import seed_companies_task
+        
+        count = company_service.get_company_count(session)
+        if count == 0:
+            print("No companies found. Triggering automated seeding task...")
+            seed_companies_task.delay()
+    except Exception as e:
+        print(f"Failed to trigger auto-seeding: {e}")
+    
     # Create and return access token
     access_token = create_access_token(data={"sub": new_user.email})
     return {"access_token": access_token, "token_type": "bearer"}
