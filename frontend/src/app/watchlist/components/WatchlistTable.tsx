@@ -1,14 +1,28 @@
-'use client';
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, ArrowRightLeft, ChevronRight, Trash2, Plus } from 'lucide-react';
-import { format } from 'date-fns';
+import { Search, ArrowRightLeft, ChevronRight, Trash2, Plus, Loader2 } from 'lucide-react';
 import { useWatchlistStore } from '@/store/watchlistStore';
-import { mockCompanies } from '@/lib/mockData';
 import { GlassCard } from '@/components/ui/GlassCard';
-import { GlassInput } from '@/components/ui/GlassInput';
-import { GlassButton } from '@/components/ui/GlassButton';
+import { GlassInput } from '@/components/ui/GlassInput'; 
+import { SearchPopout } from './SearchPopout';
+
+// Temporary helper to parse JWT
+const getUserIdFromToken = () => {
+    if (typeof window === 'undefined') return null;
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload).sub;
+    } catch (e) {
+        console.error("Failed to decode token", e);
+        return null;
+    }
+}
 
 interface WatchlistTableProps {
   onCompare: (selectedTickers: string[]) => void;
@@ -16,26 +30,26 @@ interface WatchlistTableProps {
 }
 
 export function WatchlistTable({ onCompare, onViewDetails }: WatchlistTableProps) {
-  const { watchlist, removeFromWatchlist, addToWatchlist } = useWatchlistStore();
-  const [searchQuery, setSearchQuery] = useState('');
+  const { watchlist, removeFromWatchlist, fetchWatchlist } = useWatchlistStore();
+  const [searchQuery, setSearchQuery] = useState(''); // Local filter for existing items
   const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Filter companies based on search
+  useEffect(() => {
+      const id = getUserIdFromToken();
+      setUserId(id);
+      if (id) {
+          fetchWatchlist(id);
+      }
+  }, [fetchWatchlist]);
+
+  // Filter companies based on local search of the watchlist
   const filteredWatchlist = watchlist.filter(
     (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.ticker.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  // Search functionality to find companies NOT in watchlist (mocking a global search)
-  const searchResults = searchQuery
-    ? mockCompanies.filter(
-        (c) =>
-          !watchlist.find((w) => w.ticker === c.ticker) &&
-          (c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            c.ticker.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : [];
 
   const handleToggleComparison = (ticker: string) => {
     if (selectedForComparison.includes(ticker)) {
@@ -44,18 +58,16 @@ export function WatchlistTable({ onCompare, onViewDetails }: WatchlistTableProps
       if (selectedForComparison.length < 2) {
         setSelectedForComparison(prev => [...prev, ticker]);
       } else {
-        // Option: Replace the first one or just warn? For now, prevent > 2
-        // Or strictly follow UI: UI shows "Comparison Tray" appearing.
-        // Let's allow selecting, validation happens on "Compare" click usually, 
-        // but prompt says "Select any two companies".
          setSelectedForComparison(prev => [...prev, ticker].slice(-2));
       }
     }
   };
 
   const handleRemove = (ticker: string) => {
-    removeFromWatchlist(ticker);
-    setSelectedForComparison(prev => prev.filter(t => t !== ticker));
+    if (userId) {
+        removeFromWatchlist(ticker, userId);
+        setSelectedForComparison(prev => prev.filter(t => t !== ticker));
+    }
   };
 
   return (
@@ -66,37 +78,18 @@ export function WatchlistTable({ onCompare, onViewDetails }: WatchlistTableProps
           <h1 className="text-3xl font-bold text-white mb-2">Active Watchlist</h1>
           <p className="text-gray-400">Manage core coverage and risk monitoring assets.</p>
         </div>
-        <div className="w-full md:w-96 relative z-20">
-          <GlassInput
-            icon={Search}
-            placeholder="Search Bursa Ticker/Name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {/* Search Dropdown implementation */}
-          {searchQuery && searchResults.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 p-2 bg-slate-900/90 border border-white/10 rounded-xl backdrop-blur-xl shadow-xl z-50">
-               <div className="text-xs text-gray-400 mb-2 px-2">Add to Watchlist</div>
-               {searchResults.map(company => (
-                 <button
-                    key={company.ticker}
-                    className="w-full text-left p-2 hover:bg-white/5 rounded-lg flex justify-between items-center group transition-colors"
-                    onClick={() => {
-                        addToWatchlist(company.ticker);
-                        setSearchQuery('');
-                    }}
-                 >
-                    <div>
-                        <div className="font-bold text-white">{company.ticker}</div>
-                        <div className="text-sm text-gray-400">{company.name}</div>
-                    </div>
-                    <Plus className="text-accent opacity-0 group-hover:opacity-100 transition-opacity" size={18} />
-                 </button>
-               ))}
-            </div>
-          )}
+        <div className="w-full md:w-auto relative z-20">
+            <button
+                onClick={() => setIsSearchOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-colors font-medium whitespace-nowrap"
+            >
+                <Plus size={18} />
+                <span>Add</span>
+            </button>
         </div>
       </div>
+      
+      {userId && <SearchPopout isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} userId={userId} />}
 
       {/* Table */}
       <GlassCard className="p-0 overflow-hidden">
