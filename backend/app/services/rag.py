@@ -107,58 +107,63 @@ class RAGService:
         """
         Identify companies in query and fetch structured data as Chunks.
         """
-        # Lazy imports
         from app.services.company_service import company_service
+        
+        with Session(engine) as session:
+            companies = company_service.find_companies_by_text(query, session)
+            if not companies:
+                return []
+            return self.get_structured_chunks_for_companies(companies, session)
+
+    def get_structured_chunks_for_companies(self, companies: List, session: Session) -> List[Dict]:
+        """
+        Fetch structured data chunks for a specific list of companies.
+        """
+        # Lazy imports
         from app.services.news_service import news_service
         from app.services.finance import finance_service
         from uuid import uuid4
         
         chunks = []
         
-        with Session(engine) as session:
-            # 1. Identify Companies (now returns list)
-            companies = company_service.find_companies_by_text(query, session)
-            if not companies:
-                return []
+        for company in companies:
+            # 1. Fetch Financials
+            try:
+                fin_ctx = finance_service.get_financials_context(company.ticker)
+                if fin_ctx:
+                    chunks.append({
+                        "id": uuid4(),
+                        "document_id": None,
+                        "content": fin_ctx,
+                        "page_number": 1,
+                        "chunk_index": 0,
+                        "metadata": {"type": "financials", "company": company.ticker},
+                        "filename": f"Financial Data ({company.ticker})",
+                        "similarity": 1.0, # High relevance
+                        "start_line": None,
+                        "end_line": None
+                    })
+            except Exception as e:
+                print(f"Error fetching financials chunks for {company.ticker}: {e}")
             
-            for company in companies:
-                # 2. Fetch Financials
-                try:
-                    fin_ctx = finance_service.get_financials_context(company.ticker)
-                    if fin_ctx:
-                        chunks.append({
-                            "id": uuid4(),
-                            "document_id": None,
-                            "content": fin_ctx,
-                            "page_number": 1,
-                            "chunk_index": 0,
-                            "metadata": {"type": "financials", "company": company.ticker},
-                            "filename": f"Financial Data ({company.ticker})",
-                            "similarity": 1.0, # High relevance
-                            "start_line": None,
-                            "end_line": None
-                        })
-                except Exception as e:
-                    print(f"Error fetching financials chunks for {company.ticker}: {e}")
-                
-                # 3. Fetch News
-                try:
-                    news_ctx = news_service.get_company_news_context(company.id, session)
-                    if news_ctx:
-                        chunks.append({
-                            "id": uuid4(),
-                            "document_id": None,
-                            "content": news_ctx,
-                            "page_number": 1,
-                            "chunk_index": 0,
-                            "metadata": {"type": "news", "company": company.ticker},
-                            "filename": f"News Feed ({company.ticker})",
-                            "similarity": 1.0,
-                            "start_line": None,
-                            "end_line": None
-                        })
-                except Exception as e:
-                    print(f"Error fetching news chunks for {company.ticker}: {e}")
+            # 2. Fetch News
+            try:
+                news_ctx = news_service.get_company_news_context(company.id, session)
+                if news_ctx:
+                    chunks.append({
+                        "id": uuid4(),
+                        "document_id": None,
+                        "content": news_ctx,
+                        "page_number": 1,
+                        "chunk_index": 0,
+                        "metadata": {"type": "news", "company": company.ticker},
+                        "filename": f"News Feed ({company.ticker})",
+                        "similarity": 1.0,
+                        "start_line": None,
+                        "end_line": None
+                    })
+            except Exception as e:
+                print(f"Error fetching news chunks for {company.ticker}: {e}")
                 
         return chunks
     

@@ -57,12 +57,22 @@ async def query(
     """
     rag_service = RAGService()
     
+    # Generate/Resolve session ID early for context lookback
+    if request.sessionId:
+        try:
+            session_id = UUID(request.sessionId)
+        except ValueError:
+            session_id = uuid4()
+    else:
+        session_id = uuid4()
+    
     # Log audit event
     audit_log = AuditLog(
         user_id=current_user.id,
         action="QUERY",
         resource_type="CHAT",
-        metadata_={"query": request.query[:100]}  # Truncate for privacy
+        resource_id=session_id, # Link audit to session
+        metadata_={"query": request.query[:100]}
     )
     session.add(audit_log)
     session.commit()
@@ -78,6 +88,21 @@ async def query(
     # Detect Companies for context filtering
     from app.services.company_service import company_service
     companies = company_service.find_companies_by_text(request.query, session)
+    
+    # Context Lookback: If no companies found, check previous user message
+    # This handles follow-up questions like "Which one is better?"
+    if not companies:
+         last_msg = session.exec(
+             select(ChatMessage)
+             .where(ChatMessage.session_id == session_id)
+             .where(ChatMessage.role == "user")
+             .order_by(ChatMessage.created_at.desc())
+         ).first()
+         
+         if last_msg:
+             print(f"Context Lookback: Checking previous message '{last_msg.content[:50]}...'")
+             companies = company_service.find_companies_by_text(last_msg.content, session)
+    
     company_ids = [c.id for c in companies] if companies else None
     
     # Vector search with SECURITY CHECK - only user's documents
@@ -96,7 +121,18 @@ async def query(
     # Build structured chunks from DB (Financials, News)
     # These effectively act as "Source 1", "Source 2" etc.
     try:
-        structured_chunks = rag_service.get_structured_chunks(request.query)
+        # Pass companies directly if we have them, otherwise query
+        if companies:
+            # We already have the companies, lets fetch chunks for them directly
+            # But get_structured_chunks takes query. 
+            # Let's refactor get_structured_chunks or just pass the query?
+            # Passing the original query "Which is better" won't work if we used lookback.
+            # We should pass the NAMES of the found companies or update get_structured_chunks to accept companies list.
+            # For minimal change, let's construct a synthetic query or update the service.
+            # Updating service is cleaner.
+            structured_chunks = rag_service.get_structured_chunks_for_companies(companies, session)
+        else:
+             structured_chunks = []
     except Exception as e:
         print(f"Error fetching structured chunks: {e}")
         structured_chunks = []
@@ -107,19 +143,7 @@ async def query(
     # Build context from ALL chunks
     context = rag_service.build_context(all_chunks)
     
-    # Generate session ID for this conversation if not provided
-    if request.sessionId:
-        try:
-            session_id = UUID(request.sessionId)
-        except ValueError:
-             # Fallback if invalid UUID passed, or just raise error. 
-             # For robustness let's create new one or fail? 
-             # Failing is better to avoid split brain.
-             # but to be safe let's just make a new one if it fails parsing?
-             # No, let's assume valid UUID or make new one.
-             session_id = uuid4()
-    else:
-        session_id = uuid4()
+    # Session ID logic removed from here (moved to top)
     
     # Save user message
     user_message = ChatMessage(
