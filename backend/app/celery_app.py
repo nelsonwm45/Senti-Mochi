@@ -25,6 +25,7 @@ celery_app.conf.update(
 from app.tasks import document_tasks  # noqa
 from app.tasks import company_tasks  # noqa
 from app.tasks import data_tasks  # noqa
+from app.tasks import sentiment_tasks  # noqa
 
 celery_app.conf.beat_schedule = {
     "seed-companies-every-24h": {

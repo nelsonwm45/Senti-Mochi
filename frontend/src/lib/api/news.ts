@@ -1,5 +1,12 @@
 import apiClient from '../apiClient';
 
+export interface SentimentData {
+	label: 'Positive' | 'Neutral' | 'Negative';
+	score: number;
+	confidence: number;
+	analyzed_at?: string;
+}
+
 export interface UnifiedFeedItem {
 	id: string;
 	type: 'bursa' | 'star' | 'nst';
@@ -11,6 +18,7 @@ export interface UnifiedFeedItem {
 	companyCode: string;
 	description?: string;
 	source: string;
+	sentiment?: SentimentData;
 }
 
 export const newsApi = {
