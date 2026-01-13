@@ -18,7 +18,7 @@ class ClientNewsArticle(BaseModel):
     native_id: str
     title: str
     url: str
-    published_at: datetime
+    published_at: str  # ISO string from frontend
     content: Optional[str] = None
 
 @router.post("/store-articles")
@@ -43,6 +43,12 @@ def store_articles(
             if existing:
                 continue
             
+            # Parse ISO datetime string
+            try:
+                published_at = datetime.fromisoformat(article_data.published_at.replace('Z', '+00:00'))
+            except:
+                published_at = datetime.utcnow()
+            
             # Create and save article
             article = NewsArticle(
                 company_id=article_data.company_id,
@@ -50,7 +56,7 @@ def store_articles(
                 native_id=article_data.native_id,
                 title=article_data.title,
                 url=article_data.url,
-                published_at=article_data.published_at,
+                published_at=published_at,
                 content=article_data.content
             )
             session.add(article)
