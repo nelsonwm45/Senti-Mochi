@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
+import apiClient from '@/lib/apiClient';
+import { bursaCompanies } from '@/lib/bursaCompanies';
 import {
   FileText,
   AlertTriangle,
@@ -58,6 +60,15 @@ interface NSTArticle {
     name: string;
   };
   field_article_lead?: string;
+}
+
+interface WatchlistCompany {
+  id: string;
+  name: string;
+  ticker: string;
+  sector?: string;
+  sub_sector?: string;
+  website_url?: string;
 }
 
 interface UnifiedFeedItem {
@@ -138,6 +149,8 @@ function DashboardContent() {
   const [unifiedFeed, setUnifiedFeed] = useState<UnifiedFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [watchlistEmpty, setWatchlistEmpty] = useState(false);
+  const [watchlistCompanies, setWatchlistCompanies] = useState<WatchlistCompany[]>([]);
   const [stats, setStats] = useState({
     bursa: 0,
     star: 0,
@@ -145,18 +158,26 @@ function DashboardContent() {
     total: 0
   });
 
-  // Fetch all news sources
+  // Fetch user's watchlist
   useEffect(() => {
-    const fetchAllNews = async () => {
-      setLoading(true);
-      setError(null);
-
+    const fetchWatchlist = async () => {
       try {
-        // Fetch Bursa announcements, The Star, and NST in parallel
+        const response = await apiClient.get('/api/v1/watchlist/my-watchlist');
+        const companies = response.data;
+
+        if (companies.length === 0) {
+          setWatchlistEmpty(true);
+          setLoading(false);
+          return;
+        }
+
+        setWatchlistCompanies(companies);
+
+        // Now fetch all news for these companies
         const [bursaResponse, starResponse, nstResponse] = await Promise.all([
-          fetchBursaAnnouncements(),
-          fetchStarNews(),
-          fetchNSTNews()
+          fetchBursaAnnouncements(companies),
+          fetchStarNews(companies),
+          fetchNSTNews(companies)
         ]);
 
         // Combine and sort all items by timestamp
@@ -174,136 +195,187 @@ function DashboardContent() {
           total: combinedFeed.length
         });
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch news');
-        console.error('Error fetching news:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch watchlist');
+        console.error('Error fetching watchlist:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAllNews();
+    fetchWatchlist();
   }, []);
 
-  // Fetch Bursa Malaysia announcements
-  const fetchBursaAnnouncements = async (): Promise<UnifiedFeedItem[]> => {
+  // Fetch Bursa Malaysia announcements for multiple companies
+  const fetchBursaAnnouncements = async (companies: WatchlistCompany[]): Promise<UnifiedFeedItem[]> => {
     try {
-      const companyId = '7113'; // Top Glove
-      const url = `https://www.bursamalaysia.com/api/v1/announcements/search?ann_type=company&company=${companyId}&per_page=5&page=1`;
+      const allAnnouncements: UnifiedFeedItem[] = [];
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
+      for (const company of companies) {
+        // Find the Bursa ticker in bursaCompanies and extract the numeric code (remove .KL)
+        const bursaCompany = bursaCompanies.find(bc =>
+          bc.name.toLowerCase().includes(company.name.toLowerCase()) ||
+          bc.ticker.split('.')[0] === company.ticker?.split('.')[0]
+        );
 
-      if (!response.ok) {
-        throw new Error(`Bursa API error: ${response.status}`);
+        if (!bursaCompany) {
+          console.warn(`No Bursa company found for ${company.name}`);
+          continue;
+        }
+
+        // Extract numeric ID from ticker (e.g., "1155.KL" -> "1155")
+        const bursaCode = bursaCompany.ticker.split('.')[0];
+        const url = `https://www.bursamalaysia.com/api/v1/announcements/search?ann_type=company&company=${bursaCode}&per_page=5&page=1`;
+
+        try {
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+          });
+
+          if (!response.ok) {
+            console.warn(`Bursa API error for ${company.name}: ${response.status}`);
+            continue;
+          }
+
+          const jsonData: ApiResponse = await response.json();
+          const parsedAnnouncements = jsonData.data
+            ? jsonData.data.map(parseAnnouncement)
+            : [];
+
+          allAnnouncements.push(...parsedAnnouncements.slice(0, 5).map(ann => ({
+            id: `bursa-${bursaCode}-${ann.id}`,
+            type: 'bursa' as const,
+            title: ann.title,
+            link: ann.announcementLink || '',
+            date: ann.date,
+            timestamp: parseDateToTimestamp(ann.date),
+            company: ann.companyName,
+            companyCode: ann.companyCode,
+            source: 'Bursa Malaysia'
+          })));
+        } catch (err) {
+          console.error(`Error fetching Bursa announcements for ${company.name}:`, err);
+          continue;
+        }
       }
 
-      const jsonData: ApiResponse = await response.json();
-      const parsedAnnouncements = jsonData.data
-        ? jsonData.data.map(parseAnnouncement)
-        : [];
-
-      return parsedAnnouncements.map(ann => ({
-        id: `bursa-${ann.id}`,
-        type: 'bursa' as const,
-        title: ann.title,
-        link: ann.announcementLink || '',
-        date: ann.date,
-        timestamp: parseDateToTimestamp(ann.date),
-        company: ann.companyName,
-        companyCode: ann.companyCode,
-        source: 'Bursa Malaysia'
-      }));
+      return allAnnouncements;
     } catch (err) {
       console.error('Error fetching Bursa announcements:', err);
       return [];
     }
   };
 
-  // Fetch The Star news
-  const fetchStarNews = async (): Promise<UnifiedFeedItem[]> => {
+  // Fetch The Star news for multiple companies
+  const fetchStarNews = async (companies: WatchlistCompany[]): Promise<UnifiedFeedItem[]> => {
     try {
-      const searchQuery = 'Top Glove';
-      const encodedQuery = encodeURIComponent(searchQuery);
-      const url = `https://api.queryly.com/json.aspx?queryly_key=6ddd278bf17648ac&query=${encodedQuery}&endindex=0&batchsize=5&showfaceted=true&extendeddatafields=paywalltype,isexclusive,kicker,kickerurl,summary,sponsor&timezoneoffset=-450`;
+      const allArticles: UnifiedFeedItem[] = [];
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
+      for (const company of companies) {
+        const searchQuery = company.name;
+        const encodedQuery = encodeURIComponent(searchQuery);
+        const url = `https://api.queryly.com/json.aspx?queryly_key=6ddd278bf17648ac&query=${encodedQuery}&endindex=0&batchsize=5&showfaceted=true&extendeddatafields=paywalltype,isexclusive,kicker,kickerurl,summary,sponsor&timezoneoffset=-450`;
 
-      if (!response.ok) {
-        throw new Error(`Star API error: ${response.status}`);
-      }
+        try {
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+          });
 
-      const text = await response.text();
-      let jsonData: any;
+          if (!response.ok) {
+            console.warn(`Star API error for ${company.name}: ${response.status}`);
+            continue;
+          }
 
-      // Handle JSONP response
-      if (text.includes('resultcallback')) {
-        const jsonMatch = text.match(/resultcallback\s*\(\s*({[\s\S]*})\s*\)/);
-        if (jsonMatch && jsonMatch[1]) {
-          jsonData = JSON.parse(jsonMatch[1]);
-        } else {
-          throw new Error('Unable to parse JSONP response');
+          const text = await response.text();
+          let jsonData: any;
+
+          // Handle JSONP response
+          if (text.includes('resultcallback')) {
+            const jsonMatch = text.match(/resultcallback\s*\(\s*({[\s\S]*})\s*\)/);
+            if (jsonMatch && jsonMatch[1]) {
+              jsonData = JSON.parse(jsonMatch[1]);
+            } else {
+              console.warn(`Unable to parse JSONP response for ${company.name}`);
+              continue;
+            }
+          } else {
+            jsonData = JSON.parse(text);
+          }
+
+          const articles: StarArticle[] = jsonData.items || [];
+
+          allArticles.push(...articles.map(article => ({
+            id: `star-${company.ticker}-${article._id}`,
+            type: 'star' as const,
+            title: article.title,
+            link: article.link,
+            date: article.pubdate,
+            timestamp: article.pubdateunix,
+            description: article.description,
+            company: company.name,
+            source: 'The Star'
+          })));
+        } catch (err) {
+          console.error(`Error fetching Star news for ${company.name}:`, err);
+          continue;
         }
-      } else {
-        jsonData = JSON.parse(text);
       }
 
-      const articles: StarArticle[] = jsonData.items || [];
-
-      return articles.map(article => ({
-        id: `star-${article._id}`,
-        type: 'star' as const,
-        title: article.title,
-        link: article.link,
-        date: article.pubdate,
-        timestamp: article.pubdateunix,
-        description: article.description,
-        source: 'The Star'
-      }));
+      return allArticles;
     } catch (err) {
       console.error('Error fetching Star news:', err);
       return [];
     }
   };
 
-  // Fetch NST news
-  const fetchNSTNews = async (): Promise<UnifiedFeedItem[]> => {
+  // Fetch NST news for multiple companies
+  const fetchNSTNews = async (companies: WatchlistCompany[]): Promise<UnifiedFeedItem[]> => {
     try {
-      const searchQuery = 'Top Glove';
-      const url = `/api/nst?keywords=${encodeURIComponent(searchQuery)}&category=&sort=DESC&page_size=5&page=0`;
+      const allArticles: UnifiedFeedItem[] = [];
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
+      for (const company of companies) {
+        const searchQuery = company.name;
+        const url = `/api/nst?keywords=${encodeURIComponent(searchQuery)}&category=&sort=DESC&page_size=5&page=0`;
 
-      if (!response.ok) {
-        throw new Error(`NST API error: ${response.status}`);
+        try {
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            },
+          });
+
+          if (!response.ok) {
+            console.warn(`NST API error for ${company.name}: ${response.status}`);
+            continue;
+          }
+
+          const jsonData = await response.json();
+          const articles: NSTArticle[] = jsonData.data || [];
+
+          allArticles.push(...articles.slice(0, 5).map(article => ({
+            id: `nst-${company.ticker}-${article.nid}`,
+            type: 'nst' as const,
+            title: article.title,
+            link: article.url,
+            date: formatNSTDate(article.created),
+            timestamp: article.created,
+            description: article.field_article_lead,
+            company: company.name,
+            source: 'NST'
+          })));
+        } catch (err) {
+          console.error(`Error fetching NST news for ${company.name}:`, err);
+          continue;
+        }
       }
 
-      const jsonData = await response.json();
-      const articles: NSTArticle[] = jsonData.data || [];
-
-      return articles.map(article => ({
-        id: `nst-${article.nid}`,
-        type: 'nst' as const,
-        title: article.title,
-        link: article.url,
-        date: formatNSTDate(article.created),
-        timestamp: article.created,
-        description: article.field_article_lead,
-        source: 'NST'
-      }));
+      return allArticles;
     } catch (err) {
       console.error('Error fetching NST news:', err);
       return [];
@@ -435,7 +507,7 @@ function DashboardContent() {
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-foreground">Intelligence Feed</h2>
             <span className="text-sm text-foreground-muted">
-              {loading ? 'Loading...' : `Showing ${unifiedFeed.length} items from all sources`}
+              {loading ? 'Loading...' : watchlistEmpty ? 'No companies in watchlist' : `Showing ${unifiedFeed.length} items from all sources`}
             </span>
           </div>
 
@@ -448,7 +520,21 @@ function DashboardContent() {
             </GlassCard>
           )}
 
-          {loading ? (
+          {watchlistEmpty && !loading ? (
+            <GlassCard className="p-12 border-amber-500/50 flex flex-col items-center justify-center text-center">
+              <AlertTriangle size={40} className="text-amber-500 mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">Your Watchlist is Empty</h3>
+              <p className="text-foreground-muted mb-6 max-w-md">
+                Start adding companies to your watchlist to see their Bursa filings and financial news updates here.
+              </p>
+              <button
+                onClick={() => router.push('/watchlist')}
+                className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-medium transition-colors"
+              >
+                Go to Watchlist
+              </button>
+            </GlassCard>
+          ) : loading ? (
             <GlassCard className="p-6">
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
@@ -458,7 +544,7 @@ function DashboardContent() {
             <div className="space-y-4">
               {unifiedFeed.length === 0 ? (
                 <GlassCard className="p-6">
-                  <p className="text-center text-foreground-muted">No news items found</p>
+                  <p className="text-center text-foreground-muted">No news items found for your watched companies</p>
                 </GlassCard>
               ) : (
                 unifiedFeed.map((item) => {
