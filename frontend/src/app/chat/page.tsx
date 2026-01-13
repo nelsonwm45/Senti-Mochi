@@ -21,7 +21,8 @@ export default function ChatPage() {
     clearMessages,
     sessions,
     currentSessionId,
-    loadSession
+    loadSession,
+    deleteSession
   } = useChat();
   const [citationPanelOpen, setCitationPanelOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -66,6 +67,7 @@ export default function ChatPage() {
           sessions={sessions}
           currentSessionId={currentSessionId}
           onSelectSession={loadSession}
+          onDeleteSession={deleteSession}
         />
 
         {/* Main Chat Area */}

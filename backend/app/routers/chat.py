@@ -57,12 +57,36 @@ async def query(
     """
     rag_service = RAGService()
     
+    # Generate/Resolve session ID early for context lookback
+    if request.sessionId:
+        try:
+            session_id = UUID(request.sessionId)
+        except ValueError:
+            session_id = uuid4()
+    else:
+        session_id = uuid4()
+    
+    # Check session message limit to prevent overload
+    MAX_MESSAGES_PER_SESSION = 50
+    message_count = session.exec(
+        select(func.count()).select_from(ChatMessage).where(
+            ChatMessage.session_id == session_id
+        )
+    ).one()
+    
+    if message_count >= MAX_MESSAGES_PER_SESSION:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Session has reached maximum message limit ({MAX_MESSAGES_PER_SESSION}). Please start a new chat."
+        )
+    
     # Log audit event
     audit_log = AuditLog(
         user_id=current_user.id,
         action="QUERY",
         resource_type="CHAT",
-        metadata_={"query": request.query[:100]}  # Truncate for privacy
+        resource_id=session_id, # Link audit to session
+        metadata_={"query": request.query[:100]}
     )
     session.add(audit_log)
     session.commit()
@@ -75,33 +99,91 @@ async def query(
     if request.documentIds:
         document_ids = [UUID(doc_id) for doc_id in request.documentIds]
     
+    # Detect Companies for context filtering
+    from app.services.company_service import company_service
+    companies = company_service.find_companies_by_text(request.query, session)
+    
+    # Context Lookback: If no companies found, check previous user message
+    # This handles follow-up questions like "Which one is better?"
+    if not companies:
+         last_msg = session.exec(
+             select(ChatMessage)
+             .where(ChatMessage.session_id == session_id)
+             .where(ChatMessage.role == "user")
+             .order_by(ChatMessage.created_at.desc())
+         ).first()
+         
+         if last_msg:
+             print(f"Context Lookback: Checking previous message '{last_msg.content[:50]}...'")
+             companies = company_service.find_companies_by_text(last_msg.content, session)
+    
+    company_ids = [c.id for c in companies] if companies else None
+    
     # Vector search with SECURITY CHECK - only user's documents
+    # And optional company filtering
     chunks = rag_service.vector_search(
         query_embedding=query_embedding,
         user_id=current_user.id,  # Critical security parameter
         document_ids=document_ids,
+        company_ids=company_ids,
         limit=request.maxResults
     )
     
     # Proceed even if chunks is empty to allow for general chat
     # if not chunks: ... (removed strict check)
     
-    # Build context
-    context = rag_service.build_context(chunks)
+    # Build structured chunks from DB (Financials, News)
+    # These effectively act as "Source 1", "Source 2" etc.
+    try:
+        # Pass companies directly if we have them, otherwise query
+        if companies:
+            # We already have the companies, lets fetch chunks for them directly
+            # But get_structured_chunks takes query. 
+            # Let's refactor get_structured_chunks or just pass the query?
+            # Passing the original query "Which is better" won't work if we used lookback.
+            # We should pass the NAMES of the found companies or update get_structured_chunks to accept companies list.
+            # For minimal change, let's construct a synthetic query or update the service.
+            # Updating service is cleaner.
+            structured_chunks = rag_service.get_structured_chunks_for_companies(companies, session)
+        else:
+             structured_chunks = []
+    except Exception as e:
+        print(f"Error fetching structured chunks: {e}")
+        structured_chunks = []
     
-    # Generate session ID for this conversation if not provided
-    if request.sessionId:
-        try:
-            session_id = UUID(request.sessionId)
-        except ValueError:
-             # Fallback if invalid UUID passed, or just raise error. 
-             # For robustness let's create new one or fail? 
-             # Failing is better to avoid split brain.
-             # but to be safe let's just make a new one if it fails parsing?
-             # No, let's assume valid UUID or make new one.
-             session_id = uuid4()
-    else:
-        session_id = uuid4()
+    # Combine chunks: Structured first (priority), then Vector Results
+    all_chunks = structured_chunks + chunks
+    
+    # Build context from ALL chunks
+    context = rag_service.build_context(all_chunks)
+    
+    # Session ID logic removed from here (moved to top)
+    
+    # Fetch recent chat history for context
+    # Limit to last 10 messages to avoid overflowing context window
+    history_msgs = session.exec(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.asc()) # Get oldest first? No, we need time order.
+        # But for limiting, we want the *last* 10. So order desc, limit, then reverse.
+    ).all()
+    
+    # Sort by time asc for conversation flow
+    # If we fetch all, just sort. If we limit, use subquery or Python slice.
+    # Simple approach: fetch all (sessions usually short) or fetch last 20
+    # Let's fetch last 10 by time descending, then reverse in Python
+    history_msgs = session.exec(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(10)
+    ).all()
+    history_msgs.reverse() # Now in chronological order
+    
+    chat_history = [
+        {"role": msg.role, "content": msg.content}
+        for msg in history_msgs
+    ]
     
     # Save user message
     user_message = ChatMessage(
@@ -118,7 +200,12 @@ async def query(
         # Streaming response
         async def stream_generator():
             full_response = ""
-            async for chunk in rag_service.generate_response_stream(request.query, context):
+            # Pass chat_history to stream
+            async for chunk in rag_service.generate_response_stream(
+                request.query, 
+                context, 
+                chat_history=chat_history
+            ):
                 full_response += chunk
                 yield chunk
             
@@ -128,7 +215,7 @@ async def query(
                 session_id=session_id,
                 role="assistant",
                 content=full_response,
-                citations={"chunks": [str(c["id"]) for c in chunks]}
+                citations={"chunks": [str(c["id"]) for c in all_chunks]}
             )
             session.add(assistant_message)
             session.commit()
@@ -137,11 +224,16 @@ async def query(
     
     else:
         # Non-streaming response
-        result = rag_service.generate_response(request.query, context)
+        # Pass chat_history
+        result = rag_service.generate_response(
+            request.query, 
+            context, 
+            chat_history=chat_history
+        )
         
         # Format citations
         citations = []
-        for i, chunk in enumerate(chunks):
+        for i, chunk in enumerate(all_chunks):
             citations.append(CitationInfo(
                 sourceNumber=i + 1,
                 filename=chunk["filename"],
@@ -246,3 +338,49 @@ async def submit_feedback(
     session.commit()
     
     return {"message": "Feedback recorded successfully"}
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """Delete a chat session and all its messages"""
+    try:
+        sess_uuid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID")
+        
+    # Check if session exists and belongs to user
+    # We check if there are ANY messages for this session/user
+    statement = select(ChatMessage).where(
+        ChatMessage.session_id == sess_uuid,
+        ChatMessage.user_id == current_user.id
+    )
+    result = session.exec(statement).first()
+    
+    if not result:
+        # Either session doesn't exist or belongs to another user
+        # We can just return success to be idempotent or 404
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    # Delete all messages
+    delete_stmt = select(ChatMessage).where(
+        ChatMessage.session_id == sess_uuid,
+        ChatMessage.user_id == current_user.id
+    )
+    messages = session.exec(delete_stmt).all()
+    for msg in messages:
+        session.delete(msg)
+        
+    # Log deletion
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        action="DELETE",
+        resource_type="CHAT",
+        resource_id=sess_uuid
+    )
+    session.add(audit_log)
+    
+    session.commit()
+    return {"message": "Session deleted successfully"}

@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { Upload, FileText, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { useUploadDocument } from '@/hooks/useDocuments';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { Upload, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { useDropzone } from 'react-dropzone';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ACCEPTED_TYPES = {
@@ -15,8 +15,9 @@ const ACCEPTED_TYPES = {
   'image/jpeg': ['.jpg', '.jpeg']
 };
 
-interface UploadZoneProps {
-  onUploadSuccess?: (documentId: string) => void;
+interface CompanyDocumentUploadProps {
+  companyId: string;
+  onUploadSuccess?: () => void;
 }
 
 interface UploadingFile {
@@ -25,19 +26,23 @@ interface UploadingFile {
   error?: string;
 }
 
-export default function UploadZone({ onUploadSuccess }: UploadZoneProps) {
+export default function CompanyDocumentUpload({ companyId, onUploadSuccess }: CompanyDocumentUploadProps) {
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
-  const uploadMutation = useUploadDocument(onUploadSuccess);
+  
+  // Pass success callback to invalidate queries, but we also want to trigger parent refresh potentially
+  const uploadMutation = useUploadDocument((docId) => {
+    if (onUploadSuccess) onUploadSuccess();
+  });
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     // Initialize all files as uploading
     setUploadingFiles(acceptedFiles.map(f => ({ name: f.name, status: 'uploading' })));
 
-    // Upload files sequentially to avoid overwhelming the server
+    // Upload files sequentially
     for (let i = 0; i < acceptedFiles.length; i++) {
       const file = acceptedFiles[i];
       try {
-        await uploadMutation.mutateAsync({ file });
+        await uploadMutation.mutateAsync({ file, companyId });
         setUploadingFiles(prev =>
           prev.map((f, idx) => idx === i ? { ...f, status: 'success' } : f)
         );
@@ -50,7 +55,7 @@ export default function UploadZone({ onUploadSuccess }: UploadZoneProps) {
 
     // Clear the upload status after 3 seconds
     setTimeout(() => setUploadingFiles([]), 3000);
-  }, [uploadMutation]);
+  }, [uploadMutation, companyId]);
 
   const isUploading = uploadingFiles.some(f => f.status === 'uploading');
 
@@ -64,88 +69,86 @@ export default function UploadZone({ onUploadSuccess }: UploadZoneProps) {
 
   return (
     <div className="w-full">
-      <div
+       <div
         {...getRootProps()}
         className={`
-          relative rounded-3xl p-10 transition-all duration-300 cursor-pointer group
-          border-3 border-dashed
+          relative rounded-2xl p-8 transition-all duration-300 cursor-pointer group
+          border-2 border-dashed
+            ${isDragActive
             ? 'border-emerald-500 bg-emerald-500/10 scale-[1.01] shadow-2xl shadow-emerald-500/20' 
-            : 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500 hover:bg-emerald-500/10'
+            : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
           }
-          backdrop-blur-xl flex flex-col items-center justify-center text-center gap-6 min-h-[300px]
+          flex flex-col items-center justify-center text-center gap-4 min-h-[200px]
         `}
       >
         <input {...getInputProps()} />
         
         <div className={`
-          p-6 rounded-2xl transition-all duration-300 shadow-xl
+          p-4 rounded-xl transition-all duration-300 shadow-lg
           ${isDragActive 
-            ? 'bg-accent text-white scale-125 shadow-accent/40' 
-            : 'bg-gradient-brand text-white group-hover:scale-110 shadow-blue-500/30'
+            ? 'bg-accent text-white scale-110' 
+            : 'bg-white/10 text-gray-300 group-hover:scale-105 group-hover:bg-white/20 group-hover:text-white'
           }
         `}>
-          <Upload className="w-12 h-12" />
+          <Upload className="w-8 h-8" />
         </div>
 
-        <div className="space-y-2 max-w-md mx-auto">
-          <h3 className="text-2xl font-bold text-foreground">
+        <div className="space-y-1">
+          <h3 className="text-lg font-semibold text-white">
             {isDragActive ? 'Drop files now' : 'Upload Documents'}
           </h3>
-          <p className="text-foreground-secondary text-base leading-relaxed">
-            Drag & drop your files here, or{' '}
-            <span className="text-accent font-semibold hover:underline decoration-2 underline-offset-2">browse computer</span>
-          </p>
-          <p className="pt-2 text-sm font-medium text-foreground-muted opacity-80">
-            PDF, DOCX, TXT, PNG, JPG • Max 50MB
+          <p className="text-gray-400 text-sm">
+            Drag & drop or <span className="text-emerald-400 hover:underline">browse</span>
           </p>
         </div>
+      </div>
 
-        {uploadingFiles.length > 0 && (
-          <div className="w-full max-w-sm space-y-3 mt-2">
+       {uploadingFiles.length > 0 && (
+          <div className="space-y-2 mt-4">
             {uploadingFiles.map((file, idx) => (
-              <GlassCard
+              <div
                 key={idx}
-                className={`p-4 flex items-center justify-between !bg-white/80 dark:!bg-slate-800/80 backdrop-blur-md border !border-gray-200 dark:!border-gray-700
-                  ${file.status === 'error' ? '!border-red-500/50 !bg-red-50' : ''}
-                  ${file.status === 'success' ? '!border-green-500/50 !bg-green-50' : ''}
+                className={`p-3 rounded-lg flex items-center justify-between border 
+                  ${file.status === 'error' ? 'border-red-500/30 bg-red-500/10' : ''}
+                  ${file.status === 'success' ? 'border-emerald-500/30 bg-emerald-500/10' : ''}
+                  ${file.status === 'uploading' ? 'border-white/10 bg-white/5' : ''}
                 `}
               >
                 <div className="flex items-center space-x-3 min-w-0">
                   {file.status === 'uploading' && (
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-accent border-b-transparent"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-accent border-b-transparent"></div>
                   )}
                   {file.status === 'success' && (
-                    <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+                    <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
                   )}
                   {file.status === 'error' && (
-                    <XCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                    <XCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
                   )}
                   <span className={`text-sm font-medium truncate ${
-                    file.status === 'error' ? 'text-red-700' : 
-                    file.status === 'success' ? 'text-green-700' : 'text-foreground'
+                    file.status === 'error' ? 'text-red-400' : 
+                    file.status === 'success' ? 'text-emerald-400' : 'text-gray-300'
                   }`}>
                     {file.name}
                   </span>
                 </div>
-              </GlassCard>
+              </div>
             ))}
           </div>
         )}
-      </div>
-
-      {/* File Rejections */}
+      
+       {/* File Rejections */}
       {fileRejections.length > 0 && (
         <div className="mt-4 space-y-2">
           {fileRejections.map(({ file, errors }) => (
-            <div key={file.name} className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+            <div key={file.name} className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
               <div className="flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-red-500">
                     {file.name}
                   </p>
                   {errors.map((error) => (
-                    <p key={error.code} className="text-sm text-red-400 mt-1">
+                    <p key={error.code} className="text-xs text-red-400 mt-0.5">
                       {error.message}
                     </p>
                   ))}

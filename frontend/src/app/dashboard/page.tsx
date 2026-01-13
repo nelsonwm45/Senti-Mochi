@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 import apiClient from '@/lib/apiClient';
-import { bursaCompanies } from '@/lib/bursaCompanies';
+
 import {
   FileText,
   AlertTriangle,
@@ -21,47 +21,6 @@ import {
   PieChart, Pie, Cell, Legend, ResponsiveContainer, Tooltip
 } from 'recharts';
 
-interface ParsedAnnouncement {
-  id: number;
-  disclosureId: number;
-  date: string;
-  dateRaw: string;
-  companyName: string;
-  companyLink?: string;
-  companyCode?: string;
-  title: string;
-  announcementLink?: string;
-}
-
-interface ApiResponse {
-  data?: Array<[number, string, string, string]>;
-  [key: string]: any;
-}
-
-interface StarArticle {
-  _id: number;
-  title: string;
-  link: string;
-  description: string;
-  pubdate: string;
-  pubdateunix: number;
-  image?: string;
-  feedname: string;
-}
-
-interface NSTArticle {
-  nid: number;
-  title: string;
-  created: number;
-  url: string;
-  internal_url: string;
-  field_article_topic?: {
-    tid: number;
-    name: string;
-  };
-  field_article_lead?: string;
-}
-
 interface WatchlistCompany {
   id: string;
   name: string;
@@ -70,82 +29,14 @@ interface WatchlistCompany {
   sub_sector?: string;
   website_url?: string;
 }
+import { newsApi, UnifiedFeedItem } from '@/lib/api/news';
 
-interface UnifiedFeedItem {
-  id: string;
-  type: 'bursa' | 'star' | 'nst';
-  title: string;
-  link: string;
-  date: string;
-  timestamp: number;
-  company?: string;
-  companyCode?: string;
-  description?: string;
-  source: string;
-}
-
-// Utility function to decode HTML entities
-const decodeHtml = (html: string): string => {
-  const txt = document.createElement('textarea');
-  txt.innerHTML = html;
-  return txt.value;
-};
-
-// Utility function to extract text and link from HTML string
-const parseHtmlLink = (htmlString: string): { text: string; link?: string } => {
-  const decoded = decodeHtml(htmlString);
-
-  // Try to extract link from anchor tag
-  const linkMatch = decoded.match(/<a[^>]+href=['"]([^'"]+)['"][^>]*>(.*?)<\/a>/i);
-  if (linkMatch) {
-    return {
-      text: linkMatch[2].replace(/<[^>]*>/g, '').trim(),
-      link: linkMatch[1]
-    };
-  }
-
-  // If no link, just extract text and remove HTML tags
-  const text = decoded.replace(/<[^>]*>/g, '').trim();
-  return { text };
-};
-
-// Parse announcement array into structured object
-const parseAnnouncement = (announcementArray: [number, string, string, string]): ParsedAnnouncement => {
-  const [id, dateHtml, companyHtml, titleHtml] = announcementArray;
-
-  // Parse date (remove HTML tags and clean up)
-  const dateParsed = parseHtmlLink(dateHtml);
-  const dateText = dateParsed.text.replace(/\s+/g, ' ').trim();
-
-  // Parse company info
-  const companyParsed = parseHtmlLink(companyHtml);
-  const companyLink = companyParsed.link;
-  // Extract company code from link if available
-  const companyCodeMatch = companyLink?.match(/stock_code=(\d+)/);
-  const companyCode = companyCodeMatch ? companyCodeMatch[1] : undefined;
-
-  // Parse title
-  const titleParsed = parseHtmlLink(titleHtml);
-
-  // Extract disclosure ID (ann_id) from announcement link
-  const disclosureIdMatch = titleParsed.link?.match(/ann_id=(\d+)/);
-  const disclosureId = disclosureIdMatch ? parseInt(disclosureIdMatch[1], 10) : 0;
-
-  return {
-    id,
-    disclosureId,
-    date: dateText,
-    dateRaw: dateHtml,
-    companyName: companyParsed.text,
-    companyLink: companyLink ? `https://www.bursamalaysia.com${companyLink}` : undefined,
-    companyCode,
-    title: titleParsed.text,
-    announcementLink: titleParsed.link ? `https://www.bursamalaysia.com${titleParsed.link}` : undefined
-  };
-};
 
 function DashboardContent() {
   const router = useRouter();
+
+  // ... (keep interfaces if needed, or remove if imported)
+
   const [unifiedFeed, setUnifiedFeed] = useState<UnifiedFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -173,27 +64,23 @@ function DashboardContent() {
 
         setWatchlistCompanies(companies);
 
-        // Now fetch all news for these companies
-        const [bursaResponse, starResponse, nstResponse] = await Promise.all([
-          fetchBursaAnnouncements(companies),
-          fetchStarNews(companies),
-          fetchNSTNews(companies)
-        ]);
-
-        // Combine and sort all items by timestamp
-        const combinedFeed = [
-          ...bursaResponse,
-          ...starResponse,
-          ...nstResponse
-        ].sort((a, b) => b.timestamp - a.timestamp);
-
-        setUnifiedFeed(combinedFeed);
+        // Fetch news from backend (persisted data)
+        const newsData = await newsApi.getFeed(50, true);
+        
+        setUnifiedFeed(newsData);
+        
+        // Calculate stats from the response
+        const bursaCount = newsData.filter(i => i.type === 'bursa').length;
+        const starCount = newsData.filter(i => i.type === 'star').length;
+        const nstCount = newsData.filter(i => i.type === 'nst').length;
+        
         setStats({
-          bursa: bursaResponse.length,
-          star: starResponse.length,
-          nst: nstResponse.length,
-          total: combinedFeed.length
+          bursa: bursaCount,
+          star: starCount,
+          nst: nstCount,
+          total: newsData.length
         });
+
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch watchlist');
         console.error('Error fetching watchlist:', err);
@@ -205,205 +92,7 @@ function DashboardContent() {
     fetchWatchlist();
   }, []);
 
-  // Fetch Bursa Malaysia announcements for multiple companies
-  const fetchBursaAnnouncements = async (companies: WatchlistCompany[]): Promise<UnifiedFeedItem[]> => {
-    try {
-      const allAnnouncements: UnifiedFeedItem[] = [];
 
-      for (const company of companies) {
-        // Find the Bursa ticker in bursaCompanies and extract the numeric code (remove .KL)
-        const bursaCompany = bursaCompanies.find(bc =>
-          bc.name.toLowerCase().includes(company.name.toLowerCase()) ||
-          bc.ticker.split('.')[0] === company.ticker?.split('.')[0]
-        );
-
-        if (!bursaCompany) {
-          console.warn(`No Bursa company found for ${company.name}`);
-          continue;
-        }
-
-        // Extract numeric ID from ticker (e.g., "1155.KL" -> "1155")
-        const bursaCode = bursaCompany.ticker.split('.')[0];
-        const url = `https://www.bursamalaysia.com/api/v1/announcements/search?ann_type=company&company=${bursaCode}&per_page=5&page=1`;
-
-        try {
-          const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-            },
-          });
-
-          if (!response.ok) {
-            console.warn(`Bursa API error for ${company.name}: ${response.status}`);
-            continue;
-          }
-
-          const jsonData: ApiResponse = await response.json();
-          const parsedAnnouncements = jsonData.data
-            ? jsonData.data.map(parseAnnouncement)
-            : [];
-
-          allAnnouncements.push(...parsedAnnouncements.slice(0, 5).map(ann => ({
-            id: `bursa-${bursaCode}-${ann.id}`,
-            type: 'bursa' as const,
-            title: ann.title,
-            link: ann.announcementLink || '',
-            date: ann.date,
-            timestamp: parseDateToTimestamp(ann.date),
-            company: ann.companyName,
-            companyCode: ann.companyCode,
-            source: 'Bursa Malaysia'
-          })));
-        } catch (err) {
-          console.error(`Error fetching Bursa announcements for ${company.name}:`, err);
-          continue;
-        }
-      }
-
-      return allAnnouncements;
-    } catch (err) {
-      console.error('Error fetching Bursa announcements:', err);
-      return [];
-    }
-  };
-
-  // Fetch The Star news for multiple companies
-  const fetchStarNews = async (companies: WatchlistCompany[]): Promise<UnifiedFeedItem[]> => {
-    try {
-      const allArticles: UnifiedFeedItem[] = [];
-
-      for (const company of companies) {
-        const searchQuery = company.name;
-        const encodedQuery = encodeURIComponent(searchQuery);
-        const url = `https://api.queryly.com/json.aspx?queryly_key=6ddd278bf17648ac&query=${encodedQuery}&endindex=0&batchsize=5&showfaceted=true&extendeddatafields=paywalltype,isexclusive,kicker,kickerurl,summary,sponsor&timezoneoffset=-450`;
-
-        try {
-          const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-            },
-          });
-
-          if (!response.ok) {
-            console.warn(`Star API error for ${company.name}: ${response.status}`);
-            continue;
-          }
-
-          const text = await response.text();
-          let jsonData: any;
-
-          // Handle JSONP response
-          if (text.includes('resultcallback')) {
-            const jsonMatch = text.match(/resultcallback\s*\(\s*({[\s\S]*})\s*\)/);
-            if (jsonMatch && jsonMatch[1]) {
-              jsonData = JSON.parse(jsonMatch[1]);
-            } else {
-              console.warn(`Unable to parse JSONP response for ${company.name}`);
-              continue;
-            }
-          } else {
-            jsonData = JSON.parse(text);
-          }
-
-          const articles: StarArticle[] = jsonData.items || [];
-
-          allArticles.push(...articles.map(article => ({
-            id: `star-${company.ticker}-${article._id}`,
-            type: 'star' as const,
-            title: article.title,
-            link: article.link,
-            date: article.pubdate,
-            timestamp: article.pubdateunix,
-            description: article.description,
-            company: company.name,
-            source: 'The Star'
-          })));
-        } catch (err) {
-          console.error(`Error fetching Star news for ${company.name}:`, err);
-          continue;
-        }
-      }
-
-      return allArticles;
-    } catch (err) {
-      console.error('Error fetching Star news:', err);
-      return [];
-    }
-  };
-
-  // Fetch NST news for multiple companies
-  const fetchNSTNews = async (companies: WatchlistCompany[]): Promise<UnifiedFeedItem[]> => {
-    try {
-      const allArticles: UnifiedFeedItem[] = [];
-
-      for (const company of companies) {
-        const searchQuery = company.name;
-        const url = `/api/nst?keywords=${encodeURIComponent(searchQuery)}&category=&sort=DESC&page_size=5&page=0`;
-
-        try {
-          const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-            },
-          });
-
-          if (!response.ok) {
-            console.warn(`NST API error for ${company.name}: ${response.status}`);
-            continue;
-          }
-
-          const jsonData = await response.json();
-          const articles: NSTArticle[] = jsonData.data || [];
-
-          allArticles.push(...articles.slice(0, 5).map(article => ({
-            id: `nst-${company.ticker}-${article.nid}`,
-            type: 'nst' as const,
-            title: article.title,
-            link: article.url,
-            date: formatNSTDate(article.created),
-            timestamp: article.created,
-            description: article.field_article_lead,
-            company: company.name,
-            source: 'NST'
-          })));
-        } catch (err) {
-          console.error(`Error fetching NST news for ${company.name}:`, err);
-          continue;
-        }
-      }
-
-      return allArticles;
-    } catch (err) {
-      console.error('Error fetching NST news:', err);
-      return [];
-    }
-  };
-
-  // Helper function to parse date string to timestamp
-  const parseDateToTimestamp = (dateStr: string): number => {
-    try {
-      // Handle Bursa date format: "15 Jan 2026, 05:30 pm"
-      const date = new Date(dateStr);
-      return date.getTime() / 1000;
-    } catch {
-      return Date.now() / 1000;
-    }
-  };
-
-  // Helper function to format NST date
-  const formatNSTDate = (timestamp: number): string => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleDateString('en-MY', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
   // Get badge styling based on source type
   const getSourceBadge = (type: 'bursa' | 'star' | 'nst') => {

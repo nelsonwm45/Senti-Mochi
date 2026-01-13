@@ -36,6 +36,7 @@ class RAGService:
         query_embedding: List[float],
         user_id: UUID,
         document_ids: Optional[List[UUID]] = None,
+        company_ids: Optional[List[UUID]] = None,
         limit: int = 5,
         threshold: float = 0.4
     ) -> List[Dict]:
@@ -49,9 +50,15 @@ class RAGService:
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
             
             # Log the query for debugging
-            print(f"Vector search query: {embedding_str[:50]}... User: {user_id}")
+            print(f"Vector search query user: {user_id}, companies: {company_ids}")
 
             # Base query with security check - MUST filter by user_id
+            # Also filter by company_ids if provided (include global docs with null company_id)
+            company_filter = ""
+            if company_ids and len(company_ids) > 0:
+                ids_str = ",".join([f"'{str(cid)}'" for cid in company_ids])
+                company_filter = f"AND (d.company_id IN ({ids_str}) OR d.company_id IS NULL)"
+
             query_sql = f"""
                 SELECT 
                     dc.id,
@@ -69,6 +76,7 @@ class RAGService:
                 JOIN documents d ON dc.document_id = d.id
                 WHERE d.user_id = '{str(user_id)}'
                   AND d.is_deleted = false
+                  {company_filter}
                   -- AND 1 - (dc.embedding <=> '{embedding_str}'::vector) >= {0.4}
                 ORDER BY similarity DESC
                 LIMIT {limit}
@@ -94,6 +102,70 @@ class RAGService:
                 })
             
             return chunks
+
+    def get_structured_chunks(self, query: str) -> List[Dict]:
+        """
+        Identify companies in query and fetch structured data as Chunks.
+        """
+        from app.services.company_service import company_service
+        
+        with Session(engine) as session:
+            companies = company_service.find_companies_by_text(query, session)
+            if not companies:
+                return []
+            return self.get_structured_chunks_for_companies(companies, session)
+
+    def get_structured_chunks_for_companies(self, companies: List, session: Session) -> List[Dict]:
+        """
+        Fetch structured data chunks for a specific list of companies.
+        """
+        # Lazy imports
+        from app.services.news_service import news_service
+        from app.services.finance import finance_service
+        from uuid import uuid4
+        
+        chunks = []
+        
+        for company in companies:
+            # 1. Fetch Financials
+            try:
+                fin_ctx = finance_service.get_financials_context(company.ticker)
+                if fin_ctx:
+                    chunks.append({
+                        "id": uuid4(),
+                        "document_id": None,
+                        "content": fin_ctx,
+                        "page_number": 1,
+                        "chunk_index": 0,
+                        "metadata": {"type": "financials", "company": company.ticker},
+                        "filename": f"Financial Data ({company.name})",
+                        "similarity": 1.0, # High relevance
+                        "start_line": None,
+                        "end_line": None
+                    })
+            except Exception as e:
+                print(f"Error fetching financials chunks for {company.ticker}: {e}")
+            
+            # 2. Fetch News
+            try:
+                news_ctx = news_service.get_company_news_context(company.id, session)
+                if news_ctx:
+                    chunks.append({
+                        "id": uuid4(),
+                        "document_id": None,
+                        "content": news_ctx,
+                        "page_number": 1,
+                        "chunk_index": 0,
+                        "metadata": {"type": "news", "company": company.ticker},
+                        "filename": f"News Feed ({company.name})",
+                        "similarity": 1.0,
+                        "start_line": None,
+                        "end_line": None
+                    })
+            except Exception as e:
+                print(f"Error fetching news chunks for {company.ticker}: {e}")
+                
+        return chunks
     
     def build_context(self, chunks: List[Dict], max_tokens: int = 8000) -> str:
         """Build context string from retrieved chunks"""
@@ -119,6 +191,7 @@ class RAGService:
         self,
         query: str,
         context: str,
+        chat_history: List[Dict] = None, # List of {"role": "...", "content": "..."}
         model: str = "llama-3.3-70b-versatile",  # Groq's fast model
         temperature: float = 0.7
     ) -> Dict:
@@ -128,16 +201,19 @@ class RAGService:
         Returns:
             Dict with 'response' and extracted 'citations'
         """
+        # ... (Prompt construction remains same) ...
         prompt = f"""You are a knowledgeable finance expert assistant. 
-Your role is to provide accurate, helpful financial advice based on the provided context.
+Your role is to provide accurate, helpful financial advice based on the provided context, which may include user documents, financial data, and news.
 
 CRITICAL RULES:
-1. Use the provided context to answer questions about the user's documents.
-2. If the user greets you (e.g., "hi", "hello") or asks general questions, answer politely without needing context.
-3. If the user asks a specific question about their documents and the context is empty or irrelevant, say you couldn't find that information.
-4. Always cite your sources using the format [Source N] when referencing information.
-5. Be precise with numbers and financial data.
-6. Handle personally identifiable information (PII) carefully.
+1. Use the provided context to answer the user's questions. Context acts as your knowledge base.
+2. If the user greets you or asks general questions, answer politely.
+3. If the user asks a specific question and the context contains relevant data (financials, news, or documents), answer CONFIDENTLY based on that data.
+4. DO NOT apologize for missing "documents" if you have financial data or news that answers the question.
+5. Only say you couldn't find information if the ENTIRE context is empty or irrelevant to the question.
+6. Always cite sources using [Source N] format.
+7. Be precise with financial data.
+8. Handle PII carefully.
 
 Context:
 {context}
@@ -146,14 +222,24 @@ Context:
 
 User Question: {query}
 
-Answer (remember to cite sources as [Source 1], [Source 2], etc.):"""
+Answer (cite sources as [Source 1], [Source 2], etc.):"""
         
+        # Build messages list
+        messages = [{"role": "system", "content": "You are a helpful finance expert assistant."}]
+        
+        # Inject History
+        if chat_history:
+            # We only strictly need the 'role' and 'content' fields
+            for msg in chat_history:
+                if msg.get('role') in ['user', 'assistant'] and msg.get('content'):
+                    messages.append({"role": msg['role'], "content": msg['content']})
+        
+        # Add current turn
+        messages.append({"role": "user", "content": prompt})
+
         response = self.client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": "You are a helpful finance expert assistant."},
-                {"role": "user", "content": prompt}
-            ],
+            messages=messages,
             temperature=temperature,
             max_tokens=1024
         )
@@ -175,6 +261,7 @@ Answer (remember to cite sources as [Source 1], [Source 2], etc.):"""
         self,
         query: str,
         context: str,
+        chat_history: List[Dict] = None,
         model: str = "llama-3.3-70b-versatile"
     ):
         """
@@ -183,16 +270,19 @@ Answer (remember to cite sources as [Source 1], [Source 2], etc.):"""
         Yields:
             Response chunks as they're generated
         """
+        # ... (Prompt construction remains same) ...
         prompt = f"""You are a knowledgeable finance expert assistant. 
-Your role is to provide accurate, helpful financial advice based on the provided context.
+Your role is to provide accurate, helpful financial advice based on the provided context, which may include user documents, financial data, and news.
 
 CRITICAL RULES:
-1. Use the provided context to answer questions about the user's documents.
+1. Use the provided context to answer the user's questions. Context acts as your knowledge base.
 2. If the user greets you or asks general questions, answer politely.
-3. If the user asks a specific question about their documents and the context is empty, say you couldn't find that information.
-4. Always cite sources using [Source N] format.
-5. Be precise with financial data.
-6. Handle PII carefully.
+3. If the user asks a specific question and the context contains relevant data (financials, news, or documents), answer CONFIDENTLY based on that data.
+4. DO NOT apologize for missing "documents" if you have financial data or news that answers the question.
+5. Only say you couldn't find information if the ENTIRE context is empty or irrelevant to the question.
+6. Always cite sources using [Source N] format.
+7. Be precise with financial data.
+8. Handle PII carefully.
 
 Context:
 {context}
@@ -203,12 +293,19 @@ User Question: {query}
 
 Answer (cite sources as [Source 1], [Source 2], etc.):"""
         
+        # Build messages list
+        messages = [{"role": "system", "content": "You are a helpful finance expert assistant."}]
+        
+        if chat_history:
+            for msg in chat_history:
+                if msg.get('role') in ['user', 'assistant'] and msg.get('content'):
+                    messages.append({"role": msg['role'], "content": msg['content']})
+        
+        messages.append({"role": "user", "content": prompt})
+
         stream = self.client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": "You are a helpful finance expert assistant."},
-                {"role": "user", "content": prompt}
-            ],
+            messages=messages,
             stream=True,
             max_tokens=1024
         )

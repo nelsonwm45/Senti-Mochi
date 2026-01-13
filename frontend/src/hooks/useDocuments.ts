@@ -9,6 +9,7 @@ export function useDocuments(params?: {
 	skip?: number;
 	limit?: number;
 	status?: string;
+	company_id?: string;
 }) {
 	return useQuery({
 		queryKey: ['documents', params],
@@ -42,7 +43,8 @@ export function useUploadDocument(onSuccess?: (documentId: string) => void) {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: (file: File) => documentsApi.upload(file),
+		mutationFn: ({ file, companyId }: { file: File; companyId?: string }) =>
+			documentsApi.upload(file, companyId),
 		onSuccess: (data) => {
 			queryClient.invalidateQueries({ queryKey: ['documents'] });
 			toast.success('Document uploaded successfully!');
@@ -51,7 +53,13 @@ export function useUploadDocument(onSuccess?: (documentId: string) => void) {
 			}
 		},
 		onError: (error: any) => {
-			toast.error(error.response?.data?.detail || 'Upload failed');
+			const detail = error.response?.data?.detail;
+			const message = typeof detail === 'string'
+				? detail
+				: Array.isArray(detail)
+					? detail.map((d: any) => d.msg).join(', ')
+					: error.message || 'Upload failed';
+			toast.error(message);
 		},
 	});
 }
@@ -69,7 +77,13 @@ export function useDeleteDocument() {
 			toast.success('Document deleted');
 		},
 		onError: (error: any) => {
-			toast.error(error.response?.data?.detail || 'Delete failed');
+			const detail = error.response?.data?.detail;
+			const message = typeof detail === 'string'
+				? detail
+				: Array.isArray(detail)
+					? detail.map((d: any) => d.msg).join(', ')
+					: error.message || 'Delete failed';
+			toast.error(message);
 		},
 	});
 }
@@ -87,7 +101,13 @@ export function useReprocessDocument() {
 			toast.success('Reprocessing started');
 		},
 		onError: (error: any) => {
-			toast.error(error.response?.data?.detail || 'Reprocess failed');
+			const detail = error.response?.data?.detail;
+			const message = typeof detail === 'string'
+				? detail
+				: Array.isArray(detail)
+					? detail.map((d: any) => d.msg).join(', ')
+					: error.message || 'Reprocess failed';
+			toast.error(message);
 		},
 	});
 }

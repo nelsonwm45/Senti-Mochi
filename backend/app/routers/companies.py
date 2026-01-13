@@ -51,6 +51,40 @@ def compare_companies(
         
     return results
 
+@router.get("/search")
+def search_companies(
+    query: str | None = None,
+    limit: int = 20,
+    session: Session = Depends(get_session)
+):
+    """
+    Search for companies by ticker or name.
+    If query is empty, returns first {limit} companies.
+    """
+    statement = select(Company)
+    
+    if query:
+        query = query.strip().lower()
+        statement = statement.where(
+            (Company.ticker.ilike(f"%{query}%")) | 
+            (Company.name.ilike(f"%{query}%"))
+        )
+    
+    statement = statement.limit(limit)
+    
+    companies = session.exec(statement).all()
+    
+    return [
+        {
+            "id": str(c.id),
+            "ticker": c.ticker,
+            "name": c.name,
+            "sector": c.sector,
+            "sub_sector": c.sub_sector
+        }
+        for c in companies
+    ]
+
 @router.get("/{ticker}")
 def get_company_details(
     ticker: str,
@@ -68,6 +102,7 @@ def get_company_details(
     if company:
         info = {
             "name": company.name,
+            "id": str(company.id),
             "ticker": company.ticker,
             "sector": company.sector,
             "sub_sector": company.sub_sector,
