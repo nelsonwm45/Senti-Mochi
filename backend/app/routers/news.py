@@ -69,20 +69,31 @@ def store_articles(
     if saved_count > 0:
         session.commit()
         
-        # Trigger sentiment analysis for newly saved articles
-        # Query to get the newly saved articles
-        stmt = select(NewsArticle).where(
-            NewsArticle.native_id.in_([
-                article_data.native_id for article_data in articles
-                if article_data.source.lower() != "bursa"  # Skip Bursa
-            ])
-        ).where(NewsArticle.analyzed_at == None)  # Only new articles
+        # Get the newly saved articles for task queuing
+        newly_saved = session.exec(
+            select(NewsArticle).where(
+                NewsArticle.native_id.in_([a.native_id for a in articles])
+            )
+        ).all()
         
-        newly_saved = session.exec(stmt).all()
-        
-        # Queue sentiment analysis tasks for each new article
+        # Queue tasks for newly saved articles
         for article in newly_saved:
-            analyze_article_sentiment_task.delay(str(article.id))
+            if article.source.lower() == "bursa":
+                # Skip Bursa articles for both sentiment and enrichment
+                continue
+            
+            content_length = len(article.content) if article.content else 0
+            
+            if content_length < 500:
+                # Short content: Queue enrichment first, which will trigger sentiment after
+                from app.tasks.article_enrichment_tasks import enrich_article_content_task
+                enrich_article_content_task.delay(str(article.id))
+                print(f"[STORE] Queued content enrichment for article {article.id} ({content_length} chars)")
+            else:
+                # Substantial content: Queue sentiment analysis directly
+                if not article.analyzed_at:
+                    analyze_article_sentiment_task.delay(str(article.id))
+                    print(f"[STORE] Queued sentiment analysis for article {article.id}")
     
     return {"saved": saved_count, "total": len(articles)}
 
@@ -115,6 +126,7 @@ def get_news_feed(
     for article, company in results:
         article_dict = {
             "id": str(article.id),
+            "companyId": str(company.id),  # Add company ID for filtering
             "type": article.source, # Frontend expects 'type'
             "title": article.title,
             "link": article.url,
@@ -183,4 +195,25 @@ def get_sentiment_status(
             "confidence": article.sentiment_confidence,
             "analyzed_at": article.analyzed_at.isoformat() if article.analyzed_at else None
         } if article.analyzed_at else None
+    }
+
+
+@router.post("/enrich-content")
+def trigger_content_enrichment(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """
+    Manually trigger content enrichment for articles with short/missing content.
+    Uses newspaper3k to fetch full article text from URLs.
+    """
+    from app.tasks.article_enrichment_tasks import enrich_all_articles_task
+    
+    # Queue the task
+    task = enrich_all_articles_task.delay(limit=limit)
+    
+    return {
+        "message": f"Content enrichment queued for up to {limit} articles",
+        "task_id": task.id
     }
