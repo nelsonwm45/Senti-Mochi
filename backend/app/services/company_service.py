@@ -76,6 +76,9 @@ INITIAL_TICKERS = [
     '5284.KL',  # Kossan Rubber
     '0034.KL',  # Supermax
     
+    # Auto
+    '5248.KL',  # Bermaz Auto
+    
     # Industrial & Others
     '1818.KL',  # Bursa Malaysia
     '4898.KL',  # Batu Kawan

@@ -146,18 +146,23 @@ class RAGService:
             except Exception as e:
                 print(f"Error fetching financials chunks for {company.ticker}: {e}")
             
-            # 2. Fetch News
+            # 2. Fetch News (Individual Chunks)
             try:
-                news_ctx = news_service.get_company_news_context(company.id, session)
-                if news_ctx:
+                # Increase limit to 15 to prevent "Annual Report" spam from hiding real news
+                articles = news_service.get_recent_articles(company.id, session, limit=15)
+                for idx, article in enumerate(articles):
+                    content_str = f"[{article.published_at.strftime('%Y-%m-%d')}] {article.title} (Source: {article.source})"
+                    if article.content:
+                        content_str += f"\nSummary: {article.content}"
+                        
                     chunks.append({
                         "id": uuid4(),
                         "document_id": None,
-                        "content": news_ctx,
+                        "content": content_str,
                         "page_number": 1,
-                        "chunk_index": 0,
-                        "metadata": {"type": "news", "company": company.ticker},
-                        "filename": f"News Feed ({company.name})",
+                        "chunk_index": idx,
+                        "metadata": {"type": "news", "company": company.ticker, "article_id": str(article.id)},
+                        "filename": f"News: {article.title}",
                         "similarity": 1.0,
                         "start_line": None,
                         "end_line": None
