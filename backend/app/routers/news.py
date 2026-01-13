@@ -50,9 +50,54 @@ def store_articles(
             except:
                 published_at = datetime.utcnow()
             
+            # SMART INGESTION: Check if the article title mentions other companies
+            # This fixes the issue where searching for "Maybank" returns "Bermaz Auto" news but tags it as Maybank
+            final_company_id = article_data.company_id
+            
+            try:
+                # Need to import locally to avoid circular imports if any (though routers usually fine)
+                from app.services.company_service import company_service
+                
+                # Check for companies in title
+                found_companies = company_service.find_companies_by_text(article_data.title, session)
+                
+                if found_companies:
+                    # Logic: If we found companies, and the current assigned company is NOT the "Subject"
+                    # We prioritize the subject. 
+                    
+                    # Heuristic: If multiple found, pick the first one that IS NOT the source/provider
+                    chosen_company = found_companies[0] # Default to first found
+                    
+                    # If we have multiple, try to be smarter? 
+                    # For "Bermaz Auto gains Buy call from from Maybank", both Bermaz and Maybank might be found.
+                    # We want Bermaz.
+                    
+                    # If the current assigned ID (e.g. Maybank) is in the found list, but there are OTHERS,
+                    # likely the others are the subject.
+                    
+                    current_assigned_match = next((c for c in found_companies if str(c.id) == article_data.company_id), None)
+                    
+                    if current_assigned_match and len(found_companies) > 1:
+                        # The assigned one is mentioned, but so are others. 
+                        # Pick the one that IS NOT the assigned one (assuming assigned one is the 'source' of the search)
+                        others = [c for c in found_companies if str(c.id) != article_data.company_id]
+                        if others:
+                            chosen_company = others[0]
+                            print(f"Smart Ingestion: Re-tagging '{article_data.title}' from {current_assigned_match.name} -> {chosen_company.name}")
+                            final_company_id = chosen_company.id
+                            
+                    elif not current_assigned_match and found_companies:
+                        # The assigned one is NOT found in title (loop context was loose), but we found a specific one.
+                        # Always take specific one.
+                        print(f"Smart Ingestion: Re-tagging '{article_data.title}' from ID {article_data.company_id} -> {chosen_company.name}")
+                        final_company_id = chosen_company.id
+                        
+            except Exception as e:
+                print(f"Smart Ingestion Error: {e}")
+
             # Create and save article
             article = NewsArticle(
-                company_id=article_data.company_id,
+                company_id=final_company_id,
                 source=article_data.source,
                 native_id=article_data.native_id,
                 title=article_data.title,

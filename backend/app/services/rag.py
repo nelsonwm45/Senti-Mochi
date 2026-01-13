@@ -127,37 +127,124 @@ class RAGService:
         chunks = []
         
         for company in companies:
-            # 1. Fetch Financials
+            # 1. Fetch Financials (Split into granular chunks)
             try:
-                fin_ctx = finance_service.get_financials_context(company.ticker)
-                if fin_ctx:
+                # Get raw data directly
+                fin_data = finance_service.get_financials(company.ticker)
+                
+                if fin_data:
+                    # Helper to get latest period data
+                    def get_latest(stmt_data):
+                        if not stmt_data: return None, {}
+                        dates = sorted(stmt_data.keys(), reverse=True)
+                        if not dates: return None, {}
+                        return dates[0], stmt_data[dates[0]]
+
+                    # 1a. Key Financial Metrics (Summary)
+                    key_metrics_content = f"Key Financial Metrics for {company.name} ({company.ticker}):\n"
+                    
+                    # Extract key fields from various statements
+                    date_inc, inc = get_latest(fin_data.get("income_statement"))
+                    if date_inc:
+                        for k in ["Total Revenue", "Net Income", "EBITDA", "Gross Profit", "Diluted EPS"]:
+                            if k in inc: key_metrics_content += f"{k}: {inc[k]}\n"
+                            
+                    date_bal, bal = get_latest(fin_data.get("balance_sheet"))
+                    if date_bal:
+                        for k in ["Total Assets", "Total Liabilities Net Minority Interest", "Total Equity Gross Minority Interest", "Cash And Cash Equivalents"]:
+                            if k in bal: key_metrics_content += f"{k}: {bal[k]}\n"
+                            
                     chunks.append({
                         "id": uuid4(),
                         "document_id": None,
-                        "content": fin_ctx,
+                        "content": key_metrics_content,
                         "page_number": 1,
                         "chunk_index": 0,
-                        "metadata": {"type": "financials", "company": company.ticker},
-                        "filename": f"Financial Data ({company.name})",
-                        "similarity": 1.0, # High relevance
+                        "metadata": {"type": "financials", "subtype": "key_metrics", "company": company.ticker},
+                        "filename": f"Key Metrics ({company.name})",
+                        "similarity": 1.0, 
                         "start_line": None,
                         "end_line": None
                     })
+
+                    # 1b. Income Statement (Full)
+                    if date_inc:
+                        inc_content = f"Income Statement for {company.name} ({date_inc}):\n"
+                        for k, v in inc.items():
+                            inc_content += f"{k}: {v}\n"
+                            
+                        chunks.append({
+                            "id": uuid4(),
+                            "document_id": None,
+                            "content": inc_content,
+                            "page_number": 1,
+                            "chunk_index": 0,
+                            "metadata": {"type": "financials", "subtype": "income_statement", "company": company.ticker},
+                            "filename": f"Income Statement ({company.name})",
+                            "similarity": 0.95, # Slightly lower than metrics to prioritize metrics
+                            "start_line": None,
+                            "end_line": None
+                        })
+
+                    # 1c. Balance Sheet (Full)
+                    if date_bal:
+                        bal_content = f"Balance Sheet for {company.name} ({date_bal}):\n"
+                        for k, v in bal.items():
+                            bal_content += f"{k}: {v}\n"
+                            
+                        chunks.append({
+                            "id": uuid4(),
+                            "document_id": None,
+                            "content": bal_content,
+                            "page_number": 1,
+                            "chunk_index": 0,
+                            "metadata": {"type": "financials", "subtype": "balance_sheet", "company": company.ticker},
+                            "filename": f"Balance Sheet ({company.name})",
+                            "similarity": 0.95,
+                            "start_line": None,
+                            "end_line": None
+                        })
+
+                    # 1d. Cash Flow (Full)
+                    date_cf, cf = get_latest(fin_data.get("cash_flow"))
+                    if date_cf:
+                        cf_content = f"Cash Flow Statement for {company.name} ({date_cf}):\n"
+                        for k, v in cf.items():
+                            cf_content += f"{k}: {v}\n"
+                            
+                        chunks.append({
+                            "id": uuid4(),
+                            "document_id": None,
+                            "content": cf_content,
+                            "page_number": 1,
+                            "chunk_index": 0,
+                            "metadata": {"type": "financials", "subtype": "cash_flow", "company": company.ticker},
+                            "filename": f"Cash Flow ({company.name})",
+                            "similarity": 0.95,
+                            "start_line": None,
+                            "end_line": None
+                        })
+
             except Exception as e:
                 print(f"Error fetching financials chunks for {company.ticker}: {e}")
             
-            # 2. Fetch News
+            # 2. Fetch News (Individual Chunks)
             try:
-                news_ctx = news_service.get_company_news_context(company.id, session)
-                if news_ctx:
+                # Increase limit to 15 to prevent "Annual Report" spam from hiding real news
+                articles = news_service.get_recent_articles(company.id, session, limit=15)
+                for idx, article in enumerate(articles):
+                    content_str = f"[{article.published_at.strftime('%Y-%m-%d')}] {article.title} (Source: {article.source})"
+                    if article.content:
+                        content_str += f"\nSummary: {article.content}"
+                        
                     chunks.append({
                         "id": uuid4(),
                         "document_id": None,
-                        "content": news_ctx,
+                        "content": content_str,
                         "page_number": 1,
-                        "chunk_index": 0,
-                        "metadata": {"type": "news", "company": company.ticker},
-                        "filename": f"News Feed ({company.name})",
+                        "chunk_index": idx,
+                        "metadata": {"type": "news", "company": company.ticker, "article_id": str(article.id)},
+                        "filename": f"News: {article.title}",
                         "similarity": 1.0,
                         "start_line": None,
                         "end_line": None
@@ -270,6 +357,64 @@ Answer (cite sources as [Source 1], [Source 2], etc.):"""
             "model": model,
             "tokens_used": response.usage.total_tokens if hasattr(response, 'usage') else None
         }
+
+    def reindex_citations(self, text: str, chunks: list[dict]) -> tuple[str, list[dict]]:
+        """
+        Renumber citations in the text to be sequential (1, 2, 3...) based on appearance order.
+        Also reorders the chunks list to match the new numbering.
+        """
+        import re
+        
+        # Find all current citations in the text, e.g. [Source 15], [Source 2]
+        # Regex: Case insensitive, allow optional text after number (e.g. [Source 15: News...])
+        pattern = r'\[Source\s*(\d+).*?\]'
+        matches = list(re.finditer(pattern, text, re.IGNORECASE))
+        
+        matches = list(re.finditer(pattern, text, re.IGNORECASE))
+        
+        if not matches:
+            return text, chunks
+            
+        # Map from Old Source Number (int) -> New Source Number (int)
+        old_to_new = {}
+        new_source_counter = 1
+        
+        # We must process matches in order of appearance
+        for m in matches:
+            old_num = int(m.group(1))
+            if old_num not in old_to_new:
+                old_to_new[old_num] = new_source_counter
+                new_source_counter += 1
+                
+        # 1. Replace in text
+        def replace_func(match):
+            old_num = int(match.group(1))
+            new_num = old_to_new[old_num]
+            return f"[Source {new_num}]"
+            
+        new_text = re.sub(pattern, replace_func, text, flags=re.IGNORECASE)
+        
+        # 2. Reorder chunks
+        reordered_chunks = []
+        used_indices = set()
+        
+        # Invert the mapping: New -> Old
+        new_to_old = {v: k for k, v in old_to_new.items()}
+        
+        for i in range(1, new_source_counter):
+            old_source_num = new_to_old[i]
+            # Source Num is 1-based, Chunk Index is 0-based
+            chunk_idx = old_source_num - 1
+            if 0 <= chunk_idx < len(chunks):
+                reordered_chunks.append(chunks[chunk_idx])
+                used_indices.add(chunk_idx)
+                
+        # Append unused chunks at the end - REMOVED per user request
+        # for i, chunk in enumerate(chunks):
+        #     if i not in used_indices:
+        #         reordered_chunks.append(chunk)
+                
+        return new_text, reordered_chunks
     
     async def generate_response_stream(
         self,
