@@ -66,6 +66,20 @@ async def query(
     else:
         session_id = uuid4()
     
+    # Check session message limit to prevent overload
+    MAX_MESSAGES_PER_SESSION = 50
+    message_count = session.exec(
+        select(func.count()).select_from(ChatMessage).where(
+            ChatMessage.session_id == session_id
+        )
+    ).one()
+    
+    if message_count >= MAX_MESSAGES_PER_SESSION:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Session has reached maximum message limit ({MAX_MESSAGES_PER_SESSION}). Please start a new chat."
+        )
+    
     # Log audit event
     audit_log = AuditLog(
         user_id=current_user.id,
@@ -145,6 +159,32 @@ async def query(
     
     # Session ID logic removed from here (moved to top)
     
+    # Fetch recent chat history for context
+    # Limit to last 10 messages to avoid overflowing context window
+    history_msgs = session.exec(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.asc()) # Get oldest first? No, we need time order.
+        # But for limiting, we want the *last* 10. So order desc, limit, then reverse.
+    ).all()
+    
+    # Sort by time asc for conversation flow
+    # If we fetch all, just sort. If we limit, use subquery or Python slice.
+    # Simple approach: fetch all (sessions usually short) or fetch last 20
+    # Let's fetch last 10 by time descending, then reverse in Python
+    history_msgs = session.exec(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(10)
+    ).all()
+    history_msgs.reverse() # Now in chronological order
+    
+    chat_history = [
+        {"role": msg.role, "content": msg.content}
+        for msg in history_msgs
+    ]
+    
     # Save user message
     user_message = ChatMessage(
         user_id=current_user.id,
@@ -160,7 +200,12 @@ async def query(
         # Streaming response
         async def stream_generator():
             full_response = ""
-            async for chunk in rag_service.generate_response_stream(request.query, context):
+            # Pass chat_history to stream
+            async for chunk in rag_service.generate_response_stream(
+                request.query, 
+                context, 
+                chat_history=chat_history
+            ):
                 full_response += chunk
                 yield chunk
             
@@ -179,7 +224,12 @@ async def query(
     
     else:
         # Non-streaming response
-        result = rag_service.generate_response(request.query, context)
+        # Pass chat_history
+        result = rag_service.generate_response(
+            request.query, 
+            context, 
+            chat_history=chat_history
+        )
         
         # Format citations
         citations = []
@@ -288,3 +338,49 @@ async def submit_feedback(
     session.commit()
     
     return {"message": "Feedback recorded successfully"}
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """Delete a chat session and all its messages"""
+    try:
+        sess_uuid = UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session ID")
+        
+    # Check if session exists and belongs to user
+    # We check if there are ANY messages for this session/user
+    statement = select(ChatMessage).where(
+        ChatMessage.session_id == sess_uuid,
+        ChatMessage.user_id == current_user.id
+    )
+    result = session.exec(statement).first()
+    
+    if not result:
+        # Either session doesn't exist or belongs to another user
+        # We can just return success to be idempotent or 404
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    # Delete all messages
+    delete_stmt = select(ChatMessage).where(
+        ChatMessage.session_id == sess_uuid,
+        ChatMessage.user_id == current_user.id
+    )
+    messages = session.exec(delete_stmt).all()
+    for msg in messages:
+        session.delete(msg)
+        
+    # Log deletion
+    audit_log = AuditLog(
+        user_id=current_user.id,
+        action="DELETE",
+        resource_type="CHAT",
+        resource_id=sess_uuid
+    )
+    session.add(audit_log)
+    
+    session.commit()
+    return {"message": "Session deleted successfully"}

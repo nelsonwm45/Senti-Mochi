@@ -138,7 +138,7 @@ class RAGService:
                         "page_number": 1,
                         "chunk_index": 0,
                         "metadata": {"type": "financials", "company": company.ticker},
-                        "filename": f"Financial Data ({company.ticker})",
+                        "filename": f"Financial Data ({company.name})",
                         "similarity": 1.0, # High relevance
                         "start_line": None,
                         "end_line": None
@@ -157,7 +157,7 @@ class RAGService:
                         "page_number": 1,
                         "chunk_index": 0,
                         "metadata": {"type": "news", "company": company.ticker},
-                        "filename": f"News Feed ({company.ticker})",
+                        "filename": f"News Feed ({company.name})",
                         "similarity": 1.0,
                         "start_line": None,
                         "end_line": None
@@ -191,6 +191,7 @@ class RAGService:
         self,
         query: str,
         context: str,
+        chat_history: List[Dict] = None, # List of {"role": "...", "content": "..."}
         model: str = "llama-3.3-70b-versatile",  # Groq's fast model
         temperature: float = 0.7
     ) -> Dict:
@@ -200,16 +201,19 @@ class RAGService:
         Returns:
             Dict with 'response' and extracted 'citations'
         """
+        # ... (Prompt construction remains same) ...
         prompt = f"""You are a knowledgeable finance expert assistant. 
-Your role is to provide accurate, helpful financial advice based on the provided context.
+Your role is to provide accurate, helpful financial advice based on the provided context, which may include user documents, financial data, and news.
 
 CRITICAL RULES:
-1. Use the provided context to answer questions about the user's documents.
-2. If the user greets you (e.g., "hi", "hello") or asks general questions, answer politely without needing context.
-3. If the user asks a specific question about their documents and the context is empty or irrelevant, say you couldn't find that information.
-4. Always cite your sources using the format [Source N] when referencing information.
-5. Be precise with numbers and financial data.
-6. Handle personally identifiable information (PII) carefully.
+1. Use the provided context to answer the user's questions. Context acts as your knowledge base.
+2. If the user greets you or asks general questions, answer politely.
+3. If the user asks a specific question and the context contains relevant data (financials, news, or documents), answer CONFIDENTLY based on that data.
+4. DO NOT apologize for missing "documents" if you have financial data or news that answers the question.
+5. Only say you couldn't find information if the ENTIRE context is empty or irrelevant to the question.
+6. Always cite sources using [Source N] format.
+7. Be precise with financial data.
+8. Handle PII carefully.
 
 Context:
 {context}
@@ -218,14 +222,24 @@ Context:
 
 User Question: {query}
 
-Answer (remember to cite sources as [Source 1], [Source 2], etc.):"""
+Answer (cite sources as [Source 1], [Source 2], etc.):"""
         
+        # Build messages list
+        messages = [{"role": "system", "content": "You are a helpful finance expert assistant."}]
+        
+        # Inject History
+        if chat_history:
+            # We only strictly need the 'role' and 'content' fields
+            for msg in chat_history:
+                if msg.get('role') in ['user', 'assistant'] and msg.get('content'):
+                    messages.append({"role": msg['role'], "content": msg['content']})
+        
+        # Add current turn
+        messages.append({"role": "user", "content": prompt})
+
         response = self.client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": "You are a helpful finance expert assistant."},
-                {"role": "user", "content": prompt}
-            ],
+            messages=messages,
             temperature=temperature,
             max_tokens=1024
         )
@@ -247,6 +261,7 @@ Answer (remember to cite sources as [Source 1], [Source 2], etc.):"""
         self,
         query: str,
         context: str,
+        chat_history: List[Dict] = None,
         model: str = "llama-3.3-70b-versatile"
     ):
         """
@@ -255,16 +270,19 @@ Answer (remember to cite sources as [Source 1], [Source 2], etc.):"""
         Yields:
             Response chunks as they're generated
         """
+        # ... (Prompt construction remains same) ...
         prompt = f"""You are a knowledgeable finance expert assistant. 
-Your role is to provide accurate, helpful financial advice based on the provided context.
+Your role is to provide accurate, helpful financial advice based on the provided context, which may include user documents, financial data, and news.
 
 CRITICAL RULES:
-1. Use the provided context to answer questions about the user's documents.
+1. Use the provided context to answer the user's questions. Context acts as your knowledge base.
 2. If the user greets you or asks general questions, answer politely.
-3. If the user asks a specific question about their documents and the context is empty, say you couldn't find that information.
-4. Always cite sources using [Source N] format.
-5. Be precise with financial data.
-6. Handle PII carefully.
+3. If the user asks a specific question and the context contains relevant data (financials, news, or documents), answer CONFIDENTLY based on that data.
+4. DO NOT apologize for missing "documents" if you have financial data or news that answers the question.
+5. Only say you couldn't find information if the ENTIRE context is empty or irrelevant to the question.
+6. Always cite sources using [Source N] format.
+7. Be precise with financial data.
+8. Handle PII carefully.
 
 Context:
 {context}
@@ -275,12 +293,19 @@ User Question: {query}
 
 Answer (cite sources as [Source 1], [Source 2], etc.):"""
         
+        # Build messages list
+        messages = [{"role": "system", "content": "You are a helpful finance expert assistant."}]
+        
+        if chat_history:
+            for msg in chat_history:
+                if msg.get('role') in ['user', 'assistant'] and msg.get('content'):
+                    messages.append({"role": msg['role'], "content": msg['content']})
+        
+        messages.append({"role": "user", "content": prompt})
+
         stream = self.client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": "You are a helpful finance expert assistant."},
-                {"role": "user", "content": prompt}
-            ],
+            messages=messages,
             stream=True,
             max_tokens=1024
         )

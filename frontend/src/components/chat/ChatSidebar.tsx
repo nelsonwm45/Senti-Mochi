@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Plus, MessageSquare, Menu } from 'lucide-react';
+import { Plus, MessageSquare, Menu, Trash2 } from 'lucide-react';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
@@ -14,6 +14,7 @@ interface ChatSidebarProps {
   sessions: ChatSession[];
   currentSessionId: string | null;
   onSelectSession: (session: ChatSession) => void;
+  onDeleteSession: (sessionId: string) => void;
 }
 
 export default function ChatSidebar({
@@ -23,6 +24,7 @@ export default function ChatSidebar({
   sessions,
   currentSessionId,
   onSelectSession,
+  onDeleteSession,
 }: ChatSidebarProps) {
   return (
     <>
@@ -74,15 +76,15 @@ export default function ChatSidebar({
                     if (window.innerWidth < 1024) onClose();
                 }}
                 className={cn(
-                  "w-full text-left p-3 rounded-xl transition-colors group",
+                  "w-full text-left p-3 rounded-xl transition-colors group relative", // Added relative
                   currentSessionId === session.id 
                     ? "bg-accent/10 border border-accent/20" 
                     : "hover:bg-white/5 active:bg-white/10"
                 )}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 pr-8"> {/* Added padding for delete button */}
                   <MessageSquare className={cn(
-                    "w-4 h-4 transition-colors",
+                    "w-4 h-4 transition-colors flex-shrink-0",
                     currentSessionId === session.id ? "text-accent" : "text-foreground-muted group-hover:text-accent"
                   )} />
                   <div className="flex-1 min-w-0">
@@ -96,6 +98,20 @@ export default function ChatSidebar({
                       {session.date}
                     </p>
                   </div>
+                </div>
+                
+                {/* Delete Button */}
+                <div 
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-foreground-muted hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm('Delete this chat?')) {
+                        onDeleteSession(session.id);
+                    }
+                  }}
+                  title="Delete chat"
+                >
+                  <Trash2 size={14} />
                 </div>
               </button>
             ))

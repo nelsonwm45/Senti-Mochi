@@ -120,6 +120,8 @@ class CompanyService:
                 score = 90
             if "public bank" in query_lower and "public bank" in c_name:
                 score = 90
+            if "ambank" in query_lower and ("ammb" in c_name or "1015" in c_ticker):
+                score = 90
                 
             if score >= 50:
                 found_companies.append(company)

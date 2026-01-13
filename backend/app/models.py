@@ -91,7 +91,13 @@ class NewsArticle(SQLModel, table=True):
     url: str
     published_at: datetime
     content: Optional[str] = Field(sa_column=Column(Text))
-    sentiment_score: Optional[float] = None
+    
+    # Sentiment Analysis Fields
+    sentiment_score: Optional[float] = None  # -1.0 to 1.0 (negative to positive)
+    sentiment_label: Optional[str] = None    # "positive", "negative", "neutral"
+    sentiment_confidence: Optional[float] = None  # 0.0 to 1.0
+    analyzed_at: Optional[datetime] = None   # When sentiment was calculated
+    
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     company: "Company" = Relationship(back_populates="news_articles")
