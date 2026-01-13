@@ -50,6 +50,7 @@ function DashboardContent() {
     nst: 0,
     total: 0
   });
+  const [hasFetched, setHasFetched] = useState(false);  // Prevent duplicate fetches
 
   // Helper: Parse date string to timestamp
   const parseDateToTimestamp = (dateStr: string): number => {
@@ -181,7 +182,7 @@ function DashboardContent() {
           articles.push({
             company_id: company.id,
             source: 'star',
-            native_id: `star-${company.ticker}-${item._id}`,
+            native_id: `star-${item._id}`,  // Don't include ticker to prevent duplicates
             title: item.title,
             url: item.link,
             published_at,
@@ -221,7 +222,7 @@ function DashboardContent() {
           articles.push({
             company_id: company.id,
             source: 'nst',
-            native_id: `nst-${company.ticker}-${item.nid}`,
+            native_id: `nst-${item.nid}`,  // Don't include ticker to prevent duplicates
             title: item.title,
             url: item.url,
             published_at,
@@ -238,8 +239,11 @@ function DashboardContent() {
 
   // Fetch user's watchlist and sync news
   useEffect(() => {
+    if (hasFetched) return; // Prevent duplicate fetches
+
     const fetchWatchlist = async () => {
       try {
+        setHasFetched(true);
         const response = await apiClient.get('/api/v1/watchlist/my-watchlist');
         const companies = response.data;
 
@@ -253,8 +257,13 @@ function DashboardContent() {
         // Step 1: Load existing news from database first (fast)
         const cachedNewsData = await newsApi.getFeed(50, watchlistHasCompanies);
 
-        // Filter out Bursa announcements from display
-        const filteredCachedNews = cachedNewsData.filter(i => i.type !== 'bursa');
+        // Filter out Bursa announcements from display and deduplicate by ID
+        const seenIds = new Set();
+        const filteredCachedNews = cachedNewsData.filter(i => {
+          if (i.type === 'bursa' || seenIds.has(i.id)) return false;
+          seenIds.add(i.id);
+          return true;
+        });
         setUnifiedFeed(filteredCachedNews);
 
         // Calculate stats from cached data
@@ -282,10 +291,19 @@ function DashboardContent() {
 
           const allArticles = [...bursaArticles, ...starArticles, ...nstArticles];
 
+          // Deduplicate articles by native_id (same article can appear for multiple companies)
+          const uniqueArticles = allArticles.reduce((acc, article) => {
+            if (!acc.find(a => a.native_id === article.native_id)) {
+              acc.push(article);
+            }
+            return acc;
+          }, [] as any[]);
+
           // Log sample of articles with content for debugging
-          if (allArticles.length > 0) {
-            console.log('[NEWS] Sample articles with content:', 
-              allArticles.slice(0, 2).map(a => ({
+          if (uniqueArticles.length > 0) {
+            console.log(`[NEWS] Found ${allArticles.length} articles, ${uniqueArticles.length} unique after deduplication`);
+            console.log('[NEWS] Sample articles with content:',
+              uniqueArticles.slice(0, 2).map(a => ({
                 source: a.source,
                 title: a.title.substring(0, 50),
                 contentLength: a.content?.length || 0,
@@ -295,15 +313,20 @@ function DashboardContent() {
           }
 
           // Send articles to backend for storage
-          if (allArticles.length > 0) {
+          if (uniqueArticles.length > 0) {
             try {
-              await apiClient.post('/api/v1/news/store-articles', allArticles);
+              await apiClient.post('/api/v1/news/store-articles', uniqueArticles);
 
               // Step 3: Refresh feed with newly stored articles
               const updatedNewsData = await newsApi.getFeed(50, watchlistHasCompanies);
 
-              // Filter out Bursa announcements from display
-              const filteredUpdatedNews = updatedNewsData.filter(i => i.type !== 'bursa');
+              // Filter out Bursa announcements from display and deduplicate by ID
+              const seenIds2 = new Set();
+              const filteredUpdatedNews = updatedNewsData.filter(i => {
+                if (i.type === 'bursa' || seenIds2.has(i.id)) return false;
+                seenIds2.add(i.id);
+                return true;
+              });
               setUnifiedFeed(filteredUpdatedNews);
 
               // Update stats with fresh data
@@ -617,10 +640,26 @@ function DashboardContent() {
 
                   const sentimentBadge = getSentimentBadge(item.sentiment);
 
+                  // Get hover border color based on sentiment
+                  const getHoverBorderColor = () => {
+                    if (!sentimentBadge) return 'hover:border-blue-500/50';
+
+                    switch (sentimentBadge.label) {
+                      case 'positive':
+                        return 'hover:border-emerald-500/70';
+                      case 'negative':
+                        return 'hover:border-red-500/70';
+                      case 'neutral':
+                        return 'hover:border-amber-500/70';
+                      default:
+                        return 'hover:border-blue-500/50';
+                    }
+                  };
+
                   return (
                     <GlassCard
                       key={item.id}
-                      className="p-6 relative overflow-hidden group hover:border-emerald-500/30 transition-colors"
+                      className={`p-6 relative overflow-hidden group transition-all ${getHoverBorderColor()}`}
                     >
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex-1">
@@ -668,8 +707,10 @@ function DashboardContent() {
                       </div>
 
                       {item.description && (
-                        <p className="text-foreground-secondary text-sm leading-relaxed mb-4 whitespace-pre-wrap">
-                          {item.description}
+                        <p className="text-foreground-secondary text-sm leading-relaxed mb-4">
+                          {item.description.length > 100
+                            ? `${item.description.substring(0, 100)}...`
+                            : item.description}
                         </p>
                       )}
 

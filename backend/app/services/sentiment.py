@@ -88,6 +88,9 @@ class SentimentAnalyzer:
     
     def _build_prompt(self, article: NewsArticle, company: Company) -> str:
         """Build the prompt for Groq"""
+        # Limit content to 100 characters to reduce token usage
+        content_preview = article.content[:100] + "..." if len(article.content) > 100 else article.content
+        
         return f"""
 Analyze the following news article about {company.name} ({company.ticker}) in the {company.sector or 'finance'} sector.
 
@@ -95,8 +98,8 @@ Article Title: {article.title}
 Published: {article.published_at.strftime('%Y-%m-%d') if article.published_at else 'Unknown'}
 Source: {article.source.upper()}
 
-Article Content:
-{article.content}
+Article Content (preview):
+{content_preview}
 
 Based on this article, determine the sentiment relative to the company {company.name}. Consider factors like:
 - Impact on company reputation or stock performance
