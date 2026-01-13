@@ -6,7 +6,7 @@ up:
 
 # Stop the application
 down:
-	docker compose down
+	docker compose down --remove-orphans
 
 # Stop the services only (without removing containers)
 stop:
