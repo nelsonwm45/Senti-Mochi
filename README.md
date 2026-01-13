@@ -55,7 +55,7 @@ All documents are parsed, enriched (sentiment, entities), and stored in a vector
 
 ## 📊 Presentation Deck
 
-[View Presentation Deck](https://www.canva.com/design/DAGgXSlldiY/ACEyiX0vBVNNDJWk606bLg/edit?utm_content=DAGgXSlldiY&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
+[View Presentation Deck](https://www.canva.com/design/DAG-SVuKCNs/NKoCQBp7AqrFnBOZn2Y4Qg/edit?utm_content=DAG-SVuKCNs&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
 
 ## 🛠 Tech Stack
 
