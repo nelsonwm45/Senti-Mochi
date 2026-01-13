@@ -127,22 +127,104 @@ class RAGService:
         chunks = []
         
         for company in companies:
-            # 1. Fetch Financials
+            # 1. Fetch Financials (Split into granular chunks)
             try:
-                fin_ctx = finance_service.get_financials_context(company.ticker)
-                if fin_ctx:
+                # Get raw data directly
+                fin_data = finance_service.get_financials(company.ticker)
+                
+                if fin_data:
+                    # Helper to get latest period data
+                    def get_latest(stmt_data):
+                        if not stmt_data: return None, {}
+                        dates = sorted(stmt_data.keys(), reverse=True)
+                        if not dates: return None, {}
+                        return dates[0], stmt_data[dates[0]]
+
+                    # 1a. Key Financial Metrics (Summary)
+                    key_metrics_content = f"Key Financial Metrics for {company.name} ({company.ticker}):\n"
+                    
+                    # Extract key fields from various statements
+                    date_inc, inc = get_latest(fin_data.get("income_statement"))
+                    if date_inc:
+                        for k in ["Total Revenue", "Net Income", "EBITDA", "Gross Profit", "Diluted EPS"]:
+                            if k in inc: key_metrics_content += f"{k}: {inc[k]}\n"
+                            
+                    date_bal, bal = get_latest(fin_data.get("balance_sheet"))
+                    if date_bal:
+                        for k in ["Total Assets", "Total Liabilities Net Minority Interest", "Total Equity Gross Minority Interest", "Cash And Cash Equivalents"]:
+                            if k in bal: key_metrics_content += f"{k}: {bal[k]}\n"
+                            
                     chunks.append({
                         "id": uuid4(),
                         "document_id": None,
-                        "content": fin_ctx,
+                        "content": key_metrics_content,
                         "page_number": 1,
                         "chunk_index": 0,
-                        "metadata": {"type": "financials", "company": company.ticker},
-                        "filename": f"Financial Data ({company.name})",
-                        "similarity": 1.0, # High relevance
+                        "metadata": {"type": "financials", "subtype": "key_metrics", "company": company.ticker},
+                        "filename": f"Key Metrics ({company.name})",
+                        "similarity": 1.0, 
                         "start_line": None,
                         "end_line": None
                     })
+
+                    # 1b. Income Statement (Full)
+                    if date_inc:
+                        inc_content = f"Income Statement for {company.name} ({date_inc}):\n"
+                        for k, v in inc.items():
+                            inc_content += f"{k}: {v}\n"
+                            
+                        chunks.append({
+                            "id": uuid4(),
+                            "document_id": None,
+                            "content": inc_content,
+                            "page_number": 1,
+                            "chunk_index": 0,
+                            "metadata": {"type": "financials", "subtype": "income_statement", "company": company.ticker},
+                            "filename": f"Income Statement ({company.name})",
+                            "similarity": 0.95, # Slightly lower than metrics to prioritize metrics
+                            "start_line": None,
+                            "end_line": None
+                        })
+
+                    # 1c. Balance Sheet (Full)
+                    if date_bal:
+                        bal_content = f"Balance Sheet for {company.name} ({date_bal}):\n"
+                        for k, v in bal.items():
+                            bal_content += f"{k}: {v}\n"
+                            
+                        chunks.append({
+                            "id": uuid4(),
+                            "document_id": None,
+                            "content": bal_content,
+                            "page_number": 1,
+                            "chunk_index": 0,
+                            "metadata": {"type": "financials", "subtype": "balance_sheet", "company": company.ticker},
+                            "filename": f"Balance Sheet ({company.name})",
+                            "similarity": 0.95,
+                            "start_line": None,
+                            "end_line": None
+                        })
+
+                    # 1d. Cash Flow (Full)
+                    date_cf, cf = get_latest(fin_data.get("cash_flow"))
+                    if date_cf:
+                        cf_content = f"Cash Flow Statement for {company.name} ({date_cf}):\n"
+                        for k, v in cf.items():
+                            cf_content += f"{k}: {v}\n"
+                            
+                        chunks.append({
+                            "id": uuid4(),
+                            "document_id": None,
+                            "content": cf_content,
+                            "page_number": 1,
+                            "chunk_index": 0,
+                            "metadata": {"type": "financials", "subtype": "cash_flow", "company": company.ticker},
+                            "filename": f"Cash Flow ({company.name})",
+                            "similarity": 0.95,
+                            "start_line": None,
+                            "end_line": None
+                        })
+
             except Exception as e:
                 print(f"Error fetching financials chunks for {company.ticker}: {e}")
             
