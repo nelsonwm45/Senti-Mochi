@@ -75,10 +75,10 @@ async def query(
     if request.documentIds:
         document_ids = [UUID(doc_id) for doc_id in request.documentIds]
     
-    # Detect Company for context filtering
+    # Detect Companies for context filtering
     from app.services.company_service import company_service
-    company = company_service.find_company_by_text(request.query, session)
-    company_id = company.id if company else None
+    companies = company_service.find_companies_by_text(request.query, session)
+    company_ids = [c.id for c in companies] if companies else None
     
     # Vector search with SECURITY CHECK - only user's documents
     # And optional company filtering
@@ -86,25 +86,26 @@ async def query(
         query_embedding=query_embedding,
         user_id=current_user.id,  # Critical security parameter
         document_ids=document_ids,
-        company_id=company_id,
+        company_ids=company_ids,
         limit=request.maxResults
     )
     
     # Proceed even if chunks is empty to allow for general chat
     # if not chunks: ... (removed strict check)
     
-    # Build context from documents
-    rag_context = rag_service.build_context(chunks)
-    
-    # Build structured context from DB (Financials, News)
+    # Build structured chunks from DB (Financials, News)
+    # These effectively act as "Source 1", "Source 2" etc.
     try:
-        structured_context = rag_service.get_structured_context(request.query)
+        structured_chunks = rag_service.get_structured_chunks(request.query)
     except Exception as e:
-        print(f"Error fetching structured context: {e}")
-        structured_context = ""
+        print(f"Error fetching structured chunks: {e}")
+        structured_chunks = []
     
-    # Combine context
-    context = structured_context + "\n" + rag_context
+    # Combine chunks: Structured first (priority), then Vector Results
+    all_chunks = structured_chunks + chunks
+    
+    # Build context from ALL chunks
+    context = rag_service.build_context(all_chunks)
     
     # Generate session ID for this conversation if not provided
     if request.sessionId:
@@ -145,7 +146,7 @@ async def query(
                 session_id=session_id,
                 role="assistant",
                 content=full_response,
-                citations={"chunks": [str(c["id"]) for c in chunks]}
+                citations={"chunks": [str(c["id"]) for c in all_chunks]}
             )
             session.add(assistant_message)
             session.commit()
@@ -158,7 +159,7 @@ async def query(
         
         # Format citations
         citations = []
-        for i, chunk in enumerate(chunks):
+        for i, chunk in enumerate(all_chunks):
             citations.append(CitationInfo(
                 sourceNumber=i + 1,
                 filename=chunk["filename"],
