@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, FileText, Upload, PieChart, BarChart3, TrendingUp, Loader2 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { getKeyMetrics, formatValue, formatPercent } from '../utils';
+import CompanyDocumentUpload from '@/components/documents/CompanyDocumentUpload';
+import CompanyDocumentList from '@/components/documents/CompanyDocumentList';
 
 interface CompanyDetailsProps {
   ticker: string;
@@ -244,10 +246,13 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
             )}
 
             {activeTab === 'uploads' && (
-                <GlassCard className="flex flex-col items-center justify-center py-12 text-gray-400">
-                    <Upload size={48} className="mb-4 opacity-50" />
-                    <p>No documents uploaded yet.</p>
-                </GlassCard>
+                <div className="space-y-6">
+                    <GlassCard>
+                         <h3 className="text-lg font-semibold text-white mb-4">Upload Documents for {company.ticker}</h3>
+                         <CompanyDocumentUpload companyId={company.id} />
+                    </GlassCard>
+                    <CompanyDocumentList companyId={company.id} />
+                </div>
             )}
 
             {/* Financials */}

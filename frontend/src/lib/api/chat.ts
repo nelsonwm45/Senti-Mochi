@@ -91,21 +91,21 @@ export const chatApi = {
 	/**
 	 * Get chat history
 	 */
-	async history(params?: {
-		sessionId?: string;
-		skip?: number;
-		limit?: number;
-	}): Promise<ChatHistoryResponse> {
-		const { data } = await apiClient.get<ChatHistoryResponse>('/api/v1/chat/history', {
-			params,
-		});
-		return data;
+	getHistory: async (sessionId?: string): Promise<ChatHistoryResponse> => {
+		const params = sessionId ? { session_id: sessionId } : {};
+		const response = await apiClient.get<ChatHistoryResponse>('/api/v1/chat/history', { params });
+		return response.data;
+	},
+
+	deleteSession: async (sessionId: string) => {
+		const response = await apiClient.delete<{ message: string }>(`/api/v1/chat/sessions/${sessionId}`);
+		return response.data;
 	},
 
 	/**
 	 * Submit feedback on a chat response
 	 */
-	async feedback(messageId: string, rating: number): Promise<void> {
+	submitFeedback: async (messageId: string, rating: number): Promise<void> => {
 		await apiClient.post('/api/v1/chat/feedback', {
 			message_id: messageId,
 			rating,

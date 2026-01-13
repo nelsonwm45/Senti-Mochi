@@ -47,9 +47,17 @@ export default function Signup() {
       
       // Use window.location to force a full refresh and update auth state in Sidebar
       window.location.href = '/dashboard';
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError('Signup failed. Please try again.');
+      // Extract specific error message from backend response
+      const backendError = err.response?.data?.detail || 'Signup failed. Please try again.';
+      
+      // If it's the "Email already registered" error, customize it with the email
+      if (backendError === 'Email already registered') {
+        setError(`"${email}" is already registered. Please use a different email or log in.`);
+      } else {
+        setError(backendError);
+      }
     } finally {
       setIsLoading(false);
     }

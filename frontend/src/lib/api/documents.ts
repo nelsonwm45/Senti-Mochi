@@ -22,13 +22,17 @@ export const documentsApi = {
 	/**
 	 * Upload a new document
 	 */
-	async upload(file: File): Promise<Document> {
+	async upload(file: File, companyId?: string): Promise<Document> {
 		const formData = new FormData();
 		formData.append('file', file);
+		if (companyId) {
+			formData.append('company_id', companyId);
+		}
 
 		const { data } = await apiClient.post<Document>('/api/v1/documents/upload', formData, {
 			headers: {
-				'Content-Type': 'multipart/form-data',
+				// @ts-ignore
+				'Content-Type': undefined,
 			},
 		});
 		return data;
@@ -41,6 +45,7 @@ export const documentsApi = {
 		skip?: number;
 		limit?: number;
 		status?: string;
+		company_id?: string;
 	}): Promise<DocumentListResponse> {
 		const { data } = await apiClient.get<DocumentListResponse>('/api/v1/documents/', {
 			params,

@@ -24,7 +24,7 @@ export function useChat() {
 	const [agentState, setAgentState] = useState<AgentState>('idle');
 	const [isLoading, setIsLoading] = useState(false);
 	const [currentCitations, setCurrentCitations] = useState<CitationInfo[]>([]);
-	
+
 	// Session Management
 	const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 	const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -32,24 +32,24 @@ export function useChat() {
 	// Initial Load: Fetch History
 	const fetchHistory = useCallback(async () => {
 		try {
-			const history = await chatApi.history({ limit: 100 });
-			
+			const history = await chatApi.getHistory(undefined);  // Can pass undefined or remove arg if optional in updated sig
+
 			// Group messages by sessionId
 			const sessionsMap = new Map<string, ChatMessage[]>();
-			
+
 			// Sort messages by creation time first just in case
-			const sortedMessages = history.messages.sort((a, b) => 
+			const sortedMessages = history.messages.sort((a, b) =>
 				new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
 			);
 
 			sortedMessages.forEach(msg => {
 				const sid = msg.sessionId;
 				if (!sid) return;
-				
+
 				if (!sessionsMap.has(sid)) {
 					sessionsMap.set(sid, []);
 				}
-				
+
 				sessionsMap.get(sid)?.push({
 					role: msg.role,
 					content: msg.content,
@@ -67,10 +67,10 @@ export function useChat() {
 				// Title is the first user message, or "New Chat"
 				const firstUserMsg = msgs.find(m => m.role === 'user');
 				const title = firstUserMsg ? firstUserMsg.content.slice(0, 30) + (firstUserMsg.content.length > 30 ? '...' : '') : 'New Chat';
-                
-                // Date from last message
-                const lastMsg = msgs[msgs.length - 1];
-                const date = new Date(lastMsg.timestamp).toLocaleDateString();
+
+				// Date from last message
+				const lastMsg = msgs[msgs.length - 1];
+				const date = new Date(lastMsg.timestamp).toLocaleDateString();
 
 				return {
 					id,
@@ -79,13 +79,13 @@ export function useChat() {
 					messages: msgs
 				};
 			});
-            
-            // Sort sessions by most recent (using the timestamp of the last message in the session)
-            loadedSessions.sort((a, b) => {
-                 const lastA = new Date(a.messages[a.messages.length - 1].timestamp).getTime();
-                 const lastB = new Date(b.messages[b.messages.length - 1].timestamp).getTime();
-                 return lastB - lastA;
-            });
+
+			// Sort sessions by most recent (using the timestamp of the last message in the session)
+			loadedSessions.sort((a, b) => {
+				const lastA = new Date(a.messages[a.messages.length - 1].timestamp).getTime();
+				const lastB = new Date(b.messages[b.messages.length - 1].timestamp).getTime();
+				return lastB - lastA;
+			});
 
 			setSessions(loadedSessions);
 		} catch (error) {
@@ -100,7 +100,7 @@ export function useChat() {
 	const loadSession = (session: ChatSession) => {
 		setCurrentSessionId(session.id);
 		setMessages(session.messages);
-		
+
 		// Reset other states
 		setAgentState('idle');
 		// Maybe load citations from the last message if available?
@@ -141,9 +141,9 @@ export function useChat() {
 			setAgentState('complete');
 		} finally {
 			setIsLoading(false);
-            // Refresh history to pick up the new session/messages
-            // We delay slightly to let the backend index? Or just re-fetch
-            setTimeout(fetchHistory, 1000); 
+			// Refresh history to pick up the new session/messages
+			// We delay slightly to let the backend index? Or just re-fetch
+			setTimeout(fetchHistory, 1000);
 		}
 	};
 
@@ -167,18 +167,18 @@ export function useChat() {
 
 		try {
 			// Pass currentSessionId if it exists
-			const stream = chatApi.queryStream({ 
-				query, 
-				stream: true, 
-				sessionId: currentSessionId || undefined 
+			const stream = chatApi.queryStream({
+				query,
+				stream: true,
+				sessionId: currentSessionId || undefined
 			});
 
 			for await (const chunk of stream) {
-                // If it's the first chunk and we didn't have a session ID, we might want to capture it from response headers?
-                // But the stream generator currently only yields strings (content).
-                // For now, we rely on the backend reusing the session if we pass it, or creating a new "implicit" one.
-                // Re-fetching history after will clarify the session ID.
-                
+				// If it's the first chunk and we didn't have a session ID, we might want to capture it from response headers?
+				// But the stream generator currently only yields strings (content).
+				// For now, we rely on the backend reusing the session if we pass it, or creating a new "implicit" one.
+				// Re-fetching history after will clarify the session ID.
+
 				accumulatedContent += chunk;
 				setMessages((prev) => {
 					const newMessages = [...prev];
@@ -206,16 +206,16 @@ export function useChat() {
 
 		setAgentState('generating');
 
-		const response: QueryResponse = await chatApi.query({ 
-			query, 
+		const response: QueryResponse = await chatApi.query({
+			query,
 			stream: false,
 			sessionId: currentSessionId || undefined
 		});
-        
-        // Update current session ID if we started a new one
-        if (response.sessionId && !currentSessionId) {
-            setCurrentSessionId(response.sessionId);
-        }
+
+		// Update current session ID if we started a new one
+		if (response.sessionId && !currentSessionId) {
+			setCurrentSessionId(response.sessionId);
+		}
 
 		const assistantMessage: ChatMessage = {
 			role: 'assistant',
@@ -238,6 +238,22 @@ export function useChat() {
 		setCurrentSessionId(null); // Reset session to start a fresh one
 	};
 
+	const deleteSession = async (sessionId: string) => {
+		try {
+			await chatApi.deleteSession(sessionId);
+
+			// Remove from local state
+			setSessions(prev => prev.filter(s => s.id !== sessionId));
+
+			// If current session was deleted, clear view
+			if (currentSessionId === sessionId) {
+				clearMessages();
+			}
+		} catch (error) {
+			console.error("Failed to delete session:", error);
+		}
+	};
+
 	return {
 		messages,
 		agentState,
@@ -245,8 +261,9 @@ export function useChat() {
 		currentCitations,
 		sendMessage,
 		clearMessages,
-        sessions,
-        loadSession,
-        currentSessionId
+		sessions,
+		loadSession,
+		currentSessionId,
+		deleteSession
 	};
 }

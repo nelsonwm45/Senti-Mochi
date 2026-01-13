@@ -24,47 +24,6 @@ import {
   PieChart, Pie, Cell, Legend, ResponsiveContainer, Tooltip
 } from 'recharts';
 
-interface ParsedAnnouncement {
-  id: number;
-  disclosureId: number;
-  date: string;
-  dateRaw: string;
-  companyName: string;
-  companyLink?: string;
-  companyCode?: string;
-  title: string;
-  announcementLink?: string;
-}
-
-interface ApiResponse {
-  data?: Array<[number, string, string, string]>;
-  [key: string]: any;
-}
-
-interface StarArticle {
-  _id: number;
-  title: string;
-  link: string;
-  description: string;
-  pubdate: string;
-  pubdateunix: number;
-  image?: string;
-  feedname: string;
-}
-
-interface NSTArticle {
-  nid: number;
-  title: string;
-  created: number;
-  url: string;
-  internal_url: string;
-  field_article_topic?: {
-    tid: number;
-    name: string;
-  };
-  field_article_lead?: string;
-}
-
 interface WatchlistCompany {
   id: string;
   name: string;
@@ -73,6 +32,7 @@ interface WatchlistCompany {
   sub_sector?: string;
   website_url?: string;
 }
+import { newsApi, UnifiedFeedItem } from '@/lib/api/news';
 
 interface UnifiedFeedItem {
   id: string;
@@ -151,6 +111,9 @@ const parseAnnouncement = (announcementArray: [number, string, string, string]):
 
 function DashboardContent() {
   const router = useRouter();
+
+  // ... (keep interfaces if needed, or remove if imported)
+
   const [unifiedFeed, setUnifiedFeed] = useState<UnifiedFeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -173,34 +136,29 @@ function DashboardContent() {
         const response = await apiClient.get('/api/v1/watchlist/my-watchlist');
         const companies = response.data;
 
-        if (companies.length === 0) {
-          setWatchlistEmpty(true);
-          setLoading(false);
-          return;
+        const watchlistHasCompanies = companies.length > 0;
+        setWatchlistEmpty(!watchlistHasCompanies);
+        
+        if (watchlistHasCompanies) {
+          setWatchlistCompanies(companies);
         }
 
-        setWatchlistCompanies(companies);
-
-        // Now fetch all news for these companies
-        const [bursaResponse, starResponse, nstResponse] = await Promise.all([
-          fetchBursaAnnouncements(companies),
-          fetchStarNews(companies),
-          fetchNSTNews(companies)
-        ]);
-
-        // Combine and sort all items by timestamp
-        const combinedFeed = [
-          ...bursaResponse,
-          ...starResponse,
-          ...nstResponse
-        ].sort((a, b) => b.timestamp - a.timestamp);
-
-        setUnifiedFeed(combinedFeed);
+        // Fetch news from backend (persisted data)
+        // If watchlist is empty, show all news. Otherwise, show only watchlist news.
+        const newsData = await newsApi.getFeed(50, watchlistHasCompanies);
+        
+        setUnifiedFeed(newsData);
+        
+        // Calculate stats from the response
+        const bursaCount = newsData.filter(i => i.type === 'bursa').length;
+        const starCount = newsData.filter(i => i.type === 'star').length;
+        const nstCount = newsData.filter(i => i.type === 'nst').length;
+        
         setStats({
-          bursa: bursaResponse.length,
-          star: starResponse.length,
-          nst: nstResponse.length,
-          total: combinedFeed.length
+          bursa: bursaCount,
+          star: starCount,
+          nst: nstCount,
+          total: newsData.length
         });
         
         // Automatically analyze sentiment for all articles

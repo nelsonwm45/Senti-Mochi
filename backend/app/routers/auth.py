@@ -29,6 +29,29 @@ def signup(user: UserCreate, session: Session = Depends(get_session)):
     session.commit()
     session.refresh(new_user)
     
+    # Check if companies need seeding (same as login)
+    print(f"[SIGNUP] User {new_user.email} created successfully")
+    try:
+        from app.services.company_service import company_service
+        from app.tasks.company_tasks import seed_companies_task
+        from app.tasks.data_tasks import update_all_news_task
+        
+        count = company_service.get_company_count(session)
+        print(f"[SIGNUP] Company count: {count}")
+        
+        if count == 0:
+            print("[SIGNUP] No companies found. Triggering automated seeding task...")
+            seed_companies_task.delay()
+            print("[SIGNUP] Triggering initial news sync...")
+            update_all_news_task.delay()
+            print("[SIGNUP] Auto-seeding tasks queued successfully")
+        else:
+            print(f"[SIGNUP] Companies already exist ({count}), skipping auto-seeding")
+    except Exception as e:
+        print(f"[SIGNUP] Failed to trigger auto-seeding: {e}")
+        import traceback
+        traceback.print_exc()
+    
     # Create and return access token
     access_token = create_access_token(data={"sub": new_user.email})
     return {"access_token": access_token, "token_type": "bearer"}
@@ -43,4 +66,21 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), ses
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = create_access_token(data={"sub": user.email})
+    
+    # Check if companies need seeding
+    try:
+        from app.services.company_service import company_service
+        from app.tasks.company_tasks import seed_companies_task
+        from app.tasks.data_tasks import update_all_news_task
+        
+        count = company_service.get_company_count(session)
+        if count == 0:
+            print("No companies found. Triggering automated seeding task...")
+            seed_companies_task.delay()
+            # Also trigger news sync after companies are seeded
+            print("Triggering initial news sync...")
+            update_all_news_task.delay()
+    except Exception as e:
+        print(f"Failed to trigger auto-seeding: {e}")
+
     return {"access_token": access_token, "token_type": "bearer"}

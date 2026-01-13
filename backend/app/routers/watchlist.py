@@ -48,6 +48,15 @@ def add_to_watchlist(
     session.add(watchlist_item)
     session.commit()
     
+    # Trigger immediate news fetch for this company (Hybrid Option C)
+    try:
+        from app.tasks.data_tasks import update_company_news_task
+        update_company_news_task.delay(ticker)
+        print(f"[WATCHLIST] Triggered news fetch for {ticker}")
+    except Exception as e:
+        print(f"[WATCHLIST] Failed to trigger news fetch: {e}")
+        # Don't fail the watchlist add if news fetch fails
+    
     return {"message": "Added to watchlist", "company": company.name}
 
 @router.get("/my-watchlist", response_model=List[dict])

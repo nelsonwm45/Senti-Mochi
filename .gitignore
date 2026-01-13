@@ -6,4 +6,3 @@ node_modules
 .next
 venv/
 backend/venv/
-tasks/

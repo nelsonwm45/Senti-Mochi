@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, status
 from sqlmodel import Session, select, func
 from typing import List, Optional
 from uuid import UUID
@@ -36,6 +36,7 @@ class DocumentListResponse(BaseModel):
 @router.post("/upload", response_model=DocumentResponse)
 async def upload_document(
     file: UploadFile = File(...),
+    company_id: Optional[UUID] = Form(None),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
@@ -80,6 +81,7 @@ async def upload_document(
     # Create document record
     document = Document(
         user_id=current_user.id,
+        company_id=company_id,
         filename=file.filename,
         content_type=file.content_type,
         file_size=file_size,
@@ -97,7 +99,7 @@ async def upload_document(
         action="UPLOAD",
         resource_type="DOCUMENT",
         resource_id=document.id,
-        metadata_={"filename": file.filename, "size": file_size}
+        metadata_={"filename": file.filename, "size": file_size, "company_id": str(company_id) if company_id else None}
     )
     session.add(audit_log)
     session.commit()
@@ -123,6 +125,7 @@ async def list_documents(
     skip: int = 0,
     limit: int = 20,
     status: Optional[str] = None,
+    company_id: Optional[UUID] = None,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
@@ -131,6 +134,9 @@ async def list_documents(
         Document.user_id == current_user.id,
         Document.is_deleted == False
     )
+
+    if company_id:
+        query = query.where(Document.company_id == company_id)
     
     if status:
         try:

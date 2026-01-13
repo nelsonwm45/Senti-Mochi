@@ -44,6 +44,7 @@ app.include_router(watchlist.router, prefix="/api/v1") # New: Watchlist
 app.include_router(companies.router, prefix="/api/v1") # New: Companies
 app.include_router(bursa.router)      # New: Bursa PDF downloads
 app.include_router(sentiment.router, prefix="/api/v1") # New: Sentiment Analysis
+app.include_router(news.router, prefix="/api/v1") # New: News Feed
 
 
 @app.get("/")
