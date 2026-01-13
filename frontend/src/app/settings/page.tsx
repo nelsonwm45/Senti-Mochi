@@ -69,7 +69,7 @@ export default function SettingsPage() {
                   </div>
                   <h3 className="text-lg font-medium text-foreground mb-2">Coming Soon</h3>
                   <p className="text-foreground-muted max-w-sm mx-auto">
-                    Advanced profile management features are currently under development. Stay tuned for Phase 3 updates!
+                    Advanced profile management features are currently under development. Stay tuned!
                   </p>
                 </div>
               </GlassCard>

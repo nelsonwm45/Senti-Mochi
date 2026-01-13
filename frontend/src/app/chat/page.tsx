@@ -8,6 +8,7 @@ import ChatInput from '@/components/chat/ChatInput';
 import CitationPanel from '@/components/chat/CitationPanel';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import { useChat } from '@/hooks/useChat';
+import { useUser } from '@/hooks/useUser';
 import { GlassButton } from '@/components/ui/GlassButton';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 
@@ -22,8 +23,10 @@ export default function ChatPage() {
     sessions,
     currentSessionId,
     loadSession,
-    deleteSession
+    deleteSession,
+    activeMochiVariant
   } = useChat();
+  const { user } = useUser();
   const [citationPanelOpen, setCitationPanelOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeCitationId, setActiveCitationId] = useState<number | null>(null);
@@ -150,6 +153,8 @@ export default function ChatPage() {
                       timestamp={message.timestamp}
                       citations={message.citations?.map(c => c.sourceNumber)}
                       onCitationClick={handleCitationClick}
+                      mochiVariant={activeMochiVariant}
+                      userAvatarUrl={user?.avatar_url}
                     />
                   ))}
                   
