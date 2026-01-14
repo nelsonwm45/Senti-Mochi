@@ -254,11 +254,25 @@ async def query(
     else:
         # Non-streaming response
         # Pass chat_history
-        result = rag_service.generate_response(
-            request.query, 
-            context, 
-            chat_history=chat_history
-        )
+        try:
+            result = rag_service.generate_response(
+                request.query, 
+                context, 
+                chat_history=chat_history
+            )
+        except Exception as e:
+            # Handle rate limits specifically if possible, otherwise generic error
+            error_msg = str(e)
+            if "429" in error_msg or "Rate limit" in error_msg:
+                raise HTTPException(
+                    status_code=429,
+                    detail="AI model rate limit exceeded. Please try again in 1 hour."
+                )
+            print(f"Error generating response: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error processing request: {str(e)}"
+            )
         
         # Reindex citations to be sequential (1, 2, 3...)
         # This reorders all_chunks so that the first cited source becomes Source 1 (chunks[0])
