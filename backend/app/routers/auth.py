@@ -42,8 +42,6 @@ def signup(user: UserCreate, session: Session = Depends(get_session)):
         if count == 0:
             print("[SIGNUP] No companies found. Triggering automated seeding task...")
             seed_companies_task.delay()
-            print("[SIGNUP] Triggering initial news sync...")
-            update_all_news_task.delay()
             print("[SIGNUP] Auto-seeding tasks queued successfully")
         else:
             print(f"[SIGNUP] Companies already exist ({count}), skipping auto-seeding")
@@ -77,9 +75,6 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), ses
         if count == 0:
             print("No companies found. Triggering automated seeding task...")
             seed_companies_task.delay()
-            # Also trigger news sync after companies are seeded
-            print("Triggering initial news sync...")
-            update_all_news_task.delay()
     except Exception as e:
         print(f"Failed to trigger auto-seeding: {e}")
 
