@@ -51,7 +51,7 @@ All documents are parsed, enriched (sentiment, entities), and stored in a vector
 
 ## 📹 Demo Video
 
-<!-- Add demo video link here -->
+[View Demo Video](https://youtu.be/mFSPfLC2hdc)
 
 ## 📊 Presentation Deck
 
