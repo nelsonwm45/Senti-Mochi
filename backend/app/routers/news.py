@@ -40,9 +40,11 @@ def store_articles(
     
     for article_data in articles:
         try:
-            # Check if article already exists
+            # Check if article already exists (by native_id OR exact title match)
+            # This handles cases where ID changes but content is identical
             existing = session.exec(select(NewsArticle).where(
-                NewsArticle.native_id == article_data.native_id
+                (NewsArticle.native_id == article_data.native_id) | 
+                (NewsArticle.title == article_data.title)
             )).first()
             
             if existing:
