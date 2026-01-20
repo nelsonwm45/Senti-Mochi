@@ -351,7 +351,7 @@ function DashboardContent() {
                 source: a.source,
                 title: a.title.substring(0, 50),
                 contentLength: a.content?.length || 0,
-                contentPreview: a.content?.substring(0, 100)
+                contentPreview: a.content?.substring(0, 200)
               }))
             );
           }
@@ -752,8 +752,8 @@ function DashboardContent() {
 
                       {item.description && (
                         <p className="text-foreground-secondary text-sm leading-relaxed mb-4">
-                          {item.description.length > 100
-                            ? `${item.description.substring(0, 100)}...`
+                          {item.description.length > 200
+                            ? `${item.description.substring(0, 200)}...`
                             : item.description}
                         </p>
                       )}

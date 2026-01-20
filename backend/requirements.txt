@@ -29,3 +29,4 @@ Pillow
 yfinance
 newspaper3k
 lxml_html_clean
+scrapy>=2.11.0
