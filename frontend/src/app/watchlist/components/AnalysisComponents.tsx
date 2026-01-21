@@ -21,6 +21,7 @@ type AnalysisStatus = 'waiting' | 'loading' | 'completed';
 interface AnalysisWizardModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onComplete: () => void; // New prop for signaling completion
     companyName: string;
 }
 
@@ -337,9 +338,10 @@ const ProgressStep = ({ onComplete }: { onComplete: () => void }) => {
 };
 
 // 4. Results
-const AnalysisResultsView = ({ onReanalyze }: { onReanalyze: () => void }) => {
+export const AnalysisResultsView = ({ onReanalyze }: { onReanalyze: () => void }) => {
     // Card State Management
     const [flippedCard, setFlippedCard] = useState<string | null>(null);
+    const [showDetails, setShowDetails] = useState(false); // Toggle for top 3 cards
 
     const toggleFlip = (cardId: string) => {
         setFlippedCard(prev => prev === cardId ? null : cardId);
@@ -360,11 +362,11 @@ const AnalysisResultsView = ({ onReanalyze }: { onReanalyze: () => void }) => {
     };
 
     return (
-        <div className="space-y-6">
+        <GlassCard className="space-y-6 mt-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                      <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                         ESG Analysis Results
+                        Analysis Results
                      </h2>
                      <p className="text-gray-400 mt-1">Comprehensive assessment based on uploaded documents and external sources</p>
                 </div>
@@ -373,27 +375,43 @@ const AnalysisResultsView = ({ onReanalyze }: { onReanalyze: () => void }) => {
                         <span className="text-sm text-gray-400">Overall Confidence</span>
                         <span className="text-lg font-bold text-emerald-400">82%</span>
                     </div>
-                    <GlassButton onClick={onReanalyze} leftIcon={<RefreshCw size={16}/>}>Re-analyze</GlassButton>
+                    <GlassButton 
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowDetails(!showDetails)}
+                        leftIcon={<Info size={16}/>}
+                    >
+                        {showDetails ? "Hide Details" : "View Breakdown"}
+                    </GlassButton>
                 </div>
             </div>
 
-            {/* Analysis Overview Section */}
-            {!flippedCard && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                     <GlassCard className="space-y-4">
-                         <h3 className="font-semibold text-white">Company Claims</h3>
-                         <p className="text-sm text-gray-400 leading-relaxed">{DETAILED_ANALYSIS.claims}</p>
-                     </GlassCard>
-                     <GlassCard className="space-y-4">
-                         <h3 className="font-semibold text-white">News & Third-Party Sources</h3>
-                         <p className="text-sm text-gray-400 leading-relaxed">{DETAILED_ANALYSIS.sources}</p>
-                     </GlassCard>
-                     <GlassCard className="space-y-4">
-                         <h3 className="font-semibold text-white">Judge's Analysis & Confidence</h3>
-                         <p className="text-sm text-gray-400 leading-relaxed">{DETAILED_ANALYSIS.judge}</p>
-                     </GlassCard>
-                </div>
-            )}
+            {/* Analysis Overview Section - Toggled */}
+            <AnimatePresence>
+                {showDetails && !flippedCard && (
+                    <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                    >
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-2">
+                             <GlassCard className="space-y-4">
+                                 <h3 className="font-semibold text-white">Company Claims</h3>
+                                 <p className="text-sm text-gray-400 leading-relaxed">{DETAILED_ANALYSIS.claims}</p>
+                             </GlassCard>
+                             <GlassCard className="space-y-4">
+                                 <h3 className="font-semibold text-white">News & Third-Party Sources</h3>
+                                 <p className="text-sm text-gray-400 leading-relaxed">{DETAILED_ANALYSIS.sources}</p>
+                             </GlassCard>
+                             <GlassCard className="space-y-4">
+                                 <h3 className="font-semibold text-white">Judge's Analysis & Confidence</h3>
+                                 <p className="text-sm text-gray-400 leading-relaxed">{DETAILED_ANALYSIS.judge}</p>
+                             </GlassCard>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
             
             {/* Legend */}
              <div className="flex items-center justify-center gap-6 text-xs text-gray-500 pt-2 pb-4">
@@ -402,43 +420,75 @@ const AnalysisResultsView = ({ onReanalyze }: { onReanalyze: () => void }) => {
                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500"/> Low Confidence (60%)</div>
              </div>
 
-            {/* Detailed Cards Grid */}
+            {/* Overview Card - Full Width */}
+            {(() => {
+                const overviewCard = cards.find(c => c.id === 'overview')!;
+                const isFlipped = flippedCard === overviewCard.id;
+                return (
+                    <div 
+                        className={cn(
+                            "relative perspective-1000 transition-all duration-500",
+                            isFlipped ? "h-[400px]" : "h-[200px]"
+                        )}
+                    >
+                        <GlassCard 
+                            className="h-full cursor-pointer hover:border-white/20 transition-all group overflow-hidden flex flex-col"
+                            onClick={() => toggleFlip(overviewCard.id)}
+                        >
+                            <div className="flex justify-between items-start mb-4">
+                                 <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">Main</span>
+                                    <h3 className="font-bold text-white text-lg">{overviewCard.title}</h3>
+                                 </div>
+                                 <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(overviewCard.data.score))}>
+                                     {overviewCard.data.score}%
+                                 </div>
+                            </div>
+                            
+                            <p className="text-sm text-gray-400 leading-relaxed mb-6 flex-1">
+                                {overviewCard.data.summary}
+                                 <span className="text-emerald-500/70 text-xs ml-1 font-mono tracking-tighter align-super">
+                                     {overviewCard.data.citations.join('')}
+                                 </span>
+                            </p>
+                            
+                            <div className="mt-auto border-t border-white/5 pt-4">
+                                <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                                    <FileText size={12}/> Sources
+                                </div>
+                                <div className="flex flex-wrap gap-4">
+                                    {overviewCard.data.sources.map((source, i) => (
+                                        <div key={i} className="text-xs text-indigo-300 hover:text-indigo-200">
+                                            [{i+1}] {source}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            
+                            <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 flex items-center gap-1">
+                                <RefreshCw size={12}/> {isFlipped ? "Close details" : "View analysis"}
+                            </div>
+                        </GlassCard>
+                    </div>
+                );
+            })()}
+
+            {/* Other 4 Cards - 2x2 Grid */}
             <div className={cn(
                 "grid gap-4 transition-all duration-500",
-                flippedCard ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2 xl:grid-cols-3"
+                flippedCard && flippedCard !== 'overview' ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
             )}>
-                 {cards.map(card => {
-                     // If a card is flipped, hide others or show simplified view? 
-                     // User request: "The analysis page can be flipped to show three cards... The purpose of this page is to explain the analysis in the front page."
-                     // Wait, rereading user request: "Shows an analysis page with 5 different cards... The analysis page can be flipped to show three cards..."
-                     // This implies a toggle between the "5 detailed metric cards" view and the "3 overview cards" view? 
-                     // OR clicking a card shows details behind it. 
-                     // Let's interpret "Click on any card to flip and see the detailed analysis backing" text in screenshot.
-                     // It implies individual card flipping.
-                     // BUT the top 3 cards (Claims, News, Judge) seem to be a separate "Analysis Overview" section.
-                     // The 5 cards (Overview, Governance, etc) are the "Detailed Breakdown".
-                     // Let's implement a tab switcher for "Analysis Overview" vs "Detailed Breakdown" OR show both?
-                     // Screenshot 4 shows "Analysis Overview > Detailed Breakdown" breadcrumb style or button.
-                     // The screenshot 5 shows the 5 cards. Screenshot 4 shows the 3 cards.
-                     // So it's two different views.
-                     
-                     // Let's adjust logic:
-                     // Top section: Toggle between "Analysis Overview" (3 cards) and "Detailed Breakdown" (5 cards).
-                     // Actually screenshot 5 has all 5 cards visible.
-                     // Let's stick to the 5 cards view as primary for "Results".
-                     
-                     if (flippedCard && flippedCard !== card.id) return null; // Hide others when one is focused? Or just keep them?
-                     // Let's keep it simple first. 5 cards grid.
+                 {cards.filter(c => c.id !== 'overview').map(card => {
+                     if (flippedCard && flippedCard !== card.id) return null;
                      
                      const isFlipped = flippedCard === card.id;
 
                      return (
                          <div 
                             key={card.id} 
-                            col-span={isFlipped ? "col-span-full" : ""}
                             className={cn(
                                 "relative perspective-1000 transition-all duration-500",
-                                isFlipped ? "lg:col-span-2 row-span-2 h-[400px]" : "h-[220px]"
+                                isFlipped ? "md:col-span-2 h-[400px]" : "h-[220px]"
                             )}
                          >
                             <GlassCard 
@@ -447,7 +497,6 @@ const AnalysisResultsView = ({ onReanalyze }: { onReanalyze: () => void }) => {
                             >
                                 <div className="flex justify-between items-start mb-4">
                                      <div className="flex items-center gap-2">
-                                        {card.id === 'overview' && <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">Main</span>}
                                         <h3 className="font-bold text-white text-lg">{card.title}</h3>
                                      </div>
                                      <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(card.data.score))}>
@@ -485,14 +534,14 @@ const AnalysisResultsView = ({ onReanalyze }: { onReanalyze: () => void }) => {
             <div className="text-center text-xs text-gray-600 mt-8">
                 Click on any card to flip and see the detailed analysis backing
             </div>
-        </div>
+        </GlassCard>
     );
 };
 
 
 // --- Main Wizard Component ---
 
-export function AnalysisWizardModal({ isOpen, onClose, companyName }: AnalysisWizardModalProps) {
+export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName }: AnalysisWizardModalProps) {
     const [step, setStep] = useState<AnalysisStep>('topic');
     const [topic, setTopic] = useState<AnalysisTopic | null>(null);
 
@@ -582,26 +631,19 @@ export function AnalysisWizardModal({ isOpen, onClose, companyName }: AnalysisWi
                         exit={{ opacity: 0 }}
                     >
                         <ProgressStep 
-                            onComplete={() => setStep('results')}
-                        />
-                    </motion.div>
-                )}
-
-                {step === 'results' && (
-                    <motion.div 
-                        key="results"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="min-h-[600px]"
-                    >
-                        <AnalysisResultsView 
-                            onReanalyze={() => {
-                                setStep('topic');
-                                setTopic(null);
+                            onComplete={() => {
+                                onClose();
+                                onComplete();
+                                setTimeout(() => {
+                                    setStep('topic');
+                                    setTopic(null);
+                                }, 500); 
                             }}
                         />
                     </motion.div>
                 )}
+
+                {/* Results Step Removed from Modal - handled externally */}
             </AnimatePresence>
         </GlassModal>
     );
