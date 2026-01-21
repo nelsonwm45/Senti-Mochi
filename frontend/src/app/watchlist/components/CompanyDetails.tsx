@@ -6,6 +6,9 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { getKeyMetrics, formatValue, formatPercent } from '../utils';
 import CompanyDocumentUpload from '@/components/documents/CompanyDocumentUpload';
 import CompanyDocumentList from '@/components/documents/CompanyDocumentList';
+import { AnalysisWizardModal } from './AnalysisComponents';
+import { GlassButton } from '@/components/ui/GlassButton';
+import { Sparkles } from 'lucide-react';
 
 interface CompanyDetailsProps {
     ticker: string;
@@ -94,6 +97,7 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
     const [activeTab, setActiveTab] = useState('details');
     const [annualReports, setAnnualReports] = useState<AnnualReport[]>([]);
     const [loadingReports, setLoadingReports] = useState(false);
+    const [isAnalyzeModalOpen, setIsAnalyzeModalOpen] = useState(false);
 
     useEffect(() => {
         const fetchCompany = async () => {
@@ -304,10 +308,21 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                             </h4>
                                             <div className="text-xs text-gray-400 mt-1 pl-8">Snapshot of latest available data</div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">Latest Report</div>
-                                            <div className="text-sm font-mono text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
-                                                {latestReportDate || 'N/A'}
+                                        <div className="text-right flex items-end gap-3">
+                                            <GlassButton 
+                                                size="sm" 
+                                                variant="primary" 
+                                                onClick={() => setIsAnalyzeModalOpen(true)}
+                                                leftIcon={<Sparkles size={14} />}
+                                                className="bg-indigo-600 hover:bg-indigo-500 border-none shadow-indigo-500/20"
+                                            >
+                                                Analyze Company
+                                            </GlassButton>
+                                            <div>
+                                                <div className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-1">Latest Report</div>
+                                                <div className="text-sm font-mono text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
+                                                    {latestReportDate || 'N/A'}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -404,6 +419,12 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                 {activeTab === 'bs' && renderFinancialSection('Balance Sheet', balanceSheet, BS_ORDER, bsDate)}
                 {activeTab === 'cf' && renderFinancialSection('Cash Flow', cashFlow, CF_ORDER, cfDate)}
             </div>
+
+            <AnalysisWizardModal 
+                isOpen={isAnalyzeModalOpen}
+                onClose={() => setIsAnalyzeModalOpen(false)}
+                companyName={company.name}
+            />
         </div>
     );
 }
