@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, Upload, PieChart, BarChart3, TrendingUp, Loader2, FileDown, Clock, ExternalLink, ChevronRight } from 'lucide-react';
+import { ArrowLeft, FileText, Upload, PieChart, BarChart3, TrendingUp, Loader2, FileDown, Clock, ExternalLink, ChevronRight, Trash2, BrainCircuit } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { getKeyMetrics, formatValue, formatPercent } from '../utils';
 import CompanyDocumentUpload from '@/components/documents/CompanyDocumentUpload';
@@ -199,6 +199,18 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
         // Refresh list after new analysis
         fetchAnalysisReports();
         // Force view to results if not already (logic handled by existence of report)
+    };
+
+    const handleDeleteReport = async (reportId: string, e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent card click
+        if (!confirm('Are you sure you want to delete this analysis report?')) return;
+
+        try {
+            await analysisApi.deleteReport(reportId);
+            fetchAnalysisReports(); // Refresh the list
+        } catch (error) {
+            console.error('Failed to delete report:', error);
+        }
     };
 
     // Derived state for latest report
@@ -431,7 +443,7 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                             >
                                                 <div className="flex items-center gap-4">
                                                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isCurrent ? 'bg-indigo-500/20' : 'bg-white/5'}`}>
-                                                        <Sparkles size={18} className={isCurrent ? 'text-indigo-400' : 'text-gray-400'} />
+                                                        <BrainCircuit size={18} className={isCurrent ? 'text-indigo-400' : 'text-gray-400'} />
                                                     </div>
                                                     <div>
                                                         <div className="font-medium text-white flex items-center gap-2">
@@ -441,14 +453,20 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                                         <div className="text-sm text-gray-400">{new Date(report.created_at).toLocaleString()}</div>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-4">
                                                     <div className="text-right">
                                                         <div className={`text-sm font-medium ${report.confidence_score >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
                                                             {report.confidence_score}% Confidence
                                                         </div>
                                                         <div className="text-xs text-gray-500">AI Analysis</div>
                                                     </div>
-                                                    {!isCurrent && <ChevronRight size={16} className="text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                                                    <button
+                                                        onClick={(e) => handleDeleteReport(report.id, e)}
+                                                        className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                                                        title="Delete report"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
                                                 </div>
                                             </div>
                                         );

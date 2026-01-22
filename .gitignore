@@ -6,3 +6,4 @@ node_modules
 .next
 venv/
 backend/venv/
+backend/app/agents/cache.py

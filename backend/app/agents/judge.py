@@ -11,6 +11,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 class ESGTopic(BaseModel):
     score: int = Field(description="Score out of 100")
     summary: str = Field(description="Summary of performance in this area")
+    detail: Optional[str] = Field(default=None, description="Comprehensive detailed analysis (Markdown)")
     citations: list[str] = Field(description="List of citation markers like [1], [2]")
     sources: list[str] = Field(description="List of source names used")
 
@@ -24,6 +25,7 @@ class ESGAnalysisOutput(BaseModel):
 class FinancialTopic(BaseModel):
     score: int = Field(description="Score out of 100")
     summary: str = Field(description="Summary of performance in this area")
+    detail: Optional[str] = Field(default=None, description="Comprehensive detailed analysis (Markdown)")
     citations: list[str] = Field(description="List of citation markers like [1], [2]")
     sources: list[str] = Field(description="List of source names logic")
 
@@ -70,13 +72,15 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     CRITICAL: YOU MUST ALSO PERFORM A DETAILED ESG (Environmental, Social, Governance) ANALYSIS.
     For each category (Overview, Governance, Environmental, Social, Disclosure), provide:
     - A score (0-100)
-    - A concise summary
+    - A concise summary (2-3 sentences)
+    - A detailed analysis (detail): A comprehensive, verbose analysis (approx 150-250 words) discussing specific findings, risks, strengths, and evidence from the documents.
     - Citations and Sources based on the input data provided.
     
     CRITICAL: YOU MUST ALSO PERFORM A DETAILED FINANCIAL ANALYSIS based on the provided data.
     For each category (Valuation, Profitability, Growth, Health), provide:
     - A score (0-100)
-    - A concise summary
+    - A concise summary (2-3 sentences)
+    - A detailed analysis (detail): A comprehensive analysis of the metrics and trends.
     - Citations and Sources
     
     The 'Valuation' category should assess if the stock is over/undervalued.

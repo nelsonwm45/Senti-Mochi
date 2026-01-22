@@ -19,6 +19,7 @@ export interface AnalysisReport {
 export interface ESGTopic {
 	score: number;
 	summary: string;
+	detail?: string;
 	citations: string[];
 	sources: string[];
 }
@@ -34,6 +35,7 @@ export interface ESGAnalysisOutput {
 export interface FinancialTopic {
 	score: number;
 	summary: string;
+	detail?: string;
 	citations: string[];
 	sources: string[];
 }
@@ -56,5 +58,9 @@ export const analysisApi = {
 
 	getReport: async (reportId: string): Promise<AnalysisReport> => {
 		return apiClient.get(`/api/v1/analysis/report/${reportId}`).then(res => res.data);
+	},
+
+	deleteReport: async (reportId: string): Promise<void> => {
+		return apiClient.delete(`/api/v1/analysis/report/${reportId}`);
 	}
 };

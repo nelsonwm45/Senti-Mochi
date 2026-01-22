@@ -58,3 +58,16 @@ def get_report(report_id: UUID, session: Session = Depends(get_session)):
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     return report
+
+@router.delete("/report/{report_id}")
+def delete_report(report_id: UUID, session: Session = Depends(get_session)):
+    """
+    Deletes a specific analysis report.
+    """
+    report = session.get(AnalysisReport, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    session.delete(report)
+    session.commit()
+    return {"message": "Report deleted successfully", "report_id": str(report_id)}

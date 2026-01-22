@@ -348,10 +348,10 @@ export const FinancialAnalysisView = ({ report }: { report: AnalysisReport }) =>
     const health = financial.health || { score: 0, summary: "No data", citations: [], sources: [] };
 
     const cards = [
-        { id: 'valuation', title: "Valuation", data: valuation, color: "text-emerald-400" },
-        { id: 'profitability', title: "Profitability", data: profitability, color: "text-amber-400" },
-        { id: 'growth', title: "Growth", data: growth, color: "text-emerald-400" },
-        { id: 'health', title: "Financial Health", data: health, color: "text-amber-400" },
+        { id: 'valuation', title: "Valuation", data: valuation, border: 'border-l-blue-500/50', bg: 'bg-blue-500/20', iconColor: 'text-blue-400' },
+        { id: 'profitability', title: "Profitability", data: profitability, border: 'border-l-amber-500/50', bg: 'bg-amber-500/20', iconColor: 'text-amber-400' },
+        { id: 'growth', title: "Growth", data: growth, border: 'border-l-emerald-500/50', bg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' },
+        { id: 'health', title: "Financial Health", data: health, border: 'border-l-indigo-500/50', bg: 'bg-indigo-500/20', iconColor: 'text-indigo-400' },
     ];
 
     const getScoreColor = (score: number) => {
@@ -364,22 +364,25 @@ export const FinancialAnalysisView = ({ report }: { report: AnalysisReport }) =>
         <div className="space-y-6">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  {cards.map(card => (
-                     <div key={card.id} className="h-[220px]">
-                        <GlassCard className="h-full flex flex-col hover:border-white/20 transition-all">
+                     <div key={card.id} className="min-h-[220px]">
+                        <GlassCard className={cn("h-full flex flex-col hover:border-white/20 transition-all border-l-2", card.border)}>
                             <div className="flex justify-between items-start mb-4">
-                                 <div className="flex items-center gap-2">
+                                 <div className="flex items-center gap-3">
+                                    <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", card.bg)}>
+                                        <BarChart3 size={18} className={card.iconColor} />
+                                    </div>
                                     <h3 className="font-bold text-white text-lg">{card.title}</h3>
                                  </div>
                                  <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(card.data.score))}>
                                      {card.data.score}%
                                  </div>
                             </div>
-                            
-                            <div className="text-sm text-gray-400 leading-relaxed mb-6 flex-1 prose prose-invert prose-sm max-w-none overflow-y-auto custom-scrollbar">
+
+                            <div className="text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white">
                                 <ReactMarkdown>{card.data.summary}</ReactMarkdown>
                             </div>
-                            
-                            <div className="mt-auto border-t border-white/5 pt-4">
+
+                            <div className="mt-auto border-t border-white/10 pt-4">
                                 <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                                     <FileText size={12}/> Sources
                                 </div>
@@ -409,7 +412,9 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
     const toggleFlip = (cardId: string) => {
         setFlippedCard(prev => prev === cardId ? null : cardId);
     };
-    
+
+
+
     // Safely access esg_analysis from report
     const esg = report.esg_analysis || {};
     const overview = esg.overview || { score: 0, summary: "No data", citations: [], sources: [] };
@@ -573,7 +578,9 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
                                     "text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300",
                                     !isFlipped ? "line-clamp-5" : "max-h-[300px] overflow-y-auto custom-scrollbar"
                                 )}>
-                                    <ReactMarkdown>{overviewCard.data.summary}</ReactMarkdown>
+                                    <ReactMarkdown>
+                                        {(isFlipped && overviewCard.data.detail) || overviewCard.data.summary}
+                                    </ReactMarkdown>
                                 </div>
 
                                 <div className="mt-auto border-t border-white/10 pt-4">
@@ -606,6 +613,11 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
                          if (flippedCard && flippedCard !== card.id) return null;
 
                          const isFlipped = flippedCard === card.id;
+                        // Debug log
+                        if (isFlipped) {
+                             // console.log(`Card ${card.id} flipped. Report ID:`, report.id, 'Detail present:', !!card.data.detail, 'Length:', card.data.detail?.length);
+                             console.log('Full data:', card.data);
+                        }
 
                          // Get card-specific styling
                          const getCardStyle = (id: string) => {
@@ -647,7 +659,9 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
                                         "text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none prose-p:text-gray-300 prose-strong:text-white",
                                         !isFlipped ? "line-clamp-4" : "max-h-[250px] overflow-y-auto custom-scrollbar"
                                     )}>
-                                        <ReactMarkdown>{card.data.summary}</ReactMarkdown>
+                                        <ReactMarkdown>
+                                            {(isFlipped && card.data.detail) || card.data.summary}
+                                        </ReactMarkdown>
                                     </div>
 
                                     <div className="mt-auto border-t border-white/10 pt-4">
