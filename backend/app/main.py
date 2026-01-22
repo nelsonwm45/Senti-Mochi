@@ -17,6 +17,9 @@ origins = [
     "http://localhost",
 ]
 
+# Add Tenant Isolation Middleware
+app.add_middleware(TenantMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -24,9 +27,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Add Tenant Isolation Middleware
-app.add_middleware(TenantMiddleware)
 
 @app.on_event("startup")
 def on_startup():
