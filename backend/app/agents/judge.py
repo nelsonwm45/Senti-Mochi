@@ -14,6 +14,7 @@ class ESGTopic(BaseModel):
     detail: Optional[str] = Field(default=None, description="Comprehensive detailed analysis (Markdown)")
     citations: list[str] = Field(description="List of citation markers like [1], [2]")
     sources: list[str] = Field(description="List of source names used")
+    highlights: list[str] = Field(default=[], description="List of 3-5 short key highlights/metrics (e.g. 'Net Zero 2050', '30% Women on Board')")
 
 class ESGAnalysisOutput(BaseModel):
     overview: ESGTopic
@@ -27,7 +28,8 @@ class FinancialTopic(BaseModel):
     summary: str = Field(description="Summary of performance in this area")
     detail: Optional[str] = Field(default=None, description="Comprehensive detailed analysis (Markdown)")
     citations: list[str] = Field(description="List of citation markers like [1], [2]")
-    sources: list[str] = Field(description="List of source names logic")
+    sources: list[str] = Field(description="List of source names used")
+    highlights: list[str] = Field(default=[], description="List of 3-5 short key highlights/metrics (e.g. 'Revenue +10%', 'Margin 25%')")
 
 class FinancialAnalysisOutput(BaseModel):
     valuation: FinancialTopic
@@ -73,16 +75,15 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     For each category (Overview, Governance, Environmental, Social, Disclosure), provide:
     - A score (0-100)
     - A concise summary (2-3 sentences)
-    - A score (0-100)
-    - A concise summary (2-3 sentences)
-    - A detailed analysis (detail): **FORMAT THIS USING MARKDOWN BULLET POINTS**. Do NOT write large blocks of text. Use sub-headers if necessary. Bold key metrics (e.g., **10% growth**). This content must be easily skimmable by an executive.
+    - **Highlights**: A list of 3-5 SPECIFIC data points, goals, or metrics. (e.g. "Scope 1 Emissions -10%", "Target: Net Zero 2050", "30% Female Board"). If no specific data is found, state "No specific data".
+    - A detailed analysis (detail): **FORMAT THIS USING MARKDOWN BULLET POINTS**. Do NOT write large blocks of text. Use sub-headers if necessary. Bold key metrics.
     - Citations and Sources based on the input data provided.
     
-    CRITICAL: YOU MUST ALSO PERFORM A DETAILED FINANCIAL ANALYSIS based on the provided data.
+    CRITICAL: YOU MUST ALSO PERFORM A DETAILED FINANCIAL ANALYSIS.
     For each category (Valuation, Profitability, Growth, Health), provide:
     - A score (0-100)
-    - A concise summary (2-3 sentences)
-    - A detailed analysis (detail): Use **BULLET POINTS** and Markdown formatting. Focus on the numbers.
+    - **Highlights**: A list of 3-5 SPECIFIC financial metrics (e.g. "P/E: 15.2x", "ROE: 12%", "Debt/Equity: 0.5").
+    - A detailed analysis (detail): Use **BULLET POINTS** and Markdown formatting.
     - Citations and Sources
     
     The 'Valuation' category should assess if the stock is over/undervalued.

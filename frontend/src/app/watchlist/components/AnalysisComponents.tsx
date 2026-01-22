@@ -380,6 +380,17 @@ export const FinancialAnalysisView = ({ report }: { report: AnalysisReport }) =>
                             <div className="text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white">
                                 <ReactMarkdown components={citationComponents}>{formatText(card.data.summary)}</ReactMarkdown>
                             </div>
+                            
+                            {/* Highlights Section */}
+                            {card.data.highlights && card.data.highlights.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {card.data.highlights.map((h: string, idx: number) => (
+                                        <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5">
+                                            {h}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
 
                             <div className="mt-auto border-t border-white/10 pt-4">
                                 <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
@@ -602,6 +613,17 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
                                     </ReactMarkdown>
                                 </div>
 
+                                {/* Highlights Badge Section */}
+                                {!isFlipped && overviewCard.data.highlights && overviewCard.data.highlights.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mb-4">
+                                        {overviewCard.data.highlights.map((h: string, idx: number) => (
+                                            <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5">
+                                                {h}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+
                                 <div className="mt-auto border-t border-white/10 pt-4">
                                     <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                                         <FileText size={12}/> Sources
@@ -684,6 +706,17 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
                                             {formatText((isFlipped && card.data.detail) || card.data.summary)}
                                         </ReactMarkdown>
                                     </div>
+
+                                    {/* Highlights Badge Section */}
+                                    {!isFlipped && card.data.highlights && card.data.highlights.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mb-4">
+                                            {card.data.highlights.map((h: string, idx: number) => (
+                                                <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5 truncate max-w-full">
+                                                    {h}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
 
                                     <div className="mt-auto border-t border-white/10 pt-4">
                                         <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
