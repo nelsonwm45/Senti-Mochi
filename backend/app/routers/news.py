@@ -160,6 +160,175 @@ def store_articles(
         "total": len(articles)
     }
 
+@router.post("/search")
+def search_news(
+    keyword: str = Query(..., description="Search keyword (e.g., 'Maybank', 'Top Glove ESG')"),
+    sources: Optional[List[str]] = Query(None, description="News sources to search (star, nst, edge). Defaults to all."),
+    company_id: Optional[str] = Query(None, description="Optional company ID to tag articles with"),
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user)
+):
+    """
+    Search for news articles by keyword from backend.
+    
+    Fetches news from Star, NST, and The Edge, stores them, and returns the articles.
+    This endpoint allows frontend to search for specific keywords without doing the fetching itself.
+    
+    Example:
+    - /search?keyword=Maybank
+    - /search?keyword=Top%20Glove%20ESG&sources=star&sources=nst&sources=edge
+    - /search?keyword=Ambank&company_id=<company_uuid>
+    - /search?keyword=ESG&sources=edge (search only The Edge)
+    """
+    from app.services.news_fetcher import news_fetcher_service
+    from app.services.article_fetcher import article_fetcher_service
+    
+    # Default to all sources if not specified
+    if sources is None:
+        sources = ['star', 'nst', 'edge']
+    
+    print(f"[SEARCH_NEWS] Searching for '{keyword}' in sources: {sources}")
+    
+    # Fetch articles from specified sources
+    fetch_result = news_fetcher_service.fetch_news_by_keyword(keyword, sources)
+    
+    print(f"[SEARCH_NEWS] Fetch result - Total: {fetch_result.get('total')}")
+    for source in sources:
+        count = len(fetch_result.get(source, []))
+        print(f"[SEARCH_NEWS]   {source}: {count} articles")
+    
+    # Collect all articles to store
+    articles_to_store = []
+    
+    # Process articles from each source
+    for source in sources:
+        if source in fetch_result:
+            source_articles = fetch_result[source]
+            print(f"[SEARCH_NEWS] Processing {len(source_articles)} {source} articles")
+            for article_data in source_articles:
+                # Determine which company to tag with
+                final_company_id = company_id
+                
+                # If no company_id specified, try to find matching companies in the article title
+                if not final_company_id:
+                    try:
+                        from app.services.company_service import company_service
+                        found_companies = company_service.find_companies_by_text(article_data['title'], session)
+                        if found_companies:
+                            final_company_id = found_companies[0].id
+                            print(f"[SEARCH_NEWS] Auto-tagged '{article_data['title'][:50]}' to {found_companies[0].name}")
+                    except Exception as e:
+                        print(f"[SEARCH_NEWS] Auto-tagging error: {e}")
+                
+                # Only add if we have a company to tag with
+                if final_company_id:
+                    articles_to_store.append({
+                        'company_id': str(final_company_id),
+                        'source': article_data['source'],
+                        'native_id': article_data['native_id'],
+                        'title': article_data['title'],
+                        'url': article_data['url'],
+                        'published_at': article_data['published_at'],
+                        'content': article_data['content']
+                    })
+                else:
+                    print(f"[SEARCH_NEWS] Skipping article (no company): {article_data['title'][:50]}")
+    
+    print(f"[SEARCH_NEWS] Collected {len(articles_to_store)} articles to store out of {fetch_result.get('total', 0)} fetched")
+    
+    # Store articles using the existing store logic
+    stored_articles = []
+    if articles_to_store:
+        # Convert to ClientNewsArticle objects and store
+        from app.routers.news import ClientNewsArticle
+        client_articles = [ClientNewsArticle(**article) for article in articles_to_store]
+        
+        saved_count = 0
+        skipped_count = 0
+        
+        for article_data in client_articles:
+            try:
+                # Check if article already exists
+                existing = session.exec(select(NewsArticle).where(
+                    (NewsArticle.native_id == article_data.native_id) | 
+                    (NewsArticle.title == article_data.title)
+                )).first()
+                
+                if existing:
+                    skipped_count += 1
+                    stored_articles.append({
+                        'id': str(existing.id),
+                        'title': existing.title,
+                        'url': existing.url,
+                        'source': existing.source,
+                        'published_at': existing.published_at.isoformat(),
+                        'company_id': str(existing.company_id),
+                        'status': 'existing'
+                    })
+                    continue
+                
+                # Parse datetime
+                try:
+                    published_at = datetime.fromisoformat(article_data.published_at.replace('Z', '+00:00'))
+                except:
+                    published_at = datetime.utcnow()
+                
+                # Fetch full content
+                full_content = article_data.content or article_data.title
+                if article_data.source.lower() != 'bursa' and article_data.url:
+                    print(f"[SEARCH_NEWS] Fetching full content for {article_data.title[:50]}...")
+                    fetched_content = article_fetcher_service.fetch_article_content(article_data.url)
+                    if fetched_content:
+                        full_content = fetched_content
+                
+                # Create and save article
+                article = NewsArticle(
+                    company_id=article_data.company_id,
+                    source=article_data.source,
+                    native_id=article_data.native_id,
+                    title=article_data.title,
+                    url=article_data.url,
+                    published_at=published_at,
+                    content=full_content
+                )
+                session.add(article)
+                saved_count += 1
+                
+                stored_articles.append({
+                    'id': str(article.id),
+                    'title': article.title,
+                    'url': article.url,
+                    'source': article.source,
+                    'published_at': article.published_at.isoformat(),
+                    'company_id': str(article.company_id),
+                    'status': 'new'
+                })
+                
+            except Exception as e:
+                print(f"[SEARCH_NEWS] Error storing article: {e}")
+                continue
+        
+        if saved_count > 0:
+            session.commit()
+            
+            # Queue sentiment analysis for newly saved articles
+            for article_dict in stored_articles:
+                if article_dict['status'] == 'new' and article_dict['source'].lower() != 'bursa':
+                    # Get the article from DB and queue sentiment analysis
+                    article = session.get(NewsArticle, article_dict['id'])
+                    if article and not article.analyzed_at:
+                        analyze_article_sentiment_task.delay(str(article.id))
+                        print(f"[SEARCH_NEWS] Queued sentiment analysis for article {article.id}")
+    
+    return {
+        'keyword': keyword,
+        'sources': sources,
+        'total_fetched': fetch_result.get('total', 0),
+        'total_stored': len(stored_articles),
+        'articles': stored_articles
+    }
+
+
 @router.get("/feed")
 def get_news_feed(
     limit: int = 50,
