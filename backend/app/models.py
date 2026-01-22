@@ -69,6 +69,7 @@ class Company(SQLModel, table=True):
     watchlists: list["Watchlist"] = Relationship(back_populates="company")
     financials: list["FinancialStatement"] = Relationship(back_populates="company")
     news_articles: list["NewsArticle"] = Relationship(back_populates="company")
+    analysis_reports: list["AnalysisReport"] = Relationship(back_populates="company")
 
 class FinancialStatement(SQLModel, table=True):
     __tablename__ = "financial_statements"
@@ -101,6 +102,17 @@ class NewsArticle(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     company: "Company" = Relationship(back_populates="news_articles")
+    chunks: list["NewsChunk"] = Relationship(back_populates="news_article")
+
+class NewsChunk(SQLModel, table=True):
+    __tablename__ = "news_chunks"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    news_id: UUID = Field(foreign_key="news_articles.id", index=True)
+    content: str = Field(sa_column=Column(Text))
+    chunk_index: int
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    news_article: "NewsArticle" = Relationship(back_populates="chunks")
 
 # Watchlist Model
 class Watchlist(SQLModel, table=True):
@@ -182,3 +194,30 @@ class Workflow(SQLModel, table=True):
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+
+
+# AnalysisReport Model
+class AnalysisReport(SQLModel, table=True):
+    __tablename__ = "analysis_reports"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    company_id: UUID = Field(foreign_key="companies.id", index=True)
+    current_price: Optional[float] = None
+    rating: str  # BUY, SELL, HOLD
+    confidence_score: int  # 0-100
+    summary: str = Field(sa_column=Column(Text)) # Markdown text
+    bull_case: str = Field(sa_column=Column(Text))
+    bear_case: str = Field(sa_column=Column(Text))
+    risk_factors: str = Field(sa_column=Column(Text))
+    
+    # ESG Analysis Data (JSON) to match Frontend UI
+    esg_analysis: dict = Field(default={}, sa_column=Column(JSON))
+
+    # Financial Analysis Data (JSON)
+    financial_analysis: dict = Field(default={}, sa_column=Column(JSON))
+    
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    # Store agent steps/debate logs for transparency
+    agent_logs: list[dict] = Field(default=[], sa_column=Column(JSON))
+
+    company: "Company" = Relationship(back_populates="analysis_reports")

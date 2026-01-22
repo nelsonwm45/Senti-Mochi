@@ -26,7 +26,7 @@ export function SearchPopout({ isOpen, onClose, userId }: SearchPopoutProps) {
   const [error, setError] = useState<string | null>(null);
   
   // Debounce search
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Initial fetch or search

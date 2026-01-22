@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from app.database import create_db_and_tables
 from app.middleware.tenant_isolation import TenantMiddleware
-from app.routers import auth, users, google_auth, documents, chat, health, webhooks, watchlist, companies, news
+from app.routers import auth, users, google_auth, documents, chat, health, webhooks, watchlist, companies, news, analysis
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
@@ -17,6 +17,9 @@ origins = [
     "http://localhost",
 ]
 
+# Add Tenant Isolation Middleware
+app.add_middleware(TenantMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -24,9 +27,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Add Tenant Isolation Middleware
-app.add_middleware(TenantMiddleware)
 
 @app.on_event("startup")
 def on_startup():
@@ -43,6 +43,7 @@ app.include_router(webhooks.router, prefix="/webhooks", tags=["Webhooks"]) # New
 app.include_router(watchlist.router, prefix="/api/v1") # New: Watchlist
 app.include_router(companies.router, prefix="/api/v1") # New: Companies
 app.include_router(news.router, prefix="/api/v1") # New: News Feed
+app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["Analysis"]) # New: Multi-Agent Analysis
 
 
 @app.get("/")

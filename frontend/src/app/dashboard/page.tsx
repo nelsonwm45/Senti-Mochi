@@ -72,7 +72,7 @@ function DashboardContent() {
   const handleWhatsAppShare = (item: UnifiedFeedItem) => {
     // Construct message with summary and link
     const summary = item.description || item.title || '';
-    const link = item.link || item.url || '';
+    const link = item.link || '';
     const text = `*AI Summary*: ${summary}\n\n*Source*: ${link}`;
 
     // Copy to clipboard
@@ -261,7 +261,7 @@ function DashboardContent() {
 
           // Deduplicate articles by native_id (same article can appear for multiple companies)
           const uniqueArticles = allArticles.reduce((acc, article) => {
-            if (!acc.find(a => a.native_id === article.native_id)) {
+            if (!acc.find((a: any) => a.native_id === article.native_id)) {
               acc.push(article);
             }
             return acc;
@@ -271,7 +271,7 @@ function DashboardContent() {
           if (uniqueArticles.length > 0) {
             console.log(`[NEWS] Found ${allArticles.length} articles, ${uniqueArticles.length} unique after deduplication`);
             console.log('[NEWS] Sample articles with content:',
-              uniqueArticles.slice(0, 2).map(a => ({
+              uniqueArticles.slice(0, 2).map((a: any) => ({
                 source: a.source,
                 title: a.title.substring(0, 50),
                 contentLength: a.content?.length || 0,

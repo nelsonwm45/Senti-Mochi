@@ -13,6 +13,7 @@ from app.models import Document, DocumentChunk, DocumentStatus
 from app.database import engine
 from sqlmodel import Session, select
 from datetime import datetime, timezone
+from app.agents.cache import invalidate_cache
 
 class IngestionService:
     """Service for processing and ingesting documents for RAG"""
@@ -327,6 +328,11 @@ class IngestionService:
                     document.processing_completed = datetime.now(timezone.utc)
                     session.add(document)
                     session.commit()
+
+                    # Invalidate cached analysis for this company since documents changed
+                    if document.company_id:
+                        invalidate_cache(str(document.company_id), "claims")
+                        print(f"Invalidated claims cache for company {document.company_id}")
 
             except Exception as e:
                 # Re-fetch document to avoid detachment issues
