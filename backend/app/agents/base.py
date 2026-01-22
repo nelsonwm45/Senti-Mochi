@@ -4,7 +4,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-def get_llm(model_name: str = "llama3-70b-8192") -> BaseChatModel:
+def get_llm(model_name: str = "llama-3.3-70b-versatile") -> BaseChatModel:
     """
     Factory to return the appropriate LLM based on model name.
     """
@@ -26,9 +26,9 @@ def get_llm(model_name: str = "llama3-70b-8192") -> BaseChatModel:
         if not api_key:
             raise ValueError("GROQ_API_KEY not found in environment variables")
             
-        # If the model name is generic "groq", default to llama3-70b-8192
+        # If the model name is generic "groq", default to llama-3.3-70b-versatile
         if model_name == "groq":
-            model_name = "llama3-70b-8192"
+            model_name = "llama-3.3-70b-versatile"
             
         return ChatGroq(
             model_name=model_name,

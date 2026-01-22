@@ -11,6 +11,9 @@ import { GlassModal, GlassModalFooter } from '@/components/ui/GlassModal';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { cn } from '@/lib/utils';
+import CompanyDocumentUpload from '@/components/documents/CompanyDocumentUpload';
+import { analysisApi, AnalysisReport } from '@/lib/api/analysis';
+import ReactMarkdown from 'react-markdown';
 
 // --- Types ---
 
@@ -23,59 +26,12 @@ interface AnalysisWizardModalProps {
     onClose: () => void;
     onComplete: () => void; // New prop for signaling completion
     companyName: string;
+    companyId: string;
 }
 
 // --- Mock Data ---
 
-const ESG_RESULTS = {
-    overview: {
-        score: 85,
-        summary: "The company demonstrates a strong commitment to sustainability with comprehensive ESG policies in place. Recent initiatives show significant progress in reducing carbon footprint and improving stakeholder engagement.",
-        citations: ["[1]", "[2]", "[3]"],
-        sources: [
-            "2023 Sustainability Report - p. 4-7",
-            "CDP Climate Disclosure 2023"
-        ]
-    },
-    governance: {
-        score: 78,
-        summary: "Board-level ESG oversight with dedicated sustainability committee. Executive compensation tied to ESG metrics. Clear governance framework with regular third-party audits and transparent reporting practices.",
-        citations: ["[1]", "[2]"],
-        sources: [
-            "Corporate Governance Report 2023 - p. 12"
-        ]
-    },
-    environmental: {
-        score: 82,
-        summary: "Strong environmental performance with science-based targets. Water usage reduced by 25%. Waste diversion rate at 85%. Biodiversity protection programs implemented across major operational sites.",
-        citations: ["[1]", "[2]", "[3]"],
-        sources: [
-            "CDP Water Security 2023"
-        ]
-    },
-    social: {
-        score: 76,
-        summary: "Employee satisfaction scores above industry average. Robust DEI initiatives with measurable progress. Community investment programs reaching over 50,000 beneficiaries annually. Strong supply chain labor standards.",
-        citations: ["[1]", "[2]"],
-        sources: [
-            "DEI Report 2023 - p. 8-15"
-        ]
-    },
-    disclosure: {
-        score: 88,
-        summary: "Comprehensive reporting aligned with GRI, SASB, and TCFD frameworks. Data assurance by Big Four auditor. Clear targets with measurable KPIs. Strong stakeholder communication and engagement practices.",
-        citations: ["[1]", "[2]", "[3]"],
-        sources: [
-            "GRI Content Index 2023"
-        ]
-    }
-};
-
-const DETAILED_ANALYSIS = {
-    claims: "The company has made extensive public commitments across ESG dimensions. Key claims include carbon neutrality targets, diversity initiatives, and governance reforms. Our analysis cross-references these claims against verifiable data sources.",
-    sources: "Analysis incorporates data from 47 news sources, 12 analyst reports, and 8 third-party rating agencies. Recent coverage has been largely positive with focus on environmental initiatives. Some concerns raised about social metrics verification.",
-    judge: "Overall confidence score of 82% reflects strong documentation and third-party verification. Key strength: transparent environmental reporting. Areas for improvement: more granular social impact metrics and enhanced Scope 3 reporting. Recommendation: maintain current trajectory."
-};
+// --- Mock Data Removed ---
 
 // --- Sub-Components ---
 
@@ -200,40 +156,17 @@ const TopicSelectionStep = ({
 };
 
 // 2. File Upload
-const FileUploadStep = ({ onNext, onBack, onCancel }: { onNext: () => void, onBack: () => void, onCancel: () => void }) => {
-    const [isDragging, setIsDragging] = useState(false);
-    const [files, setFiles] = useState<File[]>([]);
-
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        // Mock file acceptance
-        if (e.dataTransfer.files?.length) {
-             setFiles(prev => [...prev, ...Array.from(e.dataTransfer.files)]);
-        }
-    };
+const FileUploadStep = ({ onNext, onBack, onCancel, companyId }: { onNext: () => void, onBack: () => void, onCancel: () => void, companyId: string }) => {
+    // We can track upload count via callback if needed, but for now we trust the user to proceed
+    const [uploadCount, setUploadCount] = useState(0);
 
     return (
         <div className="space-y-6">
-            <div 
-                className={cn(
-                    "border-2 border-dashed rounded-2xl h-64 flex flex-col items-center justify-center transition-all",
-                    isDragging ? "border-accent bg-accent/5 scale-[1.02]" : "border-white/10 hover:border-white/20 bg-white/[0.02]"
-                )}
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-            >
-                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4 text-gray-400">
-                    <Upload size={32} />
-                </div>
-                <h3 className="text-lg font-medium text-white mb-2">Drag & drop PDF files here</h3>
-                <p className="text-sm text-gray-500">or click to browse</p>
-                {files.length > 0 && (
-                     <div className="mt-4 text-sm text-emerald-400 font-medium">
-                         {files.length} file{files.length > 1 ? 's' : ''} selected
-                     </div>
-                )}
+            <div className="h-96 overflow-y-auto pr-2 custom-scrollbar">
+                <CompanyDocumentUpload 
+                    companyId={companyId} 
+                    onUploadSuccess={() => setUploadCount(prev => prev + 1)}
+                />
             </div>
 
             <GlassModalFooter className="justify-between">
@@ -242,10 +175,8 @@ const FileUploadStep = ({ onNext, onBack, onCancel }: { onNext: () => void, onBa
                     <GlassButton variant="ghost" onClick={onCancel}>Cancel</GlassButton>
                     <GlassButton 
                         onClick={onNext} 
-                        // Allow proceeding without files for demo purposes if desired, but request implies upload
-                        // For now we'll allow it ("simulate")
                     >
-                        Confirm ({files.length} files)
+                        {uploadCount > 0 ? `Continue (${uploadCount} uploaded)` : 'Continue'}
                     </GlassButton>
                 </div>
             </GlassModalFooter>
@@ -254,29 +185,96 @@ const FileUploadStep = ({ onNext, onBack, onCancel }: { onNext: () => void, onBa
 };
 
 // 3. Progress
-const ProgressStep = ({ onComplete }: { onComplete: () => void }) => {
+const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, companyId: string }) => {
     const [stepIndex, setStepIndex] = useState(0);
+    const [error, setError] = useState<string | null>(null);
     const steps = [
-        { label: "PDF Upload", sub: "Uploading your documents" },
-        { label: "Pulling News", sub: "Gathering recent news articles" },
-        { label: "Extracting Data", sub: "Processing document content" },
-        { label: "Verifying Claims", sub: "Cross-referencing sources" },
-        { label: "Generating Insights", sub: "Creating analysis report" }
+        { label: "Initializing", sub: "Starting analysis engine" },
+        { label: "Pulling Data", sub: "Gathering news and documents" },
+        { label: "Synthesizing", sub: "Generating insights with AI" },
+        { label: "Finalizing", sub: "Formatting report" }
     ];
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            setStepIndex(prev => {
-                if (prev >= steps.length - 1) {
-                    clearInterval(interval);
-                    setTimeout(onComplete, 800);
-                    return prev;
-                }
-                return prev + 1;
-            });
-        }, 1200); // 1.2s per step
-        return () => clearInterval(interval);
-    }, [onComplete]);
+        let isMounted = true;
+        let pollInterval: NodeJS.Timeout;
+
+        const runAnalysis = async () => {
+            try {
+                // 1. Trigger Analysis
+                console.log("Triggering analysis for:", companyId);
+                await analysisApi.triggerAnalysis(companyId);
+
+                // 2. Start Polling
+                const startTime = Date.now();
+                const TIMEOUT = 60000; // 60s timeout
+
+                pollInterval = setInterval(async () => {
+                    if (!isMounted) return;
+
+                    try {
+                        const reports = await analysisApi.getReports(companyId);
+                        // Check if we have a very recent report (created after we started)
+                        // Or simplistic: just check if we have any report if we assume none existed before?
+                        // Better: Check if report array > 0 and the first one is "recent".
+                        // Given user flow, getting ANY report is likely success if list was previously empty.
+                        // Let's just check for existence of a report for now.
+                        if (reports && reports.length > 0) {
+                             const latest = reports[0];
+                             const created = new Date(latest.created_at).getTime();
+                             // If created recently (within last 2 mins), it's ours.
+                             // Actually, trigger_analysis creates it. 
+                             // If it exists, we are done.
+                             console.log("Report found:", latest.id);
+                             clearInterval(pollInterval);
+                             setStepIndex(steps.length); // Complete all steps
+                             setTimeout(onComplete, 800);
+                        }
+                    } catch (e) {
+                         console.error("Polling error:", e);
+                    }
+
+                    if (Date.now() - startTime > TIMEOUT) {
+                        clearInterval(pollInterval);
+                        if (isMounted) setError("Analysis timed out. Please try again.");
+                    }
+                }, 2000);
+
+            } catch (e) {
+                console.error("Trigger error:", e);
+                if (isMounted) setError("Failed to start analysis.");
+            }
+        };
+
+        runAnalysis();
+
+        // Also run the visual progress independent of polling, but slower? 
+        // Or just let polling drive it?
+        // Let's keep the visual timer for UX but make it loop on the middle steps until done.
+        const visualInterval = setInterval(() => {
+             setStepIndex(prev => {
+                 if (prev >= steps.length - 2) return prev; // Stuck at "Synthesizing" until done
+                 return prev + 1;
+             });
+        }, 3000);
+
+        return () => {
+            isMounted = false;
+            clearInterval(pollInterval);
+            clearInterval(visualInterval);
+        };
+    }, [companyId, onComplete]); // removing steps dependency to avoid re-run
+
+    if (error) {
+        return (
+            <div className="py-12 text-center space-y-4">
+                <div className="text-red-400 text-xl font-bold">Analysis Failed</div>
+                <p className="text-gray-400">{error}</p>
+                <GlassButton onClick={onComplete}>Close</GlassButton>
+            </div>
+        );
+    }
+
 
     return (
         <div className="py-8 space-y-10">
@@ -338,21 +336,94 @@ const ProgressStep = ({ onComplete }: { onComplete: () => void }) => {
 };
 
 // 4. Results
-export const AnalysisResultsView = ({ onReanalyze }: { onReanalyze: () => void }) => {
+// --- Types ---
+
+
+// 5. Financial Analysis View
+export const FinancialAnalysisView = ({ report }: { report: AnalysisReport }) => {
+    const financial = report.financial_analysis || {};
+    const valuation = financial.valuation || { score: 0, summary: "No data", citations: [], sources: [] };
+    const profitability = financial.profitability || { score: 0, summary: "No data", citations: [], sources: [] };
+    const growth = financial.growth || { score: 0, summary: "No data", citations: [], sources: [] };
+    const health = financial.health || { score: 0, summary: "No data", citations: [], sources: [] };
+
+    const cards = [
+        { id: 'valuation', title: "Valuation", data: valuation, color: "text-emerald-400" },
+        { id: 'profitability', title: "Profitability", data: profitability, color: "text-amber-400" },
+        { id: 'growth', title: "Growth", data: growth, color: "text-emerald-400" },
+        { id: 'health', title: "Financial Health", data: health, color: "text-amber-400" },
+    ];
+
+    const getScoreColor = (score: number) => {
+        if (score >= 80) return "text-emerald-500 bg-emerald-500/10 border-emerald-500/20";
+        if (score >= 60) return "text-amber-500 bg-amber-500/10 border-amber-500/20";
+        return "text-red-500 bg-red-500/10 border-red-500/20";
+    };
+
+    return (
+        <div className="space-y-6">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 {cards.map(card => (
+                     <div key={card.id} className="h-[220px]">
+                        <GlassCard className="h-full flex flex-col hover:border-white/20 transition-all">
+                            <div className="flex justify-between items-start mb-4">
+                                 <div className="flex items-center gap-2">
+                                    <h3 className="font-bold text-white text-lg">{card.title}</h3>
+                                 </div>
+                                 <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(card.data.score))}>
+                                     {card.data.score}%
+                                 </div>
+                            </div>
+                            
+                            <div className="text-sm text-gray-400 leading-relaxed mb-6 flex-1 prose prose-invert prose-sm max-w-none overflow-y-auto custom-scrollbar">
+                                <ReactMarkdown>{card.data.summary}</ReactMarkdown>
+                            </div>
+                            
+                            <div className="mt-auto border-t border-white/5 pt-4">
+                                <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                                    <FileText size={12}/> Sources
+                                </div>
+                                {card.data.sources.map((source, i) => (
+                                    <div key={i} className="text-xs text-indigo-300 truncate hover:text-indigo-200">
+                                        [{i+1}] {source}
+                                    </div>
+                                ))}
+                            </div>
+                        </GlassCard>
+                     </div>
+                 ))}
+            </div>
+        </div>
+    );
+};
+
+// ... (TopicSelectionStep, FileUploadStep, ProgressStep remain unchanged) ...
+
+// 4. Results
+export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisReport, onReanalyze: () => void }) => {
     // Card State Management
     const [flippedCard, setFlippedCard] = useState<string | null>(null);
     const [showDetails, setShowDetails] = useState(false); // Toggle for top 3 cards
+    const [viewMode, setViewMode] = useState<'esg' | 'financial'>('esg'); // Tab state
 
     const toggleFlip = (cardId: string) => {
         setFlippedCard(prev => prev === cardId ? null : cardId);
     };
+    
+    // Safely access esg_analysis from report
+    const esg = report.esg_analysis || {};
+    const overview = esg.overview || { score: 0, summary: "No data", citations: [], sources: [] };
+    const governance = esg.governance || { score: 0, summary: "No data", citations: [], sources: [] };
+    const environmental = esg.environmental || { score: 0, summary: "No data", citations: [], sources: [] };
+    const social = esg.social || { score: 0, summary: "No data", citations: [], sources: [] };
+    const disclosure = esg.disclosure || { score: 0, summary: "No data", citations: [], sources: [] };
 
     const cards = [
-        { id: 'overview', title: "Overview", data: ESG_RESULTS.overview, color: "text-emerald-400" },
-        { id: 'governance', title: "Governance & ESG Integration", data: ESG_RESULTS.governance, color: "text-amber-400" },
-        { id: 'environmental', title: "Environmental", data: ESG_RESULTS.environmental, color: "text-emerald-400" },
-        { id: 'social', title: "Social", data: ESG_RESULTS.social, color: "text-amber-400" },
-        { id: 'disclosure', title: "Disclosure Quality & Maturity", data: ESG_RESULTS.disclosure, color: "text-emerald-400" },
+        { id: 'overview', title: "Overview", data: overview, color: "text-emerald-400" },
+        { id: 'governance', title: "Governance & ESG Integration", data: governance, color: "text-amber-400" },
+        { id: 'environmental', title: "Environmental", data: environmental, color: "text-emerald-400" },
+        { id: 'social', title: "Social", data: social, color: "text-amber-400" },
+        { id: 'disclosure', title: "Disclosure Quality", data: disclosure, color: "text-emerald-400" },
     ];
 
     const getScoreColor = (score: number) => {
@@ -373,7 +444,28 @@ export const AnalysisResultsView = ({ onReanalyze }: { onReanalyze: () => void }
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-white/5 border border-white/10">
                         <span className="text-sm text-gray-400">Overall Confidence</span>
-                        <span className="text-lg font-bold text-emerald-400">82%</span>
+                        <span className="text-lg font-bold text-emerald-400">{report.confidence_score}%</span>
+                    </div>
+                    {/* View Switcher */}
+                    <div className="flex bg-white/5 p-1 rounded-lg border border-white/10">
+                        <button 
+                            onClick={() => setViewMode('esg')}
+                            className={cn(
+                                "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                                viewMode === 'esg' ? "bg-emerald-500 text-white shadow-lg" : "text-gray-400 hover:text-white"
+                            )}
+                        >
+                            ESG
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('financial')}
+                            className={cn(
+                                "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                                viewMode === 'financial' ? "bg-indigo-500 text-white shadow-lg" : "text-gray-400 hover:text-white"
+                            )}
+                        >
+                            Financials
+                        </button>
                     </div>
                     <GlassButton 
                         size="sm"
@@ -396,17 +488,38 @@ export const AnalysisResultsView = ({ onReanalyze }: { onReanalyze: () => void }
                         className="overflow-hidden"
                     >
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-2">
-                             <GlassCard className="space-y-4">
-                                 <h3 className="font-semibold text-white">Company Claims</h3>
-                                 <p className="text-sm text-gray-400 leading-relaxed">{DETAILED_ANALYSIS.claims}</p>
+                             <GlassCard className="space-y-4 border-l-2 border-l-blue-500/50">
+                                 <div className="flex items-center gap-2">
+                                     <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                         <FileText size={16} className="text-blue-400" />
+                                     </div>
+                                     <h3 className="font-semibold text-white">Investment Summary</h3>
+                                 </div>
+                                 <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none max-h-[300px] overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white">
+                                    <ReactMarkdown>{report.summary}</ReactMarkdown>
+                                 </div>
                              </GlassCard>
-                             <GlassCard className="space-y-4">
-                                 <h3 className="font-semibold text-white">News & Third-Party Sources</h3>
-                                 <p className="text-sm text-gray-400 leading-relaxed">{DETAILED_ANALYSIS.sources}</p>
+                             <GlassCard className="space-y-4 border-l-2 border-l-emerald-500/50">
+                                 <div className="flex items-center gap-2">
+                                     <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                         <BarChart3 size={16} className="text-emerald-400" />
+                                     </div>
+                                     <h3 className="font-semibold text-white">Bull Case (Claims)</h3>
+                                 </div>
+                                 <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none max-h-[300px] overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300">
+                                    <ReactMarkdown>{report.bull_case}</ReactMarkdown>
+                                 </div>
                              </GlassCard>
-                             <GlassCard className="space-y-4">
-                                 <h3 className="font-semibold text-white">Judge's Analysis & Confidence</h3>
-                                 <p className="text-sm text-gray-400 leading-relaxed">{DETAILED_ANALYSIS.judge}</p>
+                             <GlassCard className="space-y-4 border-l-2 border-l-amber-500/50">
+                                 <div className="flex items-center gap-2">
+                                     <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                         <Info size={16} className="text-amber-400" />
+                                     </div>
+                                     <h3 className="font-semibold text-white">Risks & Concerns</h3>
+                                 </div>
+                                 <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none max-h-[300px] overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300 prose-li:marker:text-amber-400">
+                                    <ReactMarkdown>{report.risk_factors}</ReactMarkdown>
+                                 </div>
                              </GlassCard>
                         </div>
                     </motion.div>
@@ -420,116 +533,144 @@ export const AnalysisResultsView = ({ onReanalyze }: { onReanalyze: () => void }
                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500"/> Low Confidence (60%)</div>
              </div>
 
-            {/* Overview Card - Full Width */}
-            {(() => {
-                const overviewCard = cards.find(c => c.id === 'overview')!;
-                const isFlipped = flippedCard === overviewCard.id;
-                return (
-                    <div 
-                        className={cn(
-                            "relative perspective-1000 transition-all duration-500",
-                            isFlipped ? "h-[400px]" : "h-[200px]"
-                        )}
-                    >
-                        <GlassCard 
-                            className="h-full cursor-pointer hover:border-white/20 transition-all group overflow-hidden flex flex-col"
-                            onClick={() => toggleFlip(overviewCard.id)}
-                        >
-                            <div className="flex justify-between items-start mb-4">
-                                 <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">Main</span>
-                                    <h3 className="font-bold text-white text-lg">{overviewCard.title}</h3>
-                                 </div>
-                                 <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(overviewCard.data.score))}>
-                                     {overviewCard.data.score}%
-                                 </div>
-                            </div>
-                            
-                            <p className="text-sm text-gray-400 leading-relaxed mb-6 flex-1">
-                                {overviewCard.data.summary}
-                                 <span className="text-emerald-500/70 text-xs ml-1 font-mono tracking-tighter align-super">
-                                     {overviewCard.data.citations.join('')}
-                                 </span>
-                            </p>
-                            
-                            <div className="mt-auto border-t border-white/5 pt-4">
-                                <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                                    <FileText size={12}/> Sources
-                                </div>
-                                <div className="flex flex-wrap gap-4">
-                                    {overviewCard.data.sources.map((source, i) => (
-                                        <div key={i} className="text-xs text-indigo-300 hover:text-indigo-200">
-                                            [{i+1}] {source}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            
-                            <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 flex items-center gap-1">
-                                <RefreshCw size={12}/> {isFlipped ? "Close details" : "View analysis"}
-                            </div>
-                        </GlassCard>
-                    </div>
-                );
-            })()}
 
-            {/* Other 4 Cards - 2x2 Grid */}
-            <div className={cn(
-                "grid gap-4 transition-all duration-500",
-                flippedCard && flippedCard !== 'overview' ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
-            )}>
-                 {cards.filter(c => c.id !== 'overview').map(card => {
-                     if (flippedCard && flippedCard !== card.id) return null;
-                     
-                     const isFlipped = flippedCard === card.id;
-
-                     return (
-                         <div 
-                            key={card.id} 
+             
+             {viewMode === 'financial' ? (
+                 <FinancialAnalysisView report={report} />
+             ) : (
+                <>
+                {/* ESG Overview Card - Full Width */}
+                {(() => {
+                    const overviewCard = cards.find(c => c.id === 'overview')!;
+                    const isFlipped = flippedCard === overviewCard.id;
+                    return (
+                        <div
                             className={cn(
                                 "relative perspective-1000 transition-all duration-500",
-                                isFlipped ? "md:col-span-2 h-[400px]" : "h-[220px]"
+                                isFlipped ? "min-h-[400px]" : "min-h-[220px]"
                             )}
-                         >
-                            <GlassCard 
-                                className="h-full cursor-pointer hover:border-white/20 transition-all group overflow-hidden flex flex-col"
-                                onClick={() => toggleFlip(card.id)}
+                        >
+                            <GlassCard
+                                className="h-full cursor-pointer hover:border-white/20 transition-all group overflow-hidden flex flex-col border-l-2 border-l-emerald-500/50"
+                                onClick={() => toggleFlip(overviewCard.id)}
                             >
                                 <div className="flex justify-between items-start mb-4">
-                                     <div className="flex items-center gap-2">
-                                        <h3 className="font-bold text-white text-lg">{card.title}</h3>
+                                     <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                            <Leaf size={20} className="text-emerald-400" />
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">Main</span>
+                                            <h3 className="font-bold text-white text-lg mt-1">{overviewCard.title}</h3>
+                                        </div>
                                      </div>
-                                     <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(card.data.score))}>
-                                         {card.data.score}%
+                                     <div className={cn("px-3 py-1.5 rounded-lg text-sm font-bold border", getScoreColor(overviewCard.data.score))}>
+                                         {overviewCard.data.score}%
                                      </div>
                                 </div>
-                                
-                                <p className="text-sm text-gray-400 leading-relaxed mb-6 flex-1">
-                                    {card.data.summary}
-                                     <span className="text-emerald-500/70 text-xs ml-1 font-mono tracking-tighter align-super">
-                                         {card.data.citations.join('')}
-                                     </span>
-                                </p>
-                                
-                                <div className="mt-auto border-t border-white/5 pt-4">
+
+                                <div className={cn(
+                                    "text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300",
+                                    !isFlipped ? "line-clamp-5" : "max-h-[300px] overflow-y-auto custom-scrollbar"
+                                )}>
+                                    <ReactMarkdown>{overviewCard.data.summary}</ReactMarkdown>
+                                </div>
+
+                                <div className="mt-auto border-t border-white/10 pt-4">
                                     <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                                         <FileText size={12}/> Sources
                                     </div>
-                                    {card.data.sources.map((source, i) => (
-                                        <div key={i} className="text-xs text-indigo-300 truncate hover:text-indigo-200">
-                                            [{i+1}] {source}
-                                        </div>
-                                    ))}
+                                    <div className="flex flex-wrap gap-4">
+                                        {overviewCard.data.sources.map((source, i) => (
+                                            <div key={i} className="text-xs text-indigo-300 hover:text-indigo-200">
+                                                [{i+1}] {source}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                                
+
                                 <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 flex items-center gap-1">
                                     <RefreshCw size={12}/> {isFlipped ? "Close details" : "View analysis"}
                                 </div>
                             </GlassCard>
-                         </div>
-                     );
-                 })}
-            </div>
+                        </div>
+                    );
+                })()}
+    
+                {/* Other 4 Cards - 2x2 Grid */}
+                <div className={cn(
+                    "grid gap-4 transition-all duration-500",
+                    flippedCard && flippedCard !== 'overview' ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
+                )}>
+                     {cards.filter(c => c.id !== 'overview').map(card => {
+                         if (flippedCard && flippedCard !== card.id) return null;
+
+                         const isFlipped = flippedCard === card.id;
+
+                         // Get card-specific styling
+                         const getCardStyle = (id: string) => {
+                             switch(id) {
+                                 case 'governance': return { border: 'border-l-amber-500/50', bg: 'bg-amber-500/20', text: 'text-amber-400', Icon: Building2 };
+                                 case 'environmental': return { border: 'border-l-emerald-500/50', bg: 'bg-emerald-500/20', text: 'text-emerald-400', Icon: Leaf };
+                                 case 'social': return { border: 'border-l-blue-500/50', bg: 'bg-blue-500/20', text: 'text-blue-400', Icon: Building2 };
+                                 case 'disclosure': return { border: 'border-l-indigo-500/50', bg: 'bg-indigo-500/20', text: 'text-indigo-400', Icon: FileText };
+                                 default: return { border: 'border-l-gray-500/50', bg: 'bg-gray-500/20', text: 'text-gray-400', Icon: Info };
+                             }
+                         };
+                         const style = getCardStyle(card.id);
+
+                         return (
+                             <div
+                                key={card.id}
+                                className={cn(
+                                    "relative perspective-1000 transition-all duration-500",
+                                    isFlipped ? "md:col-span-2 min-h-[400px]" : "min-h-[220px]"
+                                )}
+                             >
+                                <GlassCard
+                                    className={cn("h-full cursor-pointer hover:border-white/20 transition-all group overflow-hidden flex flex-col border-l-2", style.border)}
+                                    onClick={() => toggleFlip(card.id)}
+                                >
+                                    <div className="flex justify-between items-start mb-4">
+                                         <div className="flex items-center gap-3">
+                                            <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", style.bg)}>
+                                                <style.Icon size={18} className={style.text} />
+                                            </div>
+                                            <h3 className="font-bold text-white text-lg">{card.title}</h3>
+                                         </div>
+                                         <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(card.data.score))}>
+                                             {card.data.score}%
+                                         </div>
+                                    </div>
+
+                                    <div className={cn(
+                                        "text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none prose-p:text-gray-300 prose-strong:text-white",
+                                        !isFlipped ? "line-clamp-4" : "max-h-[250px] overflow-y-auto custom-scrollbar"
+                                    )}>
+                                        <ReactMarkdown>{card.data.summary}</ReactMarkdown>
+                                    </div>
+
+                                    <div className="mt-auto border-t border-white/10 pt-4">
+                                        <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                                            <FileText size={12}/> Sources
+                                        </div>
+                                        {card.data.sources.map((source, i) => (
+                                            <div key={i} className="text-xs text-indigo-300 truncate hover:text-indigo-200">
+                                                [{i+1}] {source}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 flex items-center gap-1">
+                                        <RefreshCw size={12}/> {isFlipped ? "Close details" : "View analysis"}
+                                    </div>
+                                </GlassCard>
+                             </div>
+                         );
+                     })}
+                </div>
+                </>
+             )}
             
             <div className="text-center text-xs text-gray-600 mt-8">
                 Click on any card to flip and see the detailed analysis backing
@@ -541,7 +682,7 @@ export const AnalysisResultsView = ({ onReanalyze }: { onReanalyze: () => void }
 
 // --- Main Wizard Component ---
 
-export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName }: AnalysisWizardModalProps) {
+export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, companyId }: AnalysisWizardModalProps) {
     const [step, setStep] = useState<AnalysisStep>('topic');
     const [topic, setTopic] = useState<AnalysisTopic | null>(null);
 
@@ -616,6 +757,7 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName }
                         exit={{ opacity: 0, x: -20 }}
                     >
                         <FileUploadStep 
+                            companyId={companyId}
                             onNext={() => setStep('progress')}
                             onBack={() => setStep('topic')}
                             onCancel={onClose}
@@ -631,6 +773,7 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName }
                         exit={{ opacity: 0 }}
                     >
                         <ProgressStep 
+                            companyId={companyId}
                             onComplete={() => {
                                 onClose();
                                 onComplete();

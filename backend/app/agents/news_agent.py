@@ -61,7 +61,7 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
     
     Provide a concise summary analysis in Markdown."""
     
-    llm = get_llm("llama3-70b-8192")
+    llm = get_llm("llama-3.3-70b-versatile")
     response = llm.invoke([SystemMessage(content="You are a helpful financial news analyst."), HumanMessage(content=prompt)])
     
     return {"news_analysis": response.content}

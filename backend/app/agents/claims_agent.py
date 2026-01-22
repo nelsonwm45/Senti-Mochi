@@ -71,7 +71,7 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
         
         Synthesize these findings into a Markdown report."""
         
-        llm = get_llm("llama3-70b-8192")
+        llm = get_llm("llama-3.3-70b-versatile")
         response = llm.invoke([SystemMessage(content="You are an expert due diligence analyst."), HumanMessage(content=prompt)])
         
         return {"claims_analysis": response.content}

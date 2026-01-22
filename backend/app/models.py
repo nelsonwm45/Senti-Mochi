@@ -208,6 +208,13 @@ class AnalysisReport(SQLModel, table=True):
     bull_case: str = Field(sa_column=Column(Text))
     bear_case: str = Field(sa_column=Column(Text))
     risk_factors: str = Field(sa_column=Column(Text))
+    
+    # ESG Analysis Data (JSON) to match Frontend UI
+    esg_analysis: dict = Field(default={}, sa_column=Column(JSON))
+
+    # Financial Analysis Data (JSON)
+    financial_analysis: dict = Field(default={}, sa_column=Column(JSON))
+    
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Store agent steps/debate logs for transparency

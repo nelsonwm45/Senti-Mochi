@@ -63,7 +63,7 @@ def financial_agent(state: AgentState) -> Dict[str, Any]:
     
     Provide a professional financial assessment in Markdown."""
     
-    llm = get_llm("llama3-70b-8192")
+    llm = get_llm("llama-3.3-70b-versatile")
     response = llm.invoke([SystemMessage(content="You are an expert financial analyst."), HumanMessage(content=prompt)])
     
     return {"financial_analysis": response.content}

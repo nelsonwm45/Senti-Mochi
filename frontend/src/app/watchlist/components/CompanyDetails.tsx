@@ -10,6 +10,7 @@ import { AnalysisWizardModal, AnalysisResultsView } from './AnalysisComponents';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { AnalysisReport, analysisApi } from '@/lib/api/analysis';
 
 interface CompanyDetailsProps {
     ticker: string;
@@ -98,9 +99,10 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('details');
     const [annualReports, setAnnualReports] = useState<AnnualReport[]>([]);
+    const [analysisReports, setAnalysisReports] = useState<AnalysisReport[]>([]); // New State
     const [loadingReports, setLoadingReports] = useState(false);
     const [isAnalyzeModalOpen, setIsAnalyzeModalOpen] = useState(false);
-    const [showAnalysisResults, setShowAnalysisResults] = useState(false);
+    // showAnalysisResults is now derived from whether we have reports, or if we just finished one
 
     useEffect(() => {
         const fetchCompany = async () => {
@@ -111,6 +113,7 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                 setCompany(json);
                 // Clear old reports when company changes
                 setAnnualReports([]);
+                setAnalysisReports([]);
             } catch (e) {
                 console.error(e);
             } finally {
@@ -120,13 +123,26 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
         fetchCompany();
     }, [ticker]);
 
-    // Fetch annual reports when tab is active
+    // Fetch annual reports AND analysis reports when needed
     useEffect(() => {
-        if (activeTab === 'annual-reports' && company) {
-            // Always fetch fresh data when tab becomes active
+        if (!company) return;
+
+        if (activeTab === 'annual-reports') {
             fetchAnnualReports();
+        } else if (activeTab === 'analysis') {
+            fetchAnalysisReports();
         }
     }, [activeTab, company]);
+
+    const fetchAnalysisReports = async () => {
+        if (!company) return;
+        try {
+            const reports = await analysisApi.getReports(company.id);
+            setAnalysisReports(reports);
+        } catch (e) {
+            console.error("Failed to fetch analysis reports", e);
+        }
+    };
 
     const fetchAnnualReports = async () => {
         if (!company) return;
@@ -178,6 +194,15 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
         setAnnualReports(reports);
         setLoadingReports(false);
     };
+
+    const handleAnalysisComplete = () => {
+        // Refresh list after new analysis
+        fetchAnalysisReports();
+        // Force view to results if not already (logic handled by existence of report)
+    };
+
+    // Derived state for latest report
+    const latestAnalysisReport = analysisReports.length > 0 ? analysisReports[0] : null;
 
     if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-white" size={32} /></div>;
     if (!company) return <div>Company not found</div>;
@@ -349,18 +374,18 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                 {activeTab === 'analysis' && (
                     <div className="space-y-6">
                         {/* Current/Latest Analysis */}
-                        {showAnalysisResults && (
+                        {latestAnalysisReport && (
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.5 }}
                             >
-                                <AnalysisResultsView onReanalyze={() => {}} />
+                                <AnalysisResultsView report={latestAnalysisReport} onReanalyze={() => setIsAnalyzeModalOpen(true)} />
                             </motion.div>
                         )}
 
                         {/* New Analysis Button (when no current analysis) */}
-                        {!showAnalysisResults && (
+                        {!latestAnalysisReport && (
                             <GlassCard className="text-center py-16">
                                 <Sparkles size={48} className="mx-auto text-indigo-400 mb-4" />
                                 <h3 className="text-xl font-semibold text-white mb-2">No Analysis Available</h3>
@@ -378,10 +403,10 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                     <Clock size={20} className="text-indigo-400" />
                                     <h3 className="text-lg font-semibold text-white">Analysis History</h3>
                                 </div>
-                                {showAnalysisResults && (
-                                    <GlassButton 
-                                        size="sm" 
-                                        variant="ghost" 
+                                {latestAnalysisReport && (
+                                    <GlassButton
+                                        size="sm"
+                                        variant="ghost"
                                         onClick={() => setIsAnalyzeModalOpen(true)}
                                         leftIcon={<Sparkles size={14}/>}
                                     >
@@ -389,72 +414,45 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                     </GlassButton>
                                 )}
                             </div>
-                            
-                            {/* Mock History Items */}
+
+                            {/* Real History Items */}
                             <div className="space-y-3">
-                                {showAnalysisResults ? (
-                                    <>
-                                        {/* Current analysis entry */}
-                                        <div className="flex items-center justify-between p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-                                                    <Sparkles size={18} className="text-indigo-400" />
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium text-white flex items-center gap-2">
-                                                        ESG Analysis
-                                                        <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">Current</span>
+                                {analysisReports.length > 0 ? (
+                                    analysisReports.map((report, idx) => {
+                                        const isCurrent = idx === 0;
+                                        return (
+                                            <div
+                                                key={report.id}
+                                                className={`flex items-center justify-between p-4 rounded-xl transition-colors ${
+                                                    isCurrent
+                                                    ? 'bg-indigo-500/10 border border-indigo-500/30'
+                                                    : 'bg-white/5 border border-white/10 hover:bg-white/[0.07] cursor-pointer group'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isCurrent ? 'bg-indigo-500/20' : 'bg-white/5'}`}>
+                                                        <Sparkles size={18} className={isCurrent ? 'text-indigo-400' : 'text-gray-400'} />
                                                     </div>
-                                                    <div className="text-sm text-gray-400">Today at {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                                    <div>
+                                                        <div className="font-medium text-white flex items-center gap-2">
+                                                            {report.rating} RATING
+                                                            {isCurrent && <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">Current</span>}
+                                                        </div>
+                                                        <div className="text-sm text-gray-400">{new Date(report.created_at).toLocaleString()}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="text-right">
+                                                        <div className={`text-sm font-medium ${report.confidence_score >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                                            {report.confidence_score}% Confidence
+                                                        </div>
+                                                        <div className="text-xs text-gray-500">AI Analysis</div>
+                                                    </div>
+                                                    {!isCurrent && <ChevronRight size={16} className="text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />}
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="text-right">
-                                                    <div className="text-sm font-medium text-emerald-400">82% Confidence</div>
-                                                    <div className="text-xs text-gray-500">3 documents analyzed</div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Past analysis entries (mock) */}
-                                        <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/[0.07] transition-colors cursor-pointer group">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center">
-                                                    <Sparkles size={18} className="text-gray-400" />
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium text-white">Financial Analysis</div>
-                                                    <div className="text-sm text-gray-400">Jan 15, 2026</div>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="text-right">
-                                                    <div className="text-sm font-medium text-amber-400">76% Confidence</div>
-                                                    <div className="text-xs text-gray-500">2 documents analyzed</div>
-                                                </div>
-                                                <ChevronRight size={16} className="text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/[0.07] transition-colors cursor-pointer group">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center">
-                                                    <Sparkles size={18} className="text-gray-400" />
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium text-white">ESG Analysis</div>
-                                                    <div className="text-sm text-gray-400">Dec 28, 2025</div>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="text-right">
-                                                    <div className="text-sm font-medium text-emerald-400">85% Confidence</div>
-                                                    <div className="text-xs text-gray-500">5 documents analyzed</div>
-                                                </div>
-                                                <ChevronRight size={16} className="text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                            </div>
-                                        </div>
-                                    </>
+                                        );
+                                    })
                                 ) : (
                                     <div className="text-center py-8 text-gray-500">
                                         <Clock size={32} className="mx-auto mb-3 opacity-50" />
@@ -538,8 +536,9 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
             <AnalysisWizardModal 
                 isOpen={isAnalyzeModalOpen}
                 onClose={() => setIsAnalyzeModalOpen(false)}
-                onComplete={() => setShowAnalysisResults(true)}
+                onComplete={handleAnalysisComplete}
                 companyName={company.name}
+                companyId={company.id}
             />
         </div>
     );
