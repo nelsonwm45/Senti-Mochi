@@ -31,32 +31,51 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
 
     try:
         model = get_embedding_model()
-        query = "Company strategy, key risks, future outlook, and management guidance."
-        query_vector = model.encode(query).tolist()
+        
+        # 1. Strategy Query
+        strat_query = "Company strategy, key risks, future outlook, and management guidance."
+        strat_vector = model.encode(strat_query).tolist()
+        
+        # 2. ESG Query (New)
+        esg_query = "Environmental sustainability, social responsibility, corporate governance, climate change, emissions, labor practices, board structure."
+        esg_vector = model.encode(esg_query).tolist()
 
         with Session(engine) as session:
             from app.models import Document
 
-            statement = (
+            # Fetch Strategy Chunks
+            strat_statement = (
                 select(DocumentChunk)
                 .join(Document)
                 .where(Document.company_id == state["company_id"])
-                .order_by(DocumentChunk.embedding.l2_distance(query_vector))
-                .limit(10)
+                .order_by(DocumentChunk.embedding.l2_distance(strat_vector))
+                .limit(6)
             )
+            strat_chunks = session.exec(strat_statement).all()
+            
+            # Fetch ESG Chunks
+            esg_statement = (
+                select(DocumentChunk)
+                .join(Document)
+                .where(Document.company_id == state["company_id"])
+                .order_by(DocumentChunk.embedding.l2_distance(esg_vector))
+                .limit(6)
+            )
+            esg_chunks = session.exec(esg_statement).all()
 
-            chunks = session.exec(statement).all()
+            # Combine and deduplicate
+            all_chunks = {c.id: c for c in (strat_chunks + esg_chunks)}.values()
 
-            if not chunks:
+            if not all_chunks:
                 return {"claims_analysis": "No relevant document chunks found."}
 
-            chunk_texts = [f"Source: Doc {c.document_id} (Page {c.page_number})\nContent: {c.content}" for c in chunks]
+            chunk_texts = [f"Source: Doc {c.document_id} (Page {c.page_number})\nContent: {c.content}" for c in all_chunks]
 
             context = "\n---\n".join(chunk_texts)
 
         # Generate cache key based on content hash
         # Include chunk IDs in hash to detect if documents changed
-        chunk_ids = [str(c.id) for c in chunks]
+        chunk_ids = [str(c.id) for c in all_chunks]
         content_for_hash = context + "|" + ",".join(chunk_ids)
         content_hash = hash_content(content_for_hash)
         cache_key = generate_cache_key("claims", state["company_id"], content_hash)
@@ -71,6 +90,7 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
         1. Strategic goals
         2. Reported risks
         3. Future guidance/outlook
+        4. ESG (Environmental, Social, Governance) commitments and performance (CRITICAL)
 
         Document Excerpts:
         {context}

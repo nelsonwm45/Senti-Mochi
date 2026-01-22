@@ -73,14 +73,16 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     For each category (Overview, Governance, Environmental, Social, Disclosure), provide:
     - A score (0-100)
     - A concise summary (2-3 sentences)
-    - A detailed analysis (detail): A comprehensive, verbose analysis (approx 150-250 words) discussing specific findings, risks, strengths, and evidence from the documents.
+    - A score (0-100)
+    - A concise summary (2-3 sentences)
+    - A detailed analysis (detail): **FORMAT THIS USING MARKDOWN BULLET POINTS**. Do NOT write large blocks of text. Use sub-headers if necessary. Bold key metrics (e.g., **10% growth**). This content must be easily skimmable by an executive.
     - Citations and Sources based on the input data provided.
     
     CRITICAL: YOU MUST ALSO PERFORM A DETAILED FINANCIAL ANALYSIS based on the provided data.
     For each category (Valuation, Profitability, Growth, Health), provide:
     - A score (0-100)
     - A concise summary (2-3 sentences)
-    - A detailed analysis (detail): A comprehensive analysis of the metrics and trends.
+    - A detailed analysis (detail): Use **BULLET POINTS** and Markdown formatting. Focus on the numbers.
     - Citations and Sources
     
     The 'Valuation' category should assess if the stock is over/undervalued.
@@ -88,6 +90,22 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     
     The 'Overview' category should summarize the overall ESG posture.
     The 'Disclosure' category should evaluate the quality and transparency of their reporting.
+
+    IMPORTANT - CITATION RULES:
+    You have 3 distinct input sources with fixed IDs:
+    [1] -> NEWS ANALYSIS
+    [2] -> FINANCIAL ANALYSIS
+    [3] -> CLAIMS/DOCUMENTS ANALYSIS
+
+    When writing your detailed analysis:
+    - Use `[1]` when citing News.
+    - Use `[2]` when citing Financials.
+    - Use `[3]` when citing Claims/Documents.
+    
+    When populating the `sources` list in your JSON output:
+    - YOU MUST ALWAYS PROVIDE THE LIST IN THIS EXACT ORDER: `["News Analysis", "Financial Analysis", "Claims/Documents Analysis"]`
+    - Do not omit any source from the list, even if unused for that specific topic (the citation number logic depends on this fixed order).
+    - If a source was not used, it is fine, but keep it in the list so [3] still points to Claims.
     """
     
     llm = get_llm("gemini-2.5-flash")

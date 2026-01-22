@@ -44,6 +44,33 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
                 article_text = article.content or ""
 
             news_content.append(f"Date: {article.published_at}\nTitle: {article.title}\nContent:\n{article_text}\n---")
+            
+        # [NEW] Semantic Search for extra context
+        try:
+            from app.services.embedding_service import embedding_service
+            
+            # Query for key risks and events
+            query = f"Key risks, financial performance, and major events for {state['company_name']}"
+            query_vec = embedding_service.generate_embeddings([query])[0]
+            
+            vector_stmt = (
+                select(NewsChunk)
+                .join(NewsArticle)
+                .where(NewsArticle.company_id == state["company_id"])
+                .order_by(NewsChunk.embedding.l2_distance(query_vec))
+                .limit(8)
+            )
+            
+            relevant_chunks = session.exec(vector_stmt).all()
+            
+            if relevant_chunks:
+                news_content.append("\n### Relevant Excerpts (Semantic Search):")
+                for rc in relevant_chunks:
+                    # Avoid duplicates if possible, or just append
+                    news_content.append(f"- ...{rc.content}...")
+                    
+        except Exception as e:
+            print(f"Vector search failed (ignoring): {e}")
 
     context = "\n".join(news_content)
 

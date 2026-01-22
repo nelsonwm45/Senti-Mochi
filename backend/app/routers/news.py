@@ -11,6 +11,7 @@ from app.tasks.sentiment_tasks import analyze_article_sentiment_task
 router = APIRouter(prefix="/news", tags=["news"])
 
 from sqlalchemy.orm import joinedload
+from app.tasks.vector_tasks import vectorize_article_task
 
 # Schema for storing articles from client
 class ClientNewsArticle(BaseModel):
@@ -137,14 +138,14 @@ def store_articles(
     if saved_count > 0:
         session.commit()
         
-        # Get the newly saved articles for sentiment analysis
+        # Get the newly saved articles for sentiment analysis and vectorization
         newly_saved = session.exec(
             select(NewsArticle).where(
                 NewsArticle.native_id.in_([a.native_id for a in articles])
             )
         ).all()
         
-        # Queue sentiment analysis for news articles (skip Bursa)
+        # Queue sentiment and vectorization tasks
         for article in newly_saved:
             if article.source.lower() == "bursa":
                 continue
@@ -153,6 +154,10 @@ def store_articles(
             if not article.analyzed_at:
                 analyze_article_sentiment_task.delay(str(article.id))
                 print(f"[STORE] Queued sentiment analysis for article {article.id}")
+            
+            # [NEW] Queue Vectorization
+            vectorize_article_task.delay(str(article.id))
+            print(f"[STORE] Queued vectorization for article {article.id}")
     
     return {
         "saved": saved_count, 
