@@ -63,6 +63,7 @@ function DashboardContent() {
     bursa: 0,
     star: 0,
     nst: 0,
+    edge: 0,
     total: 0
   });
   const [hasFetched, setHasFetched] = useState(false);  // Prevent duplicate fetches
@@ -93,28 +94,6 @@ function DashboardContent() {
     }).catch(err => {
       console.error('Failed to copy:', err);
       toast.error('Failed to copy to clipboard');
-    });
-  };
-
-  // Helper: Parse date string to timestamp
-  const parseDateToTimestamp = (dateStr: string): number => {
-    try {
-      const date = new Date(dateStr);
-      return date.getTime() / 1000;
-    } catch {
-      return Date.now() / 1000;
-    }
-  };
-
-  // Helper: Format NST date
-  const formatNSTDate = (timestamp: number): string => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleDateString('en-MY', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
     });
   };
 
@@ -191,94 +170,38 @@ function DashboardContent() {
     return articles;
   };
 
-  // Fetch Star news (client-side)
-  const fetchStarNews = async (companies: WatchlistCompany[]) => {
-    const articles: any[] = [];
+  // Fetch news (client-side)
+  // Search for news by keyword (now handled by backend)
+  const searchNewsForCompanies = async (companies: WatchlistCompany[]): Promise<any[]> => {
+    const allArticles: any[] = [];
 
     for (const company of companies) {
-      const query = encodeURIComponent(company.name);
-      const url = `https://api.queryly.com/json.aspx?queryly_key=6ddd278bf17648ac&query=${query}&endindex=0&batchsize=5&showfaceted=true&extendeddatafields=paywalltype,isexclusive,kicker,kickerurl,summary,sponsor&timezoneoffset=-450`;
-
       try {
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' },
-        });
+        // Call backend search endpoint with company ID
+        const response = await apiClient.post(
+          `/api/v1/news/search?keyword=${encodeURIComponent(company.name)}&company_id=${company.id}`
+        );
 
-        if (!response.ok) continue;
-
-        const text = await response.text();
-        let data: any;
-
-        if (text.includes('resultcallback')) {
-          const match = text.match(/resultcallback\s*\(\s*({[\s\S]*})\s*\)/);
-          if (match) data = JSON.parse(match[1]);
-          else continue;
-        } else {
-          data = JSON.parse(text);
-        }
-
-        const items = data.items || [];
-        for (const item of items.slice(0, 5)) {
-          const published_at = new Date(item.pubdateunix * 1000).toISOString();
-
-          // Use title as placeholder - content will be enriched by backend
-          articles.push({
-            company_id: company.id,
-            source: 'star',
-            native_id: `star-${item._id}`,  // Don't include ticker to prevent duplicates
-            title: item.title,
-            url: item.link,
-            published_at,
-            content: item.title  // Backend will enrich with full content
-          });
+        if (response.data?.articles) {
+          // Convert backend response format to expected format
+          const articles = response.data.articles.map((article: any) => ({
+            company_id: article.company_id,
+            source: article.source,
+            native_id: article.source === 'bursa' ? article.native_id : undefined,
+            title: article.title,
+            url: article.link || article.url,
+            published_at: article.date || article.published_at,
+            content: article.description || article.content,
+            id: article.id  // Include the stored ID from backend
+          }));
+          allArticles.push(...articles);
         }
       } catch (err) {
-        console.warn(`Error fetching Star for ${company.name}:`, err);
+        console.warn(`Error searching news for ${company.name}:`, err);
       }
     }
 
-    return articles;
-  };
-
-  // Fetch NST news (via Next.js API route)
-  const fetchNSTNews = async (companies: WatchlistCompany[]) => {
-    const articles: any[] = [];
-
-    for (const company of companies) {
-      const url = `/api/nst?keywords=${encodeURIComponent(company.name)}&category=&sort=DESC&page_size=5&page=0`;
-
-      try {
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' },
-        });
-
-        if (!response.ok) continue;
-
-        const data = await response.json();
-        const items = data.data || [];
-
-        for (const item of items.slice(0, 5)) {
-          const published_at = new Date(item.created * 1000).toISOString();
-
-          // Use title as placeholder - content will be enriched by backend
-          articles.push({
-            company_id: company.id,
-            source: 'nst',
-            native_id: `nst-${item.nid}`,  // Don't include ticker to prevent duplicates
-            title: item.title,
-            url: item.url,
-            published_at,
-            content: item.title  // Backend will enrich with full content
-          });
-        }
-      } catch (err) {
-        console.warn(`Error fetching NST for ${company.name}:`, err);
-      }
-    }
-
-    return articles;
+    return allArticles;
   };
 
   // Fetch user's watchlist and sync news
@@ -314,11 +237,13 @@ function DashboardContent() {
         const cachedBursaCount = cachedNewsData.filter(i => i.type === 'bursa').length;
         const cachedStarCount = cachedNewsData.filter(i => i.type === 'star').length;
         const cachedNstCount = cachedNewsData.filter(i => i.type === 'nst').length;
+        const cachedEdgeCount = cachedNewsData.filter(i => i.type === 'edge').length;
 
         setStats({
           bursa: cachedBursaCount,
           star: cachedStarCount,
           nst: cachedNstCount,
+          edge: cachedEdgeCount,
           total: filteredCachedNews.length
         });
 
@@ -326,14 +251,13 @@ function DashboardContent() {
 
         // Step 2: Fetch fresh news in background
         if (watchlistHasCompanies) {
-          // Fetch news from all sources (client-side)
-          const [bursaArticles, starArticles, nstArticles] = await Promise.all([
+          // Fetch news from all sources (now Star & NST are fetched by backend)
+          const [bursaArticles, newsArticles] = await Promise.all([
             fetchBursaAnnouncements(companies),
-            fetchStarNews(companies),
-            fetchNSTNews(companies)
+            searchNewsForCompanies(companies)  // Backend handles Star & NST
           ]);
 
-          const allArticles = [...bursaArticles, ...starArticles, ...nstArticles];
+          const allArticles = [...bursaArticles, ...newsArticles];
 
           // Deduplicate articles by native_id (same article can appear for multiple companies)
           const uniqueArticles = allArticles.reduce((acc, article) => {
@@ -356,10 +280,15 @@ function DashboardContent() {
             );
           }
 
-          // Send articles to backend for storage
-          if (uniqueArticles.length > 0) {
+          // Note: Articles from searchNewsForCompanies are already stored by backend
+          // We just need to refresh the feed
+          if (newsArticles.length > 0) {
             try {
-              await apiClient.post('/api/v1/news/store-articles', uniqueArticles);
+              // Bursa articles still need to be stored via the old endpoint
+              const bursaOnlyArticles = bursaArticles;
+              if (bursaOnlyArticles.length > 0) {
+                await apiClient.post('/api/v1/news/store-articles', bursaOnlyArticles);
+              }
 
               // Step 3: Refresh feed with newly stored articles
               const updatedNewsData = await newsApi.getFeed(50, watchlistHasCompanies);
@@ -377,11 +306,13 @@ function DashboardContent() {
               const updatedBursaCount = updatedNewsData.filter(i => i.type === 'bursa').length;
               const updatedStarCount = updatedNewsData.filter(i => i.type === 'star').length;
               const updatedNstCount = updatedNewsData.filter(i => i.type === 'nst').length;
+              const updatedEdgeCount = updatedNewsData.filter(i => i.type === 'edge').length;
 
               setStats({
                 bursa: updatedBursaCount,
                 star: updatedStarCount,
                 nst: updatedNstCount,
+                edge: updatedEdgeCount,
                 total: filteredUpdatedNews.length
               });
             } catch (storeErr) {
@@ -403,7 +334,7 @@ function DashboardContent() {
 
 
   // Get badge styling based on source type
-  const getSourceBadge = (type: 'bursa' | 'star' | 'nst') => {
+  const getSourceBadge = (type: 'bursa' | 'star' | 'nst' | 'edge') => {
     switch (type) {
       case 'bursa':
         return {
@@ -426,6 +357,13 @@ function DashboardContent() {
           bg: 'bg-purple-500/10',
           icon: Newspaper
         };
+      case 'edge':
+        return {
+          label: 'THE EDGE',
+          color: 'text-amber-500',
+          bg: 'bg-amber-500/10',
+          icon: Newspaper
+        };
     }
   };
 
@@ -443,8 +381,8 @@ function DashboardContent() {
     },
     {
       label: 'News Sources',
-      value: '2',
-      change: `${stats.star} Star, ${stats.nst} NST`,
+      value: '3',
+      change: `${stats.star} Star, ${stats.nst} NST, ${stats.edge} Edge`,
       changeColor: 'text-blue-500',
       icon: Newspaper,
       iconColor: 'text-blue-500',
@@ -486,7 +424,8 @@ function DashboardContent() {
   // Calculate sentiment distribution from unified feed (excluding Bursa)
   const sentimentData = [
     { name: 'The Star', value: stats.star, color: '#3b82f6' }, // blue-500
-    { name: 'NST', value: stats.nst, color: '#a855f7' }  // purple-500
+    { name: 'NST', value: stats.nst, color: '#a855f7' },  // purple-500
+    { name: 'The Edge', value: stats.edge, color: '#f59e0b' }  // amber-500
   ];
 
   return (
@@ -827,7 +766,7 @@ function DashboardContent() {
             </div>
             <div className="mt-6 space-y-3">
               <p className="text-sm text-foreground-muted text-center">
-                News items from {stats.star} The Star and {stats.nst} NST
+                News items from {stats.star} The Star, {stats.nst} NST, and {stats.edge} The Edge
               </p>
             </div>
           </GlassCard>
