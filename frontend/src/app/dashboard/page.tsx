@@ -97,28 +97,6 @@ function DashboardContent() {
     });
   };
 
-  // Helper: Parse date string to timestamp
-  const parseDateToTimestamp = (dateStr: string): number => {
-    try {
-      const date = new Date(dateStr);
-      return date.getTime() / 1000;
-    } catch {
-      return Date.now() / 1000;
-    }
-  };
-
-  // Helper: Format NST date
-  const formatNSTDate = (timestamp: number): string => {
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleDateString('en-MY', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   // Helper: Decode HTML entities
   const decodeHtml = (html: string): string => {
     const txt = document.createElement('textarea');
@@ -192,7 +170,7 @@ function DashboardContent() {
     return articles;
   };
 
-  // Fetch Star news (client-side)
+  // Fetch news (client-side)
   // Search for news by keyword (now handled by backend)
   const searchNewsForCompanies = async (companies: WatchlistCompany[]): Promise<any[]> => {
     const allArticles: any[] = [];
