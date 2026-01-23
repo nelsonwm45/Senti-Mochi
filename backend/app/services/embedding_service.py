@@ -16,7 +16,7 @@ class EmbeddingService:
         """Lazy load the model"""
         if self._model is None:
             print(f"Loading embedding model: {self.model_name}...")
-            self._model = SentenceTransformer(self.model_name)
+            self._model = SentenceTransformer(self.model_name, device='cpu')
         return self._model
 
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
@@ -27,8 +27,13 @@ class EmbeddingService:
         if not texts:
             return []
             
-        embeddings = self.model.encode(texts, show_progress_bar=False)
-        return embeddings.tolist()
+        try:
+            embeddings = self.model.encode(texts, show_progress_bar=False)
+            return embeddings.tolist()
+        except Exception as e:
+            print(f"Embedding generation failed: {e}")
+            # Return zero vectors as fallback (384 dimensions for all-MiniLM-L6-v2)
+            return [[0.0] * 384 for _ in texts]
 
 # Singleton instance
 embedding_service = EmbeddingService()

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Check, Upload, FileText, Leaf, BarChart3, 
     Building2, Loader2, ChevronRight, X, ArrowLeft,
-    RefreshCw, Info, ExternalLink
+    RefreshCw, Info, ExternalLink, Trash2
 } from 'lucide-react';
 import { GlassModal, GlassModalFooter } from '@/components/ui/GlassModal';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -222,7 +222,7 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
 
         const startPolling = () => {
             const startTime = Date.now();
-            const TIMEOUT = 60000; // 60s timeout
+            const TIMEOUT = 300000; // 5 min timeout
 
             pollInterval = setInterval(async () => {
                 if (!isMounted) return;
@@ -433,7 +433,7 @@ const citationComponents = {
     }
 };
 
-export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisReport, onReanalyze: () => void }) => {
+export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report: AnalysisReport, onReanalyze: () => void, onDelete?: () => void }) => {
     // Card State Management
     const [flippedCard, setFlippedCard] = useState<string | null>(null);
     const [showDetails, setShowDetails] = useState(false); // Toggle for top 3 cards
@@ -502,6 +502,17 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
                             Financials
                         </button>
                     </div>
+                    
+                    {onDelete && (
+                         <button
+                            onClick={onDelete}
+                            className="p-2 rounded-lg bg-white/5 hover:bg-red-500/10 hover:text-red-400 text-gray-400 transition-colors border border-white/10"
+                            title="Delete this report"
+                        >
+                            <Trash2 size={18} />
+                        </button>
+                    )}
+
                     <GlassButton 
                         size="sm"
                         variant="ghost"
@@ -616,7 +627,7 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
                                 {/* Highlights Badge Section */}
                                 {!isFlipped && overviewCard.data.highlights && overviewCard.data.highlights.length > 0 && (
                                     <div className="flex flex-wrap gap-2 mb-4">
-                                        {overviewCard.data.highlights.map((h: string, idx: number) => (
+                                        {(overviewCard.data.highlights || []).map((h: string, idx: number) => (
                                             <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5">
                                                 {h}
                                             </span>
@@ -629,7 +640,7 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
                                         <FileText size={12}/> Sources
                                     </div>
                                     <div className="flex flex-wrap gap-4">
-                                        {overviewCard.data.sources.map((source, i) => (
+                                        {(overviewCard.data.sources || []).map((source, i) => (
                                             <div key={i} className="text-xs text-indigo-300 hover:text-indigo-200">
                                                 [{i+1}] {source}
                                             </div>
@@ -722,7 +733,7 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
                                         <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                                             <FileText size={12}/> Sources
                                         </div>
-                                        {card.data.sources.map((source, i) => (
+                                        {(card.data.sources || []).map((source, i) => (
                                             <div key={i} className="text-xs text-indigo-300 truncate hover:text-indigo-200">
                                                 [{i+1}] {source}
                                             </div>

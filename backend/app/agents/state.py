@@ -11,6 +11,11 @@ class AgentState(TypedDict):
     news_data: Optional[str] # Raw or summarized news content
     financial_data: Optional[str] # Structured financial inputs
     claims_data: Optional[str] # RAG content from documents
+    
+    # Critique Outputs (Debate Phase)
+    news_critique: Optional[str]
+    financial_critique: Optional[str]
+    claims_critique: Optional[str]
 
     # Agent Outputs (Narratives)
     news_analysis: Optional[str]

@@ -20,8 +20,8 @@ export function SearchPopout({ isOpen, onClose, userId }: SearchPopoutProps) {
   const [loading, setLoading] = useState(false);
 
   const [addingTicker, setAddingTicker] = useState<string | null>(null);
-  const [addedTickers, setAddedTickers] = useState<Set<string>>(new Set());
-  const { addToWatchlist } = useWatchlistStore();
+
+  const { addToWatchlist, watchlist } = useWatchlistStore();
 
   const [error, setError] = useState<string | null>(null);
   
@@ -58,13 +58,12 @@ export function SearchPopout({ isOpen, onClose, userId }: SearchPopoutProps) {
   }, [query]);
 
   const handleAdd = async (company: { ticker: string, name?: string }) => {
-    if (addingTicker || addedTickers.has(company.ticker)) return;
+    if (addingTicker || watchlist.some(w => w.ticker === company.ticker)) return;
     
     setAddingTicker(company.ticker);
     setError(null);
     try {
         await addToWatchlist(company.ticker, userId);
-        setAddedTickers(prev => new Set(prev).add(company.ticker));
     } catch (err) {
         console.error("Failed to add", err);
         setError(`Failed to add ${company.ticker}. Please try again.`);
@@ -162,7 +161,7 @@ export function SearchPopout({ isOpen, onClose, userId }: SearchPopoutProps) {
                           )}
                           
                           {results.map(company => {
-                              const isAdded = addedTickers.has(company.ticker);
+                              const isAdded = watchlist.some(w => w.ticker === company.ticker);
                               const isAdding = addingTicker === company.ticker;
                               
                               return (
