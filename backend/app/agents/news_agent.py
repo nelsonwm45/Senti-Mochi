@@ -44,6 +44,33 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
                 article_text = article.content or ""
 
             news_content.append(f"Date: {article.published_at}\nTitle: {article.title}\nContent:\n{article_text}\n---")
+            
+        # [NEW] Semantic Search for extra context
+        try:
+            from app.services.embedding_service import embedding_service
+            
+            # Query for key risks and events
+            query = f"Key risks, financial performance, major events, ESG controversies, greenwashing, labor disputes, governance scandals, deforestation for {state['company_name']}"
+            query_vec = embedding_service.generate_embeddings([query])[0]
+            
+            vector_stmt = (
+                select(NewsChunk)
+                .join(NewsArticle)
+                .where(NewsArticle.company_id == state["company_id"])
+                .order_by(NewsChunk.embedding.l2_distance(query_vec))
+                .limit(8)
+            )
+            
+            relevant_chunks = session.exec(vector_stmt).all()
+            
+            if relevant_chunks:
+                news_content.append("\n### Relevant Excerpts (Semantic Search):")
+                for rc in relevant_chunks:
+                    # Avoid duplicates if possible, or just append
+                    news_content.append(f"- ...{rc.content}...")
+                    
+        except Exception as e:
+            print(f"Vector search failed (ignoring): {e}")
 
     context = "\n".join(news_content)
 
@@ -68,10 +95,47 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
 
     Provide a concise summary analysis in Markdown."""
 
-    llm = get_llm("llama-3.3-70b-versatile")
+    llm = get_llm("llama-3.1-8b-instant")
     response = llm.invoke([SystemMessage(content="You are a helpful financial news analyst."), HumanMessage(content=prompt)])
 
     # Cache the result
     set_cached_result(cache_key, response.content)
 
+
     return {"news_analysis": response.content}
+
+def news_critique(state: AgentState) -> Dict[str, Any]:
+    """
+    Critiques other agents' findings based on News data.
+    """
+    print(f"News Agent: Critiquing findings for {state['company_name']}")
+    
+    financial_analysis = state.get("financial_analysis", "No financial analysis provided.")
+    claims_analysis = state.get("claims_analysis", "No claims analysis provided.")
+    my_analysis = state.get("news_analysis", "No news analysis provided.")
+
+    prompt = f"""You are a News Analyst. You have already provided your analysis.
+    Now, review the findings from the Financial Analyst and the Claims (Documents) Analyst.
+    
+    Your Task:
+    Critique their findings based *only* on the news signals you have.
+    - If Financials say "Growth is up" but News says "Major layoffs", point out the discrepancy.
+    - If Claims say "We are eco-friendly" but News deals with "Pollution Scandal", flag it.
+    - Confirm agreement if news supports their claims.
+
+    1. NEWS ANALYSIS (Your Context):
+    {my_analysis}
+
+    2. FINANCIAL ANALYSIS (To Critique):
+    {financial_analysis}
+
+    3. CLAIMS ANALYSIS (To Critique):
+    {claims_analysis}
+
+    Provide a concise critique (max 200 words) focusing on CONSISTENCY and CONTRADICTIONS.
+    """
+
+    llm = get_llm("llama-3.1-8b-instant")
+    response = llm.invoke([SystemMessage(content="You are a critical news analyst."), HumanMessage(content=prompt)])
+    
+    return {"news_critique": response.content}

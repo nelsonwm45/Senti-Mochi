@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, Upload, PieChart, BarChart3, TrendingUp, Loader2, FileDown, Clock, ExternalLink, ChevronRight, Trash2, BrainCircuit } from 'lucide-react';
+import { ArrowLeft, FileText, Upload, PieChart, BarChart3, TrendingUp, TrendingDown, Minus, Loader2, FileDown, Clock, ExternalLink, ChevronRight, Trash2, BrainCircuit, Info, AlertTriangle } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { formatDistanceToNow, format } from 'date-fns';
 import { getKeyMetrics, formatValue, formatPercent } from '../utils';
 import CompanyDocumentUpload from '@/components/documents/CompanyDocumentUpload';
 import CompanyDocumentList from '@/components/documents/CompanyDocumentList';
@@ -92,6 +93,44 @@ const sortFinancialKeys = (keys: string[], orderList: string[]) => {
         // If neither, sort alphabetically
         return a.localeCompare(b);
     });
+};
+
+const RatingBadge = ({ rating }: { rating: string }) => {
+    const r = rating.toUpperCase();
+    let color = "bg-gray-500/20 text-gray-400 border-gray-500/30";
+    let icon = <Minus size={16} />;
+    let text = "Neutral outlook. No clear signal.";
+
+    if (r === 'BUY') {
+        color = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.3)]";
+        icon = <TrendingUp size={16} />;
+        text = "Strong potential for growth. Underlying fundamentals and sentiment exceed market expectations.";
+    } else if (r === 'SELL') {
+        color = "bg-rose-500/20 text-rose-400 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.3)]";
+        icon = <TrendingDown size={16} />; // Need direct import or use generic
+        text = "Overvalued or facing significant headwinds. Risk factors outweigh potential returns.";
+    } else if (r === 'HOLD') {
+        color = "bg-amber-500/20 text-amber-400 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.2)]";
+        icon = <Minus size={16} />;
+        text = "Fairly valued. Stability expected, but limited near-term upside catalyst.";
+    }
+
+    return (
+        <div className="group relative flex items-center gap-2">
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${color} font-bold text-sm transition-all hover:scale-105`}>
+                {icon}
+                {r} RATING
+                <Info size={14} className="opacity-70 ml-1" />
+            </div>
+            
+            {/* Tooltip */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900/95 backdrop-blur-md border border-white/10 rounded-xl text-xs text-gray-300 shadow-xl opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all z-50">
+                <div className="font-semibold text-white mb-1 border-b border-white/10 pb-1">{r} Logic</div>
+                {text}
+                <div className="absolute bottom-[-5px] left-1/2 -translate-x-1/2 w-3 h-3 bg-gray-900 border-r border-b border-white/10 rotate-45 transform"></div>
+            </div>
+        </div>
+    );
 };
 
 export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
@@ -392,7 +431,17 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.5 }}
                             >
-                                <AnalysisResultsView report={latestAnalysisReport} onReanalyze={() => setIsAnalyzeModalOpen(true)} />
+                                <AnalysisResultsView 
+                                    report={latestAnalysisReport} 
+                                    onReanalyze={() => setIsAnalyzeModalOpen(true)}
+                                    onDelete={() => {
+                                        if (confirm('Are you sure you want to delete this analysis report?')) {
+                                            analysisApi.deleteReport(latestAnalysisReport.id)
+                                                .then(() => fetchAnalysisReports())
+                                                .catch(err => console.error(err));
+                                        }
+                                    }}
+                                />
                             </motion.div>
                         )}
 
@@ -435,38 +484,81 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                         return (
                                             <div
                                                 key={report.id}
-                                                className={`flex items-center justify-between p-4 rounded-xl transition-colors ${
+                                                className={`flex flex-col sm:flex-row gap-4 p-4 rounded-xl transition-colors ${
                                                     isCurrent
                                                     ? 'bg-indigo-500/10 border border-indigo-500/30'
                                                     : 'bg-white/5 border border-white/10 hover:bg-white/[0.07] cursor-pointer group'
                                                 }`}
                                             >
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isCurrent ? 'bg-indigo-500/20' : 'bg-white/5'}`}>
-                                                        <BrainCircuit size={18} className={isCurrent ? 'text-indigo-400' : 'text-gray-400'} />
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-medium text-white flex items-center gap-2">
-                                                            {report.rating} RATING
-                                                            {isCurrent && <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">Current</span>}
+                                                {/* Left Section: Rating & Time */}
+                                                <div className="flex items-start gap-4 flex-1">
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center gap-3">
+                                                            <RatingBadge rating={report.rating} />
+                                                            {isCurrent && (
+                                                                <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded-full border border-emerald-500/20">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                                                    Current
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                        <div className="text-sm text-gray-400">{new Date(report.created_at).toLocaleString()}</div>
+                                                        
+                                                        <div className="flex flex-col">
+                                                            <div className="flex items-center gap-2 text-sm text-gray-300 font-medium">
+                                                                <Clock size={12} className="text-gray-500" />
+                                                                {(() => {
+                                                                    const dateStr = report.created_at.endsWith('Z') || report.created_at.includes('+') 
+                                                                        ? report.created_at 
+                                                                        : report.created_at + 'Z';
+                                                                    
+                                                                    let date = new Date(dateStr);
+                                                                    const now = new Date();
+                                                                    // Fix: If date is > 7 hours in the future (timezone mismatch artifact), subtract 8 hours
+                                                                    if (date.getTime() - now.getTime() > 1000 * 60 * 60 * 7) {
+                                                                        date = new Date(date.getTime() - 1000 * 60 * 60 * 8);
+                                                                    }
+
+                                                                    return formatDistanceToNow(date, { addSuffix: true });
+                                                                })()}
+                                                            </div>
+                                                            <div className="text-xs text-gray-500 pl-5">
+                                                                {(() => {
+                                                                    const dateStr = report.created_at.endsWith('Z') || report.created_at.includes('+') 
+                                                                        ? report.created_at 
+                                                                        : report.created_at + 'Z';
+                                                                    
+                                                                    let date = new Date(dateStr);
+                                                                    const now = new Date();
+                                                                    // Fix: If date is > 7 hours in the future, subtract 8 hours
+                                                                    if (date.getTime() - now.getTime() > 1000 * 60 * 60 * 7) {
+                                                                        date = new Date(date.getTime() - 1000 * 60 * 60 * 8);
+                                                                    }
+                                                                        
+                                                                    return format(date, "d MMM yyyy, h:mm a");
+                                                                })()}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-4">
-                                                    <div className="text-right">
+
+                                                {/* Right Section: Confidence & Actions */}
+                                                <div className="flex items-center justify-between sm:justify-end gap-6 sm:pl-4 border-t sm:border-t-0 border-white/5 pt-4 sm:pt-0">
+                                                    <div className="text-left sm:text-right">
                                                         <div className={`text-sm font-medium ${report.confidence_score >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
                                                             {report.confidence_score}% Confidence
                                                         </div>
-                                                        <div className="text-xs text-gray-500">AI Analysis</div>
+                                                        <div className="text-xs text-gray-500">AI Analysis Model</div>
                                                     </div>
-                                                    <button
-                                                        onClick={(e) => handleDeleteReport(report.id, e)}
-                                                        className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
-                                                        title="Delete report"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
+                                                    
+                                                    <div className="flex items-center">
+                                                        <button
+                                                            onClick={(e) => handleDeleteReport(report.id, e)}
+                                                            className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                                                            title="Delete report"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );

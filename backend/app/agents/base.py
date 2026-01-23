@@ -30,11 +30,17 @@ def get_llm(model_name: str = "llama-3.3-70b-versatile") -> BaseChatModel:
         if model_name == "groq":
             model_name = "llama-3.3-70b-versatile"
             
-        return ChatGroq(
+        llm = ChatGroq(
             model_name=model_name,
             api_key=api_key,
             temperature=0,
+            max_retries=5, # Built-in retry for connection/server errors
+            max_tokens=8192,
         )
+        # Add a custom wrapper or just rely on LangChain's retry if sufficient, 
+        # but here we can rely on ChatGroq's internal retry or just configure it.
+        # However, for 429 specifically, increasing max_retries is key.
+        return llm
     
     else:
         raise ValueError(f"Unsupported model: {model_name}")

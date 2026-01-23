@@ -111,6 +111,7 @@ class NewsChunk(SQLModel, table=True):
     content: str = Field(sa_column=Column(Text))
     chunk_index: int
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    embedding: list[float] = Field(default=None, sa_column=Column(Vector(384)))  # Local SentenceTransformer
 
     news_article: "NewsArticle" = Relationship(back_populates="chunks")
 

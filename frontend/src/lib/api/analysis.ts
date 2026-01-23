@@ -22,6 +22,7 @@ export interface ESGTopic {
 	detail?: string;
 	citations: string[];
 	sources: string[];
+	highlights?: string[];
 }
 
 export interface ESGAnalysisOutput {
@@ -38,6 +39,7 @@ export interface FinancialTopic {
 	detail?: string;
 	citations: string[];
 	sources: string[];
+	highlights?: string[];
 }
 
 export interface FinancialAnalysisOutput {

@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Check, Upload, FileText, Leaf, BarChart3, 
     Building2, Loader2, ChevronRight, X, ArrowLeft,
-    RefreshCw, Info, ExternalLink
+    RefreshCw, Info, ExternalLink, Trash2
 } from 'lucide-react';
 import { GlassModal, GlassModalFooter } from '@/components/ui/GlassModal';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -195,67 +195,66 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
         { label: "Finalizing", sub: "Formatting report" }
     ];
 
+    const hasTriggered = useRef(false);
+
+    // 1. Trigger Effect (Runs once)
+    useEffect(() => {
+        const trigger = async () => {
+            if (hasTriggered.current) return;
+            hasTriggered.current = true;
+            
+            try {
+                console.log("Triggering analysis for:", companyId);
+                await analysisApi.triggerAnalysis(companyId);
+            } catch (e) {
+                console.error("Trigger error:", e);
+                setError("Failed to start analysis.");
+            }
+        };
+        trigger();
+    }, [companyId]);
+
+    // 2. Polling & Visual Effect (Resilient to remounts)
     useEffect(() => {
         let isMounted = true;
         let pollInterval: NodeJS.Timeout;
+        let visualInterval: NodeJS.Timeout;
 
-        const runAnalysis = async () => {
-            try {
-                // 1. Trigger Analysis
-                console.log("Triggering analysis for:", companyId);
-                await analysisApi.triggerAnalysis(companyId);
+        const startPolling = () => {
+            const startTime = Date.now();
+            const TIMEOUT = 300000; // 5 min timeout
 
-                // 2. Start Polling
-                const startTime = Date.now();
-                const TIMEOUT = 60000; // 60s timeout
+            pollInterval = setInterval(async () => {
+                if (!isMounted) return;
 
-                pollInterval = setInterval(async () => {
-                    if (!isMounted) return;
-
-                    try {
-                        const reports = await analysisApi.getReports(companyId);
-                        // Check if we have a very recent report (created after we started)
-                        // Or simplistic: just check if we have any report if we assume none existed before?
-                        // Better: Check if report array > 0 and the first one is "recent".
-                        // Given user flow, getting ANY report is likely success if list was previously empty.
-                        // Let's just check for existence of a report for now.
-                        if (reports && reports.length > 0) {
-                             const latest = reports[0];
-                             const created = new Date(latest.created_at).getTime();
-                             // If created recently (within last 2 mins), it's ours.
-                             // Actually, trigger_analysis creates it. 
-                             // If it exists, we are done.
-                             console.log("Report found:", latest.id);
-                             clearInterval(pollInterval);
-                             setStepIndex(steps.length); // Complete all steps
-                             setTimeout(onComplete, 800);
-                        }
-                    } catch (e) {
-                         console.error("Polling error:", e);
+                try {
+                    const reports = await analysisApi.getReports(companyId);
+                    if (reports && reports.length > 0) {
+                            const latest = reports[0];
+                            console.log("Report found:", latest.id);
+                            clearInterval(pollInterval);
+                            setStepIndex(steps.length); // Complete all steps
+                            setTimeout(onComplete, 800);
                     }
+                } catch (e) {
+                        console.error("Polling error:", e);
+                }
 
-                    if (Date.now() - startTime > TIMEOUT) {
-                        clearInterval(pollInterval);
-                        if (isMounted) setError("Analysis timed out. Please try again.");
-                    }
-                }, 2000);
-
-            } catch (e) {
-                console.error("Trigger error:", e);
-                if (isMounted) setError("Failed to start analysis.");
-            }
+                if (Date.now() - startTime > TIMEOUT) {
+                    clearInterval(pollInterval);
+                    if (isMounted) setError("Analysis timed out. Please try again.");
+                }
+            }, 2000);
         };
 
-        runAnalysis();
+        startPolling();
 
-        // Also run the visual progress independent of polling, but slower? 
-        // Or just let polling drive it?
-        // Let's keep the visual timer for UX but make it loop on the middle steps until done.
-        const visualInterval = setInterval(() => {
-             setStepIndex(prev => {
-                 if (prev >= steps.length - 2) return prev; // Stuck at "Synthesizing" until done
-                 return prev + 1;
-             });
+        // Visual timer generic loop
+        visualInterval = setInterval(() => {
+                setStepIndex(prev => {
+                    if (prev >= steps.length - 2) return prev; // Stuck at "Synthesizing" until done
+                    return prev + 1;
+                });
         }, 3000);
 
         return () => {
@@ -263,7 +262,7 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
             clearInterval(pollInterval);
             clearInterval(visualInterval);
         };
-    }, [companyId, onComplete]); // removing steps dependency to avoid re-run
+    }, [companyId, onComplete]);
 
     if (error) {
         return (
@@ -379,8 +378,19 @@ export const FinancialAnalysisView = ({ report }: { report: AnalysisReport }) =>
                             </div>
 
                             <div className="text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white">
-                                <ReactMarkdown>{card.data.summary}</ReactMarkdown>
+                                <ReactMarkdown components={citationComponents}>{formatText(card.data.summary)}</ReactMarkdown>
                             </div>
+                            
+                            {/* Highlights Section */}
+                            {card.data.highlights && card.data.highlights.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {card.data.highlights.map((h: string, idx: number) => (
+                                        <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5">
+                                            {h}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
 
                             <div className="mt-auto border-t border-white/10 pt-4">
                                 <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
@@ -403,7 +413,27 @@ export const FinancialAnalysisView = ({ report }: { report: AnalysisReport }) =>
 // ... (TopicSelectionStep, FileUploadStep, ProgressStep remain unchanged) ...
 
 // 4. Results
-export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisReport, onReanalyze: () => void }) => {
+
+// --- Helpers ---
+const formatText = (text: string | null | undefined) => {
+    if (!text) return "";
+    return text.replace(/\[(\d+)\]/g, '[$&](#source-$1)');
+};
+
+const citationComponents = {
+    a: ({ href, children, ...props }: any) => {
+        if (href && href.startsWith('#source-')) {
+            return (
+                <span className="text-cyan-400 font-bold mx-0.5 cursor-help hover:underline decoration-dash" title="Citation Source">
+                    {children}
+                </span>
+            );
+        }
+        return <a href={href} className="text-blue-400 hover:underline" {...props}>{children}</a>;
+    }
+};
+
+export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report: AnalysisReport, onReanalyze: () => void, onDelete?: () => void }) => {
     // Card State Management
     const [flippedCard, setFlippedCard] = useState<string | null>(null);
     const [showDetails, setShowDetails] = useState(false); // Toggle for top 3 cards
@@ -472,6 +502,17 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
                             Financials
                         </button>
                     </div>
+                    
+                    {onDelete && (
+                         <button
+                            onClick={onDelete}
+                            className="p-2 rounded-lg bg-white/5 hover:bg-red-500/10 hover:text-red-400 text-gray-400 transition-colors border border-white/10"
+                            title="Delete this report"
+                        >
+                            <Trash2 size={18} />
+                        </button>
+                    )}
+
                     <GlassButton 
                         size="sm"
                         variant="ghost"
@@ -578,17 +619,28 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
                                     "text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300",
                                     !isFlipped ? "line-clamp-5" : "max-h-[300px] overflow-y-auto custom-scrollbar"
                                 )}>
-                                    <ReactMarkdown>
-                                        {(isFlipped && overviewCard.data.detail) || overviewCard.data.summary}
+                                    <ReactMarkdown components={citationComponents}>
+                                        {formatText((isFlipped && overviewCard.data.detail) || overviewCard.data.summary)}
                                     </ReactMarkdown>
                                 </div>
+
+                                {/* Highlights Badge Section */}
+                                {!isFlipped && overviewCard.data.highlights && overviewCard.data.highlights.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mb-4">
+                                        {(overviewCard.data.highlights || []).map((h: string, idx: number) => (
+                                            <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5">
+                                                {h}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
 
                                 <div className="mt-auto border-t border-white/10 pt-4">
                                     <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                                         <FileText size={12}/> Sources
                                     </div>
                                     <div className="flex flex-wrap gap-4">
-                                        {overviewCard.data.sources.map((source, i) => (
+                                        {(overviewCard.data.sources || []).map((source, i) => (
                                             <div key={i} className="text-xs text-indigo-300 hover:text-indigo-200">
                                                 [{i+1}] {source}
                                             </div>
@@ -655,20 +707,33 @@ export const AnalysisResultsView = ({ report, onReanalyze }: { report: AnalysisR
                                          </div>
                                     </div>
 
+
+
                                     <div className={cn(
-                                        "text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none prose-p:text-gray-300 prose-strong:text-white",
+                                        "text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300",
                                         !isFlipped ? "line-clamp-4" : "max-h-[250px] overflow-y-auto custom-scrollbar"
                                     )}>
-                                        <ReactMarkdown>
-                                            {(isFlipped && card.data.detail) || card.data.summary}
+                                        <ReactMarkdown components={citationComponents}>
+                                            {formatText((isFlipped && card.data.detail) || card.data.summary)}
                                         </ReactMarkdown>
                                     </div>
+
+                                    {/* Highlights Badge Section */}
+                                    {!isFlipped && card.data.highlights && card.data.highlights.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mb-4">
+                                            {card.data.highlights.map((h: string, idx: number) => (
+                                                <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5 truncate max-w-full">
+                                                    {h}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
 
                                     <div className="mt-auto border-t border-white/10 pt-4">
                                         <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                                             <FileText size={12}/> Sources
                                         </div>
-                                        {card.data.sources.map((source, i) => (
+                                        {(card.data.sources || []).map((source, i) => (
                                             <div key={i} className="text-xs text-indigo-300 truncate hover:text-indigo-200">
                                                 [{i+1}] {source}
                                             </div>
