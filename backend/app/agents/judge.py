@@ -3,7 +3,9 @@ from typing import Dict, Any, Optional, Union, List
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 from app.database import engine
-from app.models import AnalysisReport
+from app.database import engine
+from app.models import AnalysisReport, ReportChunk
+from app.services.rag import RAGService
 from app.agents.base import get_llm
 from app.agents.state import AgentState
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -202,6 +204,48 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
             session.add(report)
             session.commit()
             print(f"Report saved with ID: {report.id}")
+
+            # --- Embed Report for Vector Search ---
+            try:
+                print("Generating embeddings for report chunks...")
+                rag_service = RAGService()
+                chunks_to_add = []
+                
+                sections = [
+                    ("summary", f"**Investment Thesis**:\n{response.summary}"),
+                    ("bull_case", f"**Bull Case**:\n{response.bull_case}"),
+                    ("bear_case", f"**Bear Case**:\n{response.bear_case}"),
+                    ("risk_factors", f"**Risk Factors**:\n{response.risk_factors}")
+                ]
+
+                # Also embed specific analysis sections if useful, but summary is high leverage
+                
+                for idx, (section_type, content) in enumerate(sections):
+                    if not content or len(content) < 10: continue
+
+                    # Create descriptive header for embedding context
+                    context_content = f"[{state['company_name']} Analysis Report - {section_type.replace('_', ' ').title()}]\n{content}"
+                    
+                    embedding = rag_service.embed_query(context_content)
+                    
+                    if embedding:
+                        chunk = ReportChunk(
+                            report_id=report.id,
+                            content=context_content,
+                            chunk_index=idx,
+                            section_type=section_type,
+                            embedding=embedding
+                        )
+                        chunks_to_add.append(chunk)
+
+                if chunks_to_add:
+                    session.add_all(chunks_to_add)
+                    session.commit()
+                    print(f"Saved {len(chunks_to_add)} report vector chunks.")
+                    
+            except Exception as e:
+                print(f"Error embedding report chunks: {e}")
+            # --------------------------------------
             
         return {"final_report": response.summary}
         
@@ -259,6 +303,26 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
             session.add(report)
             session.commit()
             print(f"Mock Report saved with ID: {report.id}")
+
+             # --- Embed Mock Report (Consistency) ---
+            try:
+                rag_service = RAGService()
+                mock_sections = [
+                    ("summary", mock_decision.summary),
+                    ("bull_case", mock_decision.bull_case),
+                    ("bear_case", mock_decision.bear_case),
+                    ("risk_factors", mock_decision.risk_factors)
+                ]
+                chunks = []
+                for i, (stype, txt) in enumerate(mock_sections):
+                    emb = rag_service.embed_query(f"{stype}: {txt}")
+                    chunks.append(ReportChunk(report_id=report.id, content=txt, chunk_index=i, section_type=stype, embedding=emb))
+                session.add_all(chunks)
+                session.commit()
+            except Exception as e:
+                print(f"Error embedding mock chunks: {e}")
+            # ---------------------------------------
+
             return {"final_report": mock_decision.summary}
 
         return {"final_report": f"Error generating report: {e}", "errors": [str(e)]}

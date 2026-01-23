@@ -176,6 +176,68 @@ class RAGService:
             
         return chunks
 
+        return chunks
+
+    def vector_search_reports(
+        self,
+        query_embedding: List[float],
+        company_id: UUID,
+        session: Session,
+        limit: int = 3
+    ) -> List[Dict]:
+        """
+        Perform semantic search on Report Chunks
+        """
+        from app.models import ReportChunk, AnalysisReport
+        
+        embedding_str = f"[{','.join(map(str, query_embedding))}]"
+        
+        query_sql = f"""
+            SELECT 
+                rc.id,
+                rc.report_id,
+                rc.content,
+                rc.chunk_index,
+                1 - (rc.embedding <=> '{embedding_str}'::vector) as similarity,
+                rc.section_type,
+                c.ticker
+            FROM report_chunks rc
+            JOIN analysis_reports ar ON rc.report_id = ar.id
+            JOIN companies c ON ar.company_id = c.id
+            WHERE ar.company_id = '{str(company_id)}'
+            ORDER BY similarity DESC
+            LIMIT {limit}
+        """
+        
+        results = session.exec(text(query_sql)).fetchall()
+        
+        chunks = []
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+        
+        for row in results:
+            ticker = row[6]
+            chunks.append({
+                "id": row[0],
+                "document_id": None,
+                "content": row[2],
+                "page_number": 1, 
+                "chunk_index": row[3],
+                "metadata": {
+                    "type": "report", 
+                    "company_id": str(company_id), 
+                    "report_id": str(row[1]),
+                    "section": row[5]
+                },
+                "filename": f"Analysis Report: {row[5].replace('_', ' ').title()}",
+                "similarity": float(row[4] or 0.0),
+                "start_line": None,
+                "end_line": None,
+                # Link to watchlist page with ticker param to open details
+                "url": f"{frontend_url}/watchlist?ticker={ticker}"
+            })
+            
+        return chunks
+
     def get_structured_chunks_for_companies(self, companies: List, session: Session, query_embedding: Optional[List[float]] = None) -> List[Dict]:
         """
         Fetch structured data chunks for a specific list of companies.
@@ -273,6 +335,14 @@ class RAGService:
 
             except Exception as e:
                 print(f"Error fetching latest news for {company.ticker}: {e}")
+
+            # 3. Fetch Past Analysis Reports (Semantic Search)
+            try:
+                if query_embedding:
+                    report_chunks = self.vector_search_reports(query_embedding, company.id, session, limit=3)
+                    chunks.extend(report_chunks)
+            except Exception as e:
+                print(f"Error fetching report chunks for {company.ticker}: {e}")
                 
         return chunks
     
