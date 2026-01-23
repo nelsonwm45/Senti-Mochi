@@ -114,7 +114,7 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     CRITICAL: YOU MUST ALSO PERFORM A DETAILED ESG (Environmental, Social, Governance) ANALYSIS.
     For each category (Overview, Governance, Environmental, Social, Disclosure), provide:
     - A score (0-100)
-    - A concise summary (1-2 sentences)
+    - A concise summary (1-2 sentences). **Use bolding** for key terms. Avoid generic openers like "The company has...". Start directly with the insight.
     - **Highlights**: A list of 3-5 SPECIFIC data points (e.g. "Scope 3: 15.2M tCO2"). **PLAIN TEXT ONLY. NO MARKDOWN.**
     - A detailed analysis (detail): **COMPREHENSIVE MARKDOWN BULLET POINTS** (8-10 bullets). 
       - Go deep. Explain the 'Why' and 'How'. Connect dots between different data sources.
@@ -124,6 +124,7 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     CRITICAL: YOU MUST ALSO PERFORM A DETAILED FINANCIAL ANALYSIS.
     For each category (Valuation, Profitability, Growth, Health), provide:
     - A score (0-100)
+    - A concise summary (1-2 sentences). **Use bolding** for key metrics. Avoid generic openers.
     - **Highlights**: A list of 3-5 SPECIFIC financial metrics. **PLAIN TEXT ONLY. NO MARKDOWN.**
     - A detailed analysis (detail): **COMPREHENSIVE MARKDOWN BULLET POINTS** (8-10 bullets). 
       - Go deep. Analyze trends, risks, and strategic implications.
