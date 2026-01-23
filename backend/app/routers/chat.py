@@ -28,6 +28,7 @@ class CitationInfo(BaseModel):
     chunkId: str
     similarity: float
     text: str
+    url: Optional[str] = None
     startLine: Optional[int] = None
     endLine: Optional[int] = None
 
@@ -154,7 +155,12 @@ async def query(
     # These effectively act as "Source 1", "Source 2" etc.
     try:
         if companies:
-            structured_chunks = rag_service.get_structured_chunks_for_companies(companies, session)
+            # Pass query_embedding to enable Semantic News Search
+            structured_chunks = rag_service.get_structured_chunks_for_companies(
+                companies, 
+                session, 
+                query_embedding=query_embedding
+            )
         else:
              structured_chunks = []
     except Exception as e:
@@ -236,7 +242,8 @@ async def query(
                     similarity=chunk["similarity"],
                     text=chunk["content"],
                     startLine=chunk.get("start_line"),
-                    endLine=chunk.get("end_line")
+                    endLine=chunk.get("end_line"),
+                    url=chunk.get("url")
                 ))
 
             assistant_message = ChatMessage(
@@ -289,7 +296,8 @@ async def query(
                 similarity=chunk["similarity"],
                 text=chunk["content"],
                 startLine=chunk.get("start_line"),
-                endLine=chunk.get("end_line")
+                endLine=chunk.get("end_line"),
+                url=chunk.get("url")
             ))
 
         # Save assistant message

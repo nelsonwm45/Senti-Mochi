@@ -18,6 +18,7 @@ export interface CitationInfo {
 	text?: string;
 	startLine?: number;
 	endLine?: number;
+	url?: string; // Link to source (e.g. news URL or document view)
 }
 
 export interface QueryResponse {

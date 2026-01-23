@@ -82,3 +82,16 @@ class S3StorageService:
             Params={"Bucket": self.bucket_name, "Key": s3_key},
             ExpiresIn=expiration
         )
+
+    def get_file_stream(self, s3_key: str):
+        """
+        Get file stream from S3
+        
+        Args:
+            s3_key: S3 key of the file
+            
+        Returns:
+            StreamingBody object
+        """
+        response = self.s3_client.get_object(Bucket=self.bucket_name, Key=s3_key)
+        return response["Body"]

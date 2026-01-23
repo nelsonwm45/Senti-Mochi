@@ -98,7 +98,9 @@ class RAGService:
                     "filename": row[6],
                     "similarity": float(row[8]),
                     "start_line": row[9],
-                    "end_line": row[10]
+                    "end_line": row[10],
+                    # Construct URL for frontend redirection
+                    "url": f"{os.getenv('API_URL', 'http://localhost:8000')}/api/v1/documents/{row[1]}/download"
                 })
             
             return chunks
@@ -115,12 +117,133 @@ class RAGService:
                 return []
             return self.get_structured_chunks_for_companies(companies, session)
 
-    def get_structured_chunks_for_companies(self, companies: List, session: Session) -> List[Dict]:
+    def vector_search_news(
+        self, 
+        query_embedding: List[float], 
+        company_id: UUID, 
+        session: Session, 
+        limit: int = 5
+    ) -> List[Dict]:
+        """
+        Perform semantic search on News Chunks
+        """
+        from app.models import NewsChunk, NewsArticle
+        
+        embedding_str = f"[{','.join(map(str, query_embedding))}]"
+        
+        query_sql = f"""
+            SELECT 
+                nc.id,
+                nc.news_id,
+                nc.content,
+                nc.chunk_index,
+                1 - (nc.embedding <=> '{embedding_str}'::vector) as similarity,
+                na.title,
+                na.published_at,
+                na.source,
+                na.url
+            FROM news_chunks nc
+            JOIN news_articles na ON nc.news_id = na.id
+            WHERE na.company_id = '{str(company_id)}'
+            ORDER BY similarity DESC
+            LIMIT {limit}
+        """
+        
+        results = session.exec(text(query_sql)).fetchall()
+        
+        chunks = []
+        for row in results:
+            chunks.append({
+                "id": row[0],
+                "document_id": None, # Distinct type
+                "content": row[2],
+                "page_number": 1, 
+                "chunk_index": row[3],
+                "metadata": {
+                    "type": "news", 
+                    "company_id": str(company_id), 
+                    "article_id": str(row[1]),
+                    "source": row[7],
+                    "published_at": row[6].strftime('%Y-%m-%d'),
+                    "url": row[8]
+                },
+                "filename": f"News: {row[5]}",
+                "similarity": float(row[4] or 0.0),
+                "start_line": None,
+                "end_line": None,
+                "url": row[8]
+            })
+            
+        return chunks
+
+        return chunks
+
+    def vector_search_reports(
+        self,
+        query_embedding: List[float],
+        company_id: UUID,
+        session: Session,
+        limit: int = 3
+    ) -> List[Dict]:
+        """
+        Perform semantic search on Report Chunks
+        """
+        from app.models import ReportChunk, AnalysisReport
+        
+        embedding_str = f"[{','.join(map(str, query_embedding))}]"
+        
+        query_sql = f"""
+            SELECT 
+                rc.id,
+                rc.report_id,
+                rc.content,
+                rc.chunk_index,
+                1 - (rc.embedding <=> '{embedding_str}'::vector) as similarity,
+                rc.section_type,
+                c.ticker
+            FROM report_chunks rc
+            JOIN analysis_reports ar ON rc.report_id = ar.id
+            JOIN companies c ON ar.company_id = c.id
+            WHERE ar.company_id = '{str(company_id)}'
+            ORDER BY similarity DESC
+            LIMIT {limit}
+        """
+        
+        results = session.exec(text(query_sql)).fetchall()
+        
+        chunks = []
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+        
+        for row in results:
+            ticker = row[6]
+            chunks.append({
+                "id": row[0],
+                "document_id": None,
+                "content": row[2],
+                "page_number": 1, 
+                "chunk_index": row[3],
+                "metadata": {
+                    "type": "report", 
+                    "company_id": str(company_id), 
+                    "report_id": str(row[1]),
+                    "section": row[5]
+                },
+                "filename": f"Analysis Report: {row[5].replace('_', ' ').title()}",
+                "similarity": float(row[4] or 0.0),
+                "start_line": None,
+                "end_line": None,
+                # Link to watchlist page with ticker param to open details
+                "url": f"{frontend_url}/watchlist?ticker={ticker}"
+            })
+            
+        return chunks
+
+    def get_structured_chunks_for_companies(self, companies: List, session: Session, query_embedding: Optional[List[float]] = None) -> List[Dict]:
         """
         Fetch structured data chunks for a specific list of companies.
+        Now includes Semantic Vectors for News if query_embedding is provided.
         """
         # Lazy imports
-        from app.services.news_service import news_service
         from app.services.finance import finance_service
         from uuid import uuid4
         
@@ -167,90 +290,59 @@ class RAGService:
                         "end_line": None
                     })
 
-                    # 1b. Income Statement (Full)
-                    if date_inc:
-                        inc_content = f"Income Statement for {company.name} ({date_inc}):\n"
-                        for k, v in inc.items():
-                            inc_content += f"{k}: {v}\n"
-                            
-                        chunks.append({
-                            "id": uuid4(),
-                            "document_id": None,
-                            "content": inc_content,
-                            "page_number": 1,
-                            "chunk_index": 0,
-                            "metadata": {"type": "financials", "subtype": "income_statement", "company": company.ticker},
-                            "filename": f"Income Statement ({company.name})",
-                            "similarity": 0.95, # Slightly lower than metrics to prioritize metrics
-                            "start_line": None,
-                            "end_line": None
-                        })
-
-                    # 1c. Balance Sheet (Full)
-                    if date_bal:
-                        bal_content = f"Balance Sheet for {company.name} ({date_bal}):\n"
-                        for k, v in bal.items():
-                            bal_content += f"{k}: {v}\n"
-                            
-                        chunks.append({
-                            "id": uuid4(),
-                            "document_id": None,
-                            "content": bal_content,
-                            "page_number": 1,
-                            "chunk_index": 0,
-                            "metadata": {"type": "financials", "subtype": "balance_sheet", "company": company.ticker},
-                            "filename": f"Balance Sheet ({company.name})",
-                            "similarity": 0.95,
-                            "start_line": None,
-                            "end_line": None
-                        })
-
-                    # 1d. Cash Flow (Full)
-                    date_cf, cf = get_latest(fin_data.get("cash_flow"))
-                    if date_cf:
-                        cf_content = f"Cash Flow Statement for {company.name} ({date_cf}):\n"
-                        for k, v in cf.items():
-                            cf_content += f"{k}: {v}\n"
-                            
-                        chunks.append({
-                            "id": uuid4(),
-                            "document_id": None,
-                            "content": cf_content,
-                            "page_number": 1,
-                            "chunk_index": 0,
-                            "metadata": {"type": "financials", "subtype": "cash_flow", "company": company.ticker},
-                            "filename": f"Cash Flow ({company.name})",
-                            "similarity": 0.95,
-                            "start_line": None,
-                            "end_line": None
-                        })
-
             except Exception as e:
                 print(f"Error fetching financials chunks for {company.ticker}: {e}")
             
-            # 2. Fetch News (Individual Chunks)
+            # 2. Fetch News (Hybrid: Recent + Semantic)
+            # 2. Fetch News (Hybrid: Recent + Semantic)
+            
+            # 2a. Semantic Search
             try:
-                # Increase limit to 15 to prevent "Annual Report" spam from hiding real news
-                articles = news_service.get_recent_articles(company.id, session, limit=15)
-                for idx, article in enumerate(articles):
-                    content_str = f"[{article.published_at.strftime('%Y-%m-%d')}] {article.title} (Source: {article.source})"
-                    if article.content:
-                        content_str += f"\nSummary: {article.content}"
+                if query_embedding:
+                    semantic_news = self.vector_search_news(query_embedding, company.id, session, limit=7)
+                    chunks.extend(semantic_news)
+            except Exception as e:
+                print(f"Error fetching semantic news chunks for {company.ticker}: {e}")
+
+            # 2b. Latest Article Baseline
+            try:
+                from app.models import NewsArticle
+                latest_article = session.exec(
+                    select(NewsArticle)
+                    .where(NewsArticle.company_id == company.id)
+                    .order_by(NewsArticle.published_at.desc())
+                    .limit(1)
+                ).first()
+                
+                if latest_article:
+                    content_str = f"[{latest_article.published_at.strftime('%Y-%m-%d')}] {latest_article.title} (Source: {latest_article.source})"
+                    if latest_article.content:
+                        content_str += f"\nSummary: {latest_article.content[:500]}..." # Truncate for brevity
                         
                     chunks.append({
                         "id": uuid4(),
                         "document_id": None,
                         "content": content_str,
                         "page_number": 1,
-                        "chunk_index": idx,
-                        "metadata": {"type": "news", "company": company.ticker, "article_id": str(article.id)},
-                        "filename": f"News: {article.title}",
-                        "similarity": 1.0,
+                        "chunk_index": 0,
+                        "metadata": {"type": "news", "subtype": "latest", "company": company.ticker, "url": latest_article.url},
+                        "filename": f"Latest News: {latest_article.title}",
+                        "similarity": 0.9, # High priority but below perfect vector match
                         "start_line": None,
-                        "end_line": None
+                        "end_line": None,
+                        "url": latest_article.url
                     })
+
             except Exception as e:
-                print(f"Error fetching news chunks for {company.ticker}: {e}")
+                print(f"Error fetching latest news for {company.ticker}: {e}")
+
+            # 3. Fetch Past Analysis Reports (Semantic Search)
+            try:
+                if query_embedding:
+                    report_chunks = self.vector_search_reports(query_embedding, company.id, session, limit=3)
+                    chunks.extend(report_chunks)
+            except Exception as e:
+                print(f"Error fetching report chunks for {company.ticker}: {e}")
                 
         return chunks
     

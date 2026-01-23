@@ -306,3 +306,40 @@ async def get_document_content(
             for chunk in chunks
         ]
     }
+
+@router.get("/{document_id}/download")
+async def download_document(
+    document_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """
+    Stream the document content directly from S3 through the backend.
+    This avoids DNS/Network issues with internal MinIO URLs.
+    """
+    from fastapi.responses import StreamingResponse
+    
+    document = session.get(Document, document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    if document.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+        
+    storage = S3StorageService()
+    try:
+        file_stream = storage.get_file_stream(document.s3_key)
+        
+        # Determine strict content type or default
+        media_type = document.content_type if document.content_type else "application/octet-stream"
+        
+        return StreamingResponse(
+            file_stream, 
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'inline; filename="{document.filename}"'
+            }
+        )
+    except Exception as e:
+        print(f"Error streaming file: {e}")
+        raise HTTPException(status_code=500, detail="Error streaming file")

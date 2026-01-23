@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WatchlistTable } from './components/WatchlistTable';
 import { ComparisonView } from './components/ComparisonView';
@@ -10,10 +10,24 @@ type ViewState = 'list' | 'comparison' | 'details';
 
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 
+import { useSearchParams } from 'next/navigation';
+
 export default function WatchlistPage() {
-  const [view, setView] = useState<ViewState>('list');
+  const searchParams = useSearchParams();
+  const initialTicker = searchParams.get('ticker');
+
+  const [view, setView] = useState<ViewState>(initialTicker ? 'details' : 'list');
   const [comparisonTickers, setComparisonTickers] = useState<string[]>([]);
-  const [detailTicker, setDetailTicker] = useState<string | null>(null);
+  const [detailTicker, setDetailTicker] = useState<string | null>(initialTicker);
+
+  // Update state when URL changes (optional but good for consistency)
+  useEffect(() => {
+    const ticker = searchParams.get('ticker');
+    if (ticker) {
+      setDetailTicker(ticker);
+      setView('details');
+    }
+  }, [searchParams]);
 
   const handleCompare = (tickers: string[]) => {
     setComparisonTickers(tickers);

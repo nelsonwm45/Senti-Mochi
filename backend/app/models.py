@@ -222,3 +222,16 @@ class AnalysisReport(SQLModel, table=True):
     agent_logs: list[dict] = Field(default=[], sa_column=Column(JSON))
 
     company: "Company" = Relationship(back_populates="analysis_reports")
+    chunks: list["ReportChunk"] = Relationship(back_populates="analysis_report")
+
+class ReportChunk(SQLModel, table=True):
+    __tablename__ = "report_chunks"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    report_id: UUID = Field(foreign_key="analysis_reports.id", index=True)
+    content: str = Field(sa_column=Column(Text))
+    chunk_index: int
+    section_type: str # "summary", "bull_case", "bear_case", "risk_factors"
+    embedding: list[float] = Field(sa_column=Column(Vector(384)))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    analysis_report: "AnalysisReport" = Relationship(back_populates="chunks")
