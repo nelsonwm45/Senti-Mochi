@@ -154,7 +154,12 @@ async def query(
     # These effectively act as "Source 1", "Source 2" etc.
     try:
         if companies:
-            structured_chunks = rag_service.get_structured_chunks_for_companies(companies, session)
+            # Pass query_embedding to enable Semantic News Search
+            structured_chunks = rag_service.get_structured_chunks_for_companies(
+                companies, 
+                session, 
+                query_embedding=query_embedding
+            )
         else:
              structured_chunks = []
     except Exception as e:
