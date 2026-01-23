@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, FileText, ExternalLink } from 'lucide-react';
 import { CitationInfo } from '@/lib/api/chat';
 import { GlassCard } from '@/components/ui/GlassCard';
+import apiClient from '@/lib/apiClient';
 
 interface CitationPanelProps {
   citations: CitationInfo[];
@@ -30,6 +31,38 @@ export default function CitationPanel({
         }
     }
   }, [activeCitationId, isOpen]);
+
+  const handleLinkClick = async (e: React.MouseEvent, url: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    try {
+      // If it's a backend document link, we need to fetch the file content (proxy)
+      if (url.includes('/api/v1/documents')) {
+         // Extract relative path if it's a full URL
+         const relativeUrl = url.replace(/^https?:\/\/[^\/]+/, '');
+         
+         const response = await apiClient.get(relativeUrl, { 
+            responseType: 'blob' 
+         });
+         
+         // Create blob URL
+         const blob = new Blob([response.data], { type: response.headers['content-type'] || 'application/pdf' });
+         const blobUrl = window.URL.createObjectURL(blob);
+         window.open(blobUrl, '_blank');
+         
+         // Note: We're not revoking the URL immediately so the new tab can load it.
+         // Ideally we track it and revoke later.
+      } else {
+         // External link (news)
+         window.open(url, '_blank');
+      }
+    } catch (err) {
+      console.error("Failed to open link:", err);
+      // Fallback
+      window.open(url, '_blank');
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -110,7 +143,17 @@ export default function CitationPanel({
                             Source {citation.sourceNumber}
                           </div>
                         </div>
-                        <ExternalLink className={`w-4 h-4 transition-colors ${isActive ? 'text-accent' : 'text-foreground-muted'}`} />
+                        {citation.url ? (
+                          <button 
+                            onClick={(e) => handleLinkClick(e, citation.url!)}
+                            className="p-1 hover:bg-accent/10 rounded-full transition-colors"
+                            title="Open Source"
+                          >
+                            <ExternalLink className={`w-4 h-4 transition-colors ${isActive ? 'text-accent' : 'text-foreground-muted hover:text-accent'}`} />
+                          </button>
+                        ) : (
+                          <ExternalLink className={`w-4 h-4 transition-colors ${isActive ? 'text-accent' : 'text-foreground-muted'}`} />
+                        )}
                       </div>
 
                       {/* Document Info */}

@@ -28,6 +28,7 @@ class CitationInfo(BaseModel):
     chunkId: str
     similarity: float
     text: str
+    url: Optional[str] = None
     startLine: Optional[int] = None
     endLine: Optional[int] = None
 
@@ -241,7 +242,8 @@ async def query(
                     similarity=chunk["similarity"],
                     text=chunk["content"],
                     startLine=chunk.get("start_line"),
-                    endLine=chunk.get("end_line")
+                    endLine=chunk.get("end_line"),
+                    url=chunk.get("url")
                 ))
 
             assistant_message = ChatMessage(
@@ -294,7 +296,8 @@ async def query(
                 similarity=chunk["similarity"],
                 text=chunk["content"],
                 startLine=chunk.get("start_line"),
-                endLine=chunk.get("end_line")
+                endLine=chunk.get("end_line"),
+                url=chunk.get("url")
             ))
 
         # Save assistant message

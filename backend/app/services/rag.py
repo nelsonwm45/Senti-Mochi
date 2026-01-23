@@ -98,7 +98,9 @@ class RAGService:
                     "filename": row[6],
                     "similarity": float(row[8]),
                     "start_line": row[9],
-                    "end_line": row[10]
+                    "end_line": row[10],
+                    # Construct URL for frontend redirection
+                    "url": f"{os.getenv('API_URL', 'http://localhost:8000')}/api/v1/documents/{row[1]}/download"
                 })
             
             return chunks
@@ -138,7 +140,8 @@ class RAGService:
                 1 - (nc.embedding <=> '{embedding_str}'::vector) as similarity,
                 na.title,
                 na.published_at,
-                na.source
+                na.source,
+                na.url
             FROM news_chunks nc
             JOIN news_articles na ON nc.news_id = na.id
             WHERE na.company_id = '{str(company_id)}'
@@ -161,12 +164,14 @@ class RAGService:
                     "company_id": str(company_id), 
                     "article_id": str(row[1]),
                     "source": row[7],
-                    "published_at": row[6].strftime('%Y-%m-%d')
+                    "published_at": row[6].strftime('%Y-%m-%d'),
+                    "url": row[8]
                 },
                 "filename": f"News: {row[5]}",
-                "similarity": float(row[4]),
+                "similarity": float(row[4] or 0.0),
                 "start_line": None,
-                "end_line": None
+                "end_line": None,
+                "url": row[8]
             })
             
         return chunks
@@ -227,14 +232,18 @@ class RAGService:
                 print(f"Error fetching financials chunks for {company.ticker}: {e}")
             
             # 2. Fetch News (Hybrid: Recent + Semantic)
+            # 2. Fetch News (Hybrid: Recent + Semantic)
+            
+            # 2a. Semantic Search
             try:
-                # 2a. Semantic Search (replaces 'get_recent_articles' spam)
                 if query_embedding:
                     semantic_news = self.vector_search_news(query_embedding, company.id, session, limit=7)
                     chunks.extend(semantic_news)
-                
-                # 2b. Always fetch the SINGLE most recent article as a "current status" baseline
-                # This ensures we don't miss "today's breaking news" even if semantic match is low
+            except Exception as e:
+                print(f"Error fetching semantic news chunks for {company.ticker}: {e}")
+
+            # 2b. Latest Article Baseline
+            try:
                 from app.models import NewsArticle
                 latest_article = session.exec(
                     select(NewsArticle)
@@ -254,15 +263,16 @@ class RAGService:
                         "content": content_str,
                         "page_number": 1,
                         "chunk_index": 0,
-                        "metadata": {"type": "news", "subtype": "latest", "company": company.ticker},
+                        "metadata": {"type": "news", "subtype": "latest", "company": company.ticker, "url": latest_article.url},
                         "filename": f"Latest News: {latest_article.title}",
                         "similarity": 0.9, # High priority but below perfect vector match
                         "start_line": None,
-                        "end_line": None
+                        "end_line": None,
+                        "url": latest_article.url
                     })
 
             except Exception as e:
-                print(f"Error fetching news chunks for {company.ticker}: {e}")
+                print(f"Error fetching latest news for {company.ticker}: {e}")
                 
         return chunks
     

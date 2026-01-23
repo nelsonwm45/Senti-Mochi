@@ -6,6 +6,8 @@ import Image from 'next/image';
 import { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { GlassCard } from '@/components/ui/GlassCard';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
@@ -34,39 +36,15 @@ export default function MessageBubble({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Process content to make citations clickable
-  const renderContent = () => {
-    if (role === 'user' || citations.length === 0) {
-      return <p className="whitespace-pre-wrap">{content}</p>;
-    }
-
-    // Replace [Source N: ...] with clickable badges
-    const parts = content.split(/(\[Source \d+(?:[^\]]*)\])/g);
-    
-    return (
-      <p className="whitespace-pre-wrap">
-        {parts.map((part, index) => {
-          const match = part.match(/\[Source (\d+)(?:[^\]]*)\]/);
-          if (match) {
-            const citationNum = parseInt(match[1]);
-            return (
-              <button
-                key={index}
-                onClick={() => onCitationClick?.(citationNum)}
-                className="inline-flex items-center px-2 py-0.5 mx-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-accent/10 text-accent hover:bg-accent/20 transition-colors border border-accent/20 font-mono"
-                title={part} // Show full citation on hover
-              >
-                Source {match[1]}
-              </button>
-            );
-          }
-          return <span key={index}>{part}</span>;
-        })}
-      </p>
-    );
-  };
-
   const isUser = role === 'user';
+
+  // Pre-process content to convert citation markers [Source N] into links we can intercept
+  // [Source 1] -> [Source 1](#citation-1)
+  // We use a hash fragment (#citation-1) because custom protocols like citation:// get sanitized by ReactMarkdown
+  const processedContent = content.replace(
+    /\[Source (\d+)(?:[^\]]*)\]/g,
+    '[Source $1](#citation-$1)'
+  );
 
   return (
     <motion.div
@@ -115,13 +93,85 @@ export default function MessageBubble({
           {isUser ? (
             <div className="inline-block px-5 py-4 rounded-2xl rounded-tr-sm bg-gradient-brand text-white shadow-lg shadow-accent/20">
               <div className="text-sm leading-relaxed text-left">
-                {renderContent()}
+                <p className="whitespace-pre-wrap">{content}</p>
               </div>
             </div>
           ) : (
-            <GlassCard className="rounded-tl-sm px-5 py-4">
-              <div className="text-sm leading-relaxed text-foreground">
-                {renderContent()}
+            <GlassCard className="rounded-tl-sm px-5 py-4 bg-white/40 dark:bg-gray-900/40">
+              <div className="text-sm leading-relaxed text-foreground markdown-content prose prose-sm dark:prose-invert max-w-none break-words">
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    // Override anchor tags to handle citations
+                    a: ({ href, children, ...props }) => {
+                      // Check for citation hash
+                      if (href?.startsWith('#citation-')) {
+                        const citationNum = parseInt(href.replace('#citation-', ''));
+                        return (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              onCitationClick?.(citationNum);
+                            }}
+                            className="inline-flex items-center px-2 py-0.5 mx-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-accent/10 text-accent hover:bg-accent/20 transition-colors border border-accent/20 font-mono no-underline transform hover:scale-105"
+                            title={`View Source ${citationNum}`}
+                          >
+                            {children}
+                          </button>
+                        );
+                      }
+                      return (
+                        <a 
+                          href={href} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="text-accent hover:underline"
+                          {...props}
+                        >
+                          {children}
+                        </a>
+                      );
+                    },
+                    // Enhance table styling
+                    table: ({ children }) => (
+                      <div className="overflow-x-auto my-4 rounded-lg border border-glass-border">
+                        <table className="min-w-full divide-y divide-glass-border bg-white/5">
+                          {children}
+                        </table>
+                      </div>
+                    ),
+                    thead: ({ children }) => (
+                      <thead className="bg-white/10">
+                        {children}
+                      </thead>
+                    ),
+                    th: ({ children }) => (
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-foreground uppercase tracking-wider">
+                        {children}
+                      </th>
+                    ),
+                    td: ({ children }) => (
+                      <td className="px-3 py-2 text-sm text-foreground/80 whitespace-nowrap border-t border-glass-border/50">
+                          {children}
+                      </td>
+                    ),
+                    // Enhance code blocks
+                    pre: ({ children }) => (
+                      <pre className="bg-gray-900/90 text-gray-100 p-3 rounded-lg overflow-x-auto my-2 border border-white/10">
+                        {children}
+                      </pre>
+                    ),
+                    code: ({ children, className }) => {
+                       const isInline = !className; // Basic heuristic
+                       if (isInline) {
+                           return <code className="bg-accent/10 text-accent px-1 py-0.5 rounded text-xs font-mono">{children}</code>;
+                       }
+                       return <code className={className}>{children}</code>;
+                    }
+                  }}
+                >
+                  {processedContent}
+                </ReactMarkdown>
               </div>
             </GlassCard>
           )}
