@@ -66,16 +66,16 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), ses
     access_token = create_access_token(data={"sub": user.email})
     
     # Check if companies need seeding
-    try:
-        from app.services.company_service import company_service
-        from app.tasks.company_tasks import seed_companies_task
-        from app.tasks.data_tasks import update_all_news_task
-        
-        count = company_service.get_company_count(session)
-        if count == 0:
-            print("No companies found. Triggering automated seeding task...")
-            seed_companies_task.delay()
-    except Exception as e:
-        print(f"Failed to trigger auto-seeding: {e}")
+    # try:
+    #     from app.services.company_service import company_service
+    #     from app.tasks.company_tasks import seed_companies_task
+    #     from app.tasks.data_tasks import update_all_news_task
+    #     
+    #     count = company_service.get_company_count(session)
+    #     if count == 0:
+    #         print("No companies found. Triggering automated seeding task...")
+    #         seed_companies_task.delay()
+    # except Exception as e:
+    #     print(f"Failed to trigger auto-seeding: {e}")
 
     return {"access_token": access_token, "token_type": "bearer"}

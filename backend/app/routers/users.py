@@ -8,6 +8,7 @@ from pydantic import BaseModel
 import boto3
 import os
 from datetime import datetime, timezone
+from typing import Optional
 from fastapi.responses import StreamingResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -28,6 +29,7 @@ BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'avatars')
 
 class UserUpdate(BaseModel):
     full_name: str
+    persona: Optional[str] = None
 
 class ProfileUpdate(BaseModel):
     financial_goals: str
@@ -43,8 +45,10 @@ def read_users_me(current_user: User = Depends(get_current_user)):
 
 @router.patch("/me", response_model=User)
 def update_user(user_data: UserUpdate, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    """Update user's display name"""
+    """Update user's display name and persona"""
     current_user.full_name = user_data.full_name
+    if user_data.persona:
+        current_user.persona = user_data.persona
     current_user.updated_at = datetime.now(timezone.utc)
     session.add(current_user)
     session.commit()

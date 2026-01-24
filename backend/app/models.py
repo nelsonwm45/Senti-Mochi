@@ -47,6 +47,8 @@ class User(SQLModel, table=True):
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
     role: UserRole = Field(default=UserRole.USER)
+    # FEATURE: Polymorphic Persona Preference
+    persona: str = Field(default="investor")
     tenant_id: Optional[UUID] = Field(default=None, index=True)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -250,6 +252,8 @@ class AnalysisJob(SQLModel, table=True):
     __tablename__ = "analysis_jobs"
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     company_id: UUID = Field(foreign_key="companies.id", index=True)
+    # FEATURE: Polymorphic Analysis Role
+    user_role: str = Field(default="investor")
     status: AnalysisStatus = Field(default=AnalysisStatus.PENDING)
     current_step: Optional[str] = None  # Human-readable step description
     progress: int = Field(default=0)  # 0-100 percentage
