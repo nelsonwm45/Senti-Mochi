@@ -107,7 +107,12 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
 
             chunk_texts = [f"Source: Doc {c.document_id} (Page {c.page_number})\nContent: {c.content}" for c in all_chunks]
             
-            context = "\n---\n".join(chunk_texts)
+        context = "\n---\n".join(chunk_texts)
+
+        # Check token limit roughly (characters / 4)
+        # Reduced to 15000 to fit within Groq's 6000 TPM limit (approx 3750 tokens)
+        if len(context) > 15000:
+            context = context[:15000] + "..."
 
         # Generate cache key based on content hash
         # Include chunk IDs in hash to detect if documents changed

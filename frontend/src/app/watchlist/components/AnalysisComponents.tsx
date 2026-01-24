@@ -12,7 +12,7 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { cn } from '@/lib/utils';
 import CompanyDocumentUpload from '@/components/documents/CompanyDocumentUpload';
-import { analysisApi, AnalysisReport } from '@/lib/api/analysis';
+import { analysisApi, AnalysisReport, AnalysisJobStatusResponse } from '@/lib/api/analysis';
 import ReactMarkdown from 'react-markdown';
 
 // --- Types ---
@@ -187,22 +187,38 @@ const FileUploadStep = ({ onNext, onBack, onCancel, companyId }: { onNext: () =>
 // 3. Progress
 const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, companyId: string }) => {
     const [stepIndex, setStepIndex] = useState(0);
+    const [currentStep, setCurrentStep] = useState<string>("Starting analysis engine");
+    const [progress, setProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const steps = [
         { label: "Initializing", sub: "Starting analysis engine" },
-        { label: "Pulling Data", sub: "Gathering news and documents" },
-        { label: "Synthesizing", sub: "Generating insights with AI" },
-        { label: "Finalizing", sub: "Formatting report" }
+        { label: "Gathering Intel", sub: "Analyzing news, financials & documents" },
+        { label: "Cross-Examination", sub: "Agents debating findings" },
+        { label: "Synthesizing", sub: "Generating final report" },
+        { label: "Finalizing", sub: "Embedding for search" }
     ];
 
     const hasTriggered = useRef(false);
+
+    // Map backend status to step index
+    const statusToStep = (status: string): number => {
+        switch (status) {
+            case 'PENDING': return 0;
+            case 'GATHERING_INTEL': return 1;
+            case 'CROSS_EXAMINATION': return 2;
+            case 'SYNTHESIZING': return 3;
+            case 'EMBEDDING': return 4;
+            case 'COMPLETED': return 5;
+            default: return 0;
+        }
+    };
 
     // 1. Trigger Effect (Runs once)
     useEffect(() => {
         const trigger = async () => {
             if (hasTriggered.current) return;
             hasTriggered.current = true;
-            
+
             try {
                 console.log("Triggering analysis for:", companyId);
                 await analysisApi.triggerAnalysis(companyId);
@@ -214,53 +230,77 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
         trigger();
     }, [companyId]);
 
-    // 2. Polling & Visual Effect (Resilient to remounts)
+    // 2. Status Polling (uses new status endpoint)
     useEffect(() => {
         let isMounted = true;
         let pollInterval: NodeJS.Timeout;
-        let visualInterval: NodeJS.Timeout;
 
         const startPolling = () => {
             const startTime = Date.now();
-            const TIMEOUT = 300000; // 5 min timeout
+            const TIMEOUT = 600000; // 10 minutes timeout (increased from 5)
 
             pollInterval = setInterval(async () => {
                 if (!isMounted) return;
 
                 try {
-                    const reports = await analysisApi.getReports(companyId);
-                    if (reports && reports.length > 0) {
-                            const latest = reports[0];
-                            console.log("Report found:", latest.id);
-                            clearInterval(pollInterval);
-                            setStepIndex(steps.length); // Complete all steps
-                            setTimeout(onComplete, 800);
+                    // Poll status endpoint for real-time progress
+                    const statusResponse: AnalysisJobStatusResponse = await analysisApi.getStatus(companyId);
+
+                    if (statusResponse.status === 'COMPLETED') {
+                        console.log("Analysis completed, report:", statusResponse.report_id);
+                        clearInterval(pollInterval);
+                        setStepIndex(steps.length);
+                        setProgress(100);
+                        setTimeout(onComplete, 800);
+                        return;
                     }
+
+                    if (statusResponse.status === 'FAILED') {
+                        clearInterval(pollInterval);
+                        if (isMounted) {
+                            setError(statusResponse.error_message || "Analysis failed. Please try again.");
+                        }
+                        return;
+                    }
+
+                    // Update progress from backend
+                    if (statusResponse.progress !== undefined) {
+                        setProgress(statusResponse.progress);
+                    }
+                    if (statusResponse.current_step) {
+                        setCurrentStep(statusResponse.current_step);
+                    }
+                    setStepIndex(statusToStep(statusResponse.status));
+
                 } catch (e) {
-                        console.error("Polling error:", e);
+                    console.error("Status polling error:", e);
+                    // Fallback: check for reports directly
+                    try {
+                        const reports = await analysisApi.getReports(companyId);
+                        if (reports && reports.length > 0) {
+                            console.log("Report found via fallback:", reports[0].id);
+                            clearInterval(pollInterval);
+                            setStepIndex(steps.length);
+                            setTimeout(onComplete, 800);
+                            return;
+                        }
+                    } catch {
+                        // Ignore fallback errors
+                    }
                 }
 
                 if (Date.now() - startTime > TIMEOUT) {
                     clearInterval(pollInterval);
-                    if (isMounted) setError("Analysis timed out. Please try again.");
+                    if (isMounted) setError("Analysis timed out. The analysis may still be running - please check back later.");
                 }
             }, 2000);
         };
 
         startPolling();
 
-        // Visual timer generic loop
-        visualInterval = setInterval(() => {
-                setStepIndex(prev => {
-                    if (prev >= steps.length - 2) return prev; // Stuck at "Synthesizing" until done
-                    return prev + 1;
-                });
-        }, 3000);
-
         return () => {
             isMounted = false;
             clearInterval(pollInterval);
-            clearInterval(visualInterval);
         };
     }, [companyId, onComplete]);
 
@@ -279,20 +319,20 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
         <div className="py-8 space-y-10">
             <div className="text-center space-y-2">
                 <h2 className="text-2xl font-bold text-white">Analyzing Company</h2>
-                <p className="text-gray-400">Please wait while we process your documents</p>
+                <p className="text-gray-400">{currentStep}</p>
             </div>
 
             <div className="max-w-md mx-auto relative px-8">
                  {/* Vertical line connection */}
                  <div className="absolute left-[47px] top-4 bottom-4 w-0.5 bg-white/10" />
-                 
+
                  <div className="space-y-6 relative z-10">
                     {steps.map((step, idx) => {
                         const isCompleted = stepIndex > idx;
                         const isCurrent = stepIndex === idx;
-                        
+
                         return (
-                            <motion.div 
+                            <motion.div
                                 key={idx}
                                 initial={{ opacity: 0.5, x: -10 }}
                                 animate={{ opacity: isCurrent || isCompleted ? 1 : 0.4, x: 0 }}
@@ -300,7 +340,7 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
                             >
                                 <div className={cn(
                                     "w-8 h-8 rounded-full flex items-center justify-center transition-all duration-500 border-2",
-                                    isCompleted 
+                                    isCompleted
                                         ? "bg-emerald-500 border-emerald-500 text-white"
                                         : isCurrent
                                             ? "bg-emerald-500/20 border-emerald-500 text-emerald-500"
@@ -319,17 +359,17 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
                     })}
                  </div>
             </div>
-            
-            {/* Progress bar at bottom */}
+
+            {/* Progress bar at bottom - now using real progress from backend */}
             <div className="h-1 bg-white/10 rounded-full overflow-hidden w-full max-w-sm mx-auto">
-                <motion.div 
+                <motion.div
                     className="h-full bg-emerald-500"
                     initial={{ width: "0%" }}
-                    animate={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }}
+                    animate={{ width: `${progress}%` }}
                     transition={{ duration: 0.5 }}
                 />
             </div>
-            <div className="text-center text-xs text-gray-500">Step {Math.min(stepIndex + 1, steps.length)} of {steps.length}</div>
+            <div className="text-center text-xs text-gray-500">{progress}% complete</div>
         </div>
     );
 };

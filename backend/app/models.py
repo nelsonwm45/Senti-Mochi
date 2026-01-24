@@ -18,6 +18,15 @@ class DocumentStatus(str, Enum):
     PROCESSED = "PROCESSED"
     FAILED = "FAILED"
 
+class AnalysisStatus(str, Enum):
+    PENDING = "PENDING"
+    GATHERING_INTEL = "GATHERING_INTEL"
+    CROSS_EXAMINATION = "CROSS_EXAMINATION"
+    SYNTHESIZING = "SYNTHESIZING"
+    EMBEDDING = "EMBEDDING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
 # Tenant Model
 class Tenant(SQLModel, table=True):
     __tablename__ = "tenants"
@@ -222,7 +231,7 @@ class AnalysisReport(SQLModel, table=True):
     agent_logs: list[dict] = Field(default=[], sa_column=Column(JSON))
 
     company: "Company" = Relationship(back_populates="analysis_reports")
-    chunks: list["ReportChunk"] = Relationship(back_populates="analysis_report")
+    chunks: list["ReportChunk"] = Relationship(back_populates="analysis_report", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
 class ReportChunk(SQLModel, table=True):
     __tablename__ = "report_chunks"
@@ -235,3 +244,16 @@ class ReportChunk(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     analysis_report: "AnalysisReport" = Relationship(back_populates="chunks")
+
+# Analysis Job Tracking Model
+class AnalysisJob(SQLModel, table=True):
+    __tablename__ = "analysis_jobs"
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    company_id: UUID = Field(foreign_key="companies.id", index=True)
+    status: AnalysisStatus = Field(default=AnalysisStatus.PENDING)
+    current_step: Optional[str] = None  # Human-readable step description
+    progress: int = Field(default=0)  # 0-100 percentage
+    error_message: Optional[str] = None
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: Optional[datetime] = None
+    report_id: Optional[UUID] = None  # Links to the generated report when complete

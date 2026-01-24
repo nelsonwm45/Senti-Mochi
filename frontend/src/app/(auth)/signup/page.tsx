@@ -38,7 +38,7 @@ export default function Signup() {
 
     setIsLoading(true);
     try {
-      const res = await axios.post('http://localhost:8000/auth/signup', {
+      const res = await axios.post('/api/v1/auth/signup', {
         email: email,
         password: password,
         full_name: fullName
@@ -49,15 +49,7 @@ export default function Signup() {
       window.location.href = '/dashboard';
     } catch (err: any) {
       console.error(err);
-      // Extract specific error message from backend response
-      const backendError = err.response?.data?.detail || 'Signup failed. Please try again.';
-      
-      // If it's the "Email already registered" error, customize it with the email
-      if (backendError === 'Email already registered') {
-        setError(`"${email}" is already registered. Please use a different email or log in.`);
-      } else {
-        setError(backendError);
-      }
+      setError(err.response?.data?.detail || 'Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -81,7 +73,7 @@ export default function Signup() {
             <UserPlus className="w-8 h-8 text-white" />
           </motion.div>
           <h2 className="text-2xl font-bold text-foreground mb-2">Create Account</h2>
-          <p className="text-foreground-muted">Join us to start your financial journey</p>
+          <p className="text-foreground-muted">Join Senti-Mochi for advanced analytics</p>
         </div>
 
         <form onSubmit={handleSignup} className="space-y-6">
@@ -177,7 +169,7 @@ export default function Signup() {
 
         {/* Google Sign Up Button */}
         <a
-          href="http://localhost:8000/auth/google/login"
+          href="/api/v1/auth/google/login"
           className="w-full block"
         >
           <GlassButton variant="outline" size="lg" className="w-full justify-center gap-2">

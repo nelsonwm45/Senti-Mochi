@@ -12,7 +12,7 @@ from app.services.finance import finance_service
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
 
-@router.post("/", response_model=dict)
+@router.post("", response_model=dict)
 def add_to_watchlist(
     ticker: str = Query(...),
     session: Session = Depends(get_session),
@@ -82,7 +82,7 @@ def get_my_watchlist(
         for company in companies
     ]
 
-@router.get("/", response_model=List[dict])
+@router.get("", response_model=List[dict])
 def get_watchlist(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)

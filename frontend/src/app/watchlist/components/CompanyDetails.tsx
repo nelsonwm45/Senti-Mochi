@@ -146,7 +146,7 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
     useEffect(() => {
         const fetchCompany = async () => {
             try {
-                const res = await fetch(`http://localhost:8000/api/v1/companies/${ticker}`);
+                const res = await fetch(`/api/v1/companies/${ticker}`);
                 if (!res.ok) throw new Error('Failed to fetch');
                 const json = await res.json();
                 setCompany(json);

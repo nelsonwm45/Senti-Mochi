@@ -11,7 +11,7 @@ from app.services.storage import S3StorageService
 from app.tasks.document_tasks import process_document_task
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
+router = APIRouter(prefix="/documents", tags=["documents"])
 
 # Response models using camelCase
 class DocumentResponse(BaseModel):

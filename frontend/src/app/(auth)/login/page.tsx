@@ -37,7 +37,7 @@ export default function Login() {
       formData.append('username', email);
       formData.append('password', password);
       
-      const res = await axios.post('http://localhost:8000/auth/token', formData);
+      const res = await axios.post('/api/v1/auth/token', formData);
       setToken(res.data.access_token);
       
       // Use window.location to force a full refresh and update auth state in Sidebar
@@ -138,7 +138,7 @@ export default function Login() {
 
         {/* Google Sign In Button */}
         <a
-          href="http://localhost:8000/auth/google/login"
+          href="/api/v1/auth/google/login"
           className="w-full block"
         >
           <GlassButton variant="outline" size="lg" className="w-full justify-center gap-2">

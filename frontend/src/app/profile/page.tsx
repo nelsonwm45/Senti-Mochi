@@ -34,7 +34,7 @@ export default function Profile() {
     const token = localStorage.getItem('token');
     if (token) {
       try {
-        const res = await axios.get('http://localhost:8000/users/me', {
+        const res = await axios.get('/api/v1/users/me', {
           headers: { Authorization: `Bearer ${token}` }
         });
         setUser(res.data);
@@ -54,7 +54,7 @@ export default function Profile() {
     
     try {
       const res = await axios.patch(
-        'http://localhost:8000/users/me',
+        '/api/v1/users/me',
         { full_name: fullName },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -98,7 +98,7 @@ export default function Profile() {
       formData.append('file', file);
 
       const res = await axios.post(
-        'http://localhost:8000/users/me/avatar',
+        '/api/v1/users/me/avatar',
         formData,
         {
           headers: {

@@ -7,22 +7,7 @@ import { GlassInput } from '@/components/ui/GlassInput';
 import { SearchPopout } from './SearchPopout';
 
 // Temporary helper to parse JWT
-const getUserIdFromToken = () => {
-    if (typeof window === 'undefined') return null;
-    const token = localStorage.getItem('token');
-    if (!token) return null;
-    try {
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
-        return JSON.parse(jsonPayload).sub;
-    } catch (e) {
-        console.error("Failed to decode token", e);
-        return null;
-    }
-}
+
 
 interface WatchlistTableProps {
   onCompare: (selectedTickers: string[]) => void;
@@ -34,14 +19,10 @@ export function WatchlistTable({ onCompare, onViewDetails }: WatchlistTableProps
   const [searchQuery, setSearchQuery] = useState(''); // Local filter for existing items
   const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+
 
   useEffect(() => {
-      const id = getUserIdFromToken();
-      setUserId(id);
-      if (id) {
-          fetchWatchlist(id);
-      }
+      fetchWatchlist();
   }, [fetchWatchlist]);
 
   // Filter companies based on local search of the watchlist
@@ -64,10 +45,8 @@ export function WatchlistTable({ onCompare, onViewDetails }: WatchlistTableProps
   };
 
   const handleRemove = (ticker: string) => {
-    if (userId) {
-        removeFromWatchlist(ticker, userId);
-        setSelectedForComparison(prev => prev.filter(t => t !== ticker));
-    }
+      removeFromWatchlist(ticker);
+      setSelectedForComparison(prev => prev.filter(t => t !== ticker));
   };
 
   return (
@@ -89,7 +68,7 @@ export function WatchlistTable({ onCompare, onViewDetails }: WatchlistTableProps
         </div>
       </div>
       
-      {userId && <SearchPopout isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} userId={userId} />}
+      <SearchPopout isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
       {/* Table */}
       <GlassCard className="p-0 overflow-hidden">

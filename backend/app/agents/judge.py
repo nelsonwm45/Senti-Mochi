@@ -3,12 +3,29 @@ from typing import Dict, Any, Optional, Union, List
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 from app.database import engine
-from app.database import engine
 from app.models import AnalysisReport, ReportChunk
 from app.services.rag import RAGService
 from app.agents.base import get_llm
 from app.agents.state import AgentState
 from langchain_core.messages import SystemMessage, HumanMessage
+import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
+# Timeout configuration (in seconds)
+LLM_TIMEOUT = 180  # 3 minutes for Judge Agent LLM call
+
+class LLMTimeoutError(Exception):
+    """Raised when LLM call exceeds timeout."""
+    pass
+
+def invoke_with_timeout(llm, messages, timeout_seconds):
+    """Invoke LLM with a timeout using ThreadPoolExecutor."""
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(llm.invoke, messages)
+        try:
+            return future.result(timeout=timeout_seconds)
+        except FuturesTimeoutError:
+            raise LLMTimeoutError(f"LLM call timed out after {timeout_seconds} seconds")
 
 class ESGTopic(BaseModel):
     score: int = Field(description="Score out of 100")
@@ -159,15 +176,22 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     """
     
     llm = get_llm("llama-3.3-70b-versatile")
-    
+
     # Use structured output
     structured_llm = llm.with_structured_output(InvestmentDecision)
-    
+
     try:
-        response = structured_llm.invoke([
-            SystemMessage(content="You are a decisive, objective Chief Investment Officer."), 
-            HumanMessage(content=prompt)
-        ])
+        print(f"Judge Agent: invoking LLM with {LLM_TIMEOUT}s timeout...")
+        start_time = time.time()
+        response = invoke_with_timeout(
+            structured_llm,
+            [
+                SystemMessage(content="You are a decisive, objective Chief Investment Officer."),
+                HumanMessage(content=prompt)
+            ],
+            LLM_TIMEOUT
+        )
+        print(f"Judge Agent: LLM completed in {time.time() - start_time:.2f}s")
 
         # Normalize fields (Handle list vs string mismatch)
         if response.esg_analysis:
@@ -203,6 +227,9 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
             )
             session.add(report)
             session.commit()
+            session.refresh(report)
+            if not report.id:
+                 print("CRITICAL ERROR: Report ID is None after commit/refresh")
             print(f"Report saved with ID: {report.id}")
 
             # --- Embed Report for Vector Search ---
@@ -249,8 +276,18 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
             
         return {"final_report": response.summary}
         
+    except LLMTimeoutError as e:
+        print(f"Judge Agent TIMEOUT: {e}")
+        # Log timeout specifically - this is important for debugging
+        import traceback
+        traceback.print_exc()
+
     except Exception as e:
+        import traceback
         print(f"Error in Judge Agent: {e}")
+        traceback.print_exc()
+        if hasattr(e, 'errors'):  # Pydantic validation error
+            print(f"Validation Errors: {e.errors()}")
         # Fallback for verification if LLM fails (e.g. 404 on model)
         print("Using Mock Judge Response for Verification")
         
@@ -302,6 +339,7 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
             )
             session.add(report)
             session.commit()
+            session.refresh(report)
             print(f"Mock Report saved with ID: {report.id}")
 
              # --- Embed Mock Report (Consistency) ---
