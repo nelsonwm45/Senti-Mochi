@@ -6,9 +6,9 @@ interface WatchlistState {
 	watchlist: Company[];
 	isLoading: boolean;
 	error: string | null;
-	fetchWatchlist: (userId: string) => Promise<void>;
-	addToWatchlist: (ticker: string, userId: string) => Promise<void>;
-	removeFromWatchlist: (ticker: string, userId: string) => Promise<void>;
+	fetchWatchlist: () => Promise<void>;
+	addToWatchlist: (ticker: string) => Promise<void>;
+	removeFromWatchlist: (ticker: string) => Promise<void>;
 	isInWatchlist: (ticker: string) => boolean;
 }
 
@@ -17,10 +17,10 @@ export const useWatchlistStore = create<WatchlistState>((set, get) => ({
 	isLoading: false,
 	error: null,
 
-	fetchWatchlist: async (userId: string) => {
+	fetchWatchlist: async () => {
 		set({ isLoading: true, error: null });
 		try {
-			const response = await apiClient.get(`/api/v1/watchlist/`);
+			const response = await apiClient.get(`/api/v1/watchlist`);
 			if (!response.data) throw new Error('Failed to fetch watchlist');
 			set({ watchlist: response.data });
 		} catch (error) {
@@ -30,22 +30,23 @@ export const useWatchlistStore = create<WatchlistState>((set, get) => ({
 		}
 	},
 
-	addToWatchlist: async (ticker: string, userId: string) => {
+	addToWatchlist: async (ticker: string) => {
 		set({ isLoading: true, error: null });
 		try {
-			const response = await apiClient.post(`/api/v1/watchlist/?ticker=${ticker}`);
+			const response = await apiClient.post(`/api/v1/watchlist?ticker=${ticker}`);
 			if (!response.data) throw new Error('Failed to add to watchlist');
 
 			// Refresh list to get full company details
-			await get().fetchWatchlist(userId);
+			await get().fetchWatchlist();
 		} catch (error) {
 			set({ error: (error as Error).message });
+			throw error; // Rethrow so components can show feedback
 		} finally {
 			set({ isLoading: false });
 		}
 	},
 
-	removeFromWatchlist: async (ticker: string, userId: string) => {
+	removeFromWatchlist: async (ticker: string) => {
 		set({ isLoading: true, error: null });
 		try {
 			const response = await apiClient.delete(`/api/v1/watchlist/${ticker}`);
@@ -56,6 +57,7 @@ export const useWatchlistStore = create<WatchlistState>((set, get) => ({
 			}));
 		} catch (error) {
 			set({ error: (error as Error).message });
+			throw error;
 		} finally {
 			set({ isLoading: false });
 		}

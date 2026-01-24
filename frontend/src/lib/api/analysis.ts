@@ -49,9 +49,35 @@ export interface FinancialAnalysisOutput {
 	health: FinancialTopic;
 }
 
+export type AnalysisJobStatus =
+	| 'PENDING'
+	| 'GATHERING_INTEL'
+	| 'CROSS_EXAMINATION'
+	| 'SYNTHESIZING'
+	| 'EMBEDDING'
+	| 'COMPLETED'
+	| 'FAILED'
+	| 'no_analysis';
+
+export interface AnalysisJobStatusResponse {
+	job_id?: string;
+	status: AnalysisJobStatus;
+	current_step?: string;
+	progress?: number;
+	error_message?: string;
+	started_at?: string;
+	completed_at?: string;
+	report_id?: string;
+	message?: string;
+}
+
 export const analysisApi = {
 	triggerAnalysis: async (companyId: string) => {
 		return apiClient.post(`/api/v1/analysis/${companyId}`);
+	},
+
+	getStatus: async (companyId: string): Promise<AnalysisJobStatusResponse> => {
+		return apiClient.get(`/api/v1/analysis/${companyId}/status`).then(res => res.data);
 	},
 
 	getReports: async (companyId: string): Promise<AnalysisReport[]> => {

@@ -92,7 +92,7 @@ async def upload_avatar(
         # Here we construct a path that points to the new get_avatar endpoint.
         # We need an absolute URL because the frontend is on a different port (3000 vs 8000)
         base_url = os.getenv('API_BASE_URL', 'http://localhost:8000')
-        avatar_url = f"{base_url}/users/avatars/{current_user.id}/{timestamp}.{file_extension}"
+        avatar_url = f"{base_url}/api/v1/users/avatars/{current_user.id}/{timestamp}.{file_extension}"
         
         # Update user record
         current_user.avatar_url = avatar_url

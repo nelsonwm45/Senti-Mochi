@@ -13,7 +13,7 @@ export interface User {
 }
 
 async function fetchCurrentUser(): Promise<User> {
-  const response = await api.get('/users/me');
+  const response = await api.get('/api/v1/users/me');
   return response.data;
 }
 

@@ -54,7 +54,7 @@ export function ComparisonView({ tickers, onBack }: ComparisonViewProps) {
     const fetchData = async () => {
         try {
             const query = tickers.map(t => `tickers=${t}`).join('&');
-            const res = await fetch(`http://localhost:8000/api/v1/companies/compare?${query}`);
+            const res = await fetch(`/api/v1/companies/compare?${query}`);
             const json = await res.json();
             setData(json);
         } catch (e) {

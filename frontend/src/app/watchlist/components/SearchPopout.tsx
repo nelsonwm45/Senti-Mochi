@@ -11,10 +11,9 @@ import { companiesApi, Company } from '@/lib/api/companies';
 interface SearchPopoutProps {
   isOpen: boolean;
   onClose: () => void;
-  userId: string;
 }
 
-export function SearchPopout({ isOpen, onClose, userId }: SearchPopoutProps) {
+export function SearchPopout({ isOpen, onClose }: SearchPopoutProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Company[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,10 +62,12 @@ export function SearchPopout({ isOpen, onClose, userId }: SearchPopoutProps) {
     setAddingTicker(company.ticker);
     setError(null);
     try {
-        await addToWatchlist(company.ticker, userId);
+        await addToWatchlist(company.ticker);
     } catch (err) {
         console.error("Failed to add", err);
+        const errMessage = err instanceof Error ? err.message : "Failed to add company";
         setError(`Failed to add ${company.ticker}. Please try again.`);
+        // Assuming toast is available or use console for now as I can't easily import toast here without checking imports
     } finally {
         setAddingTicker(null);
     }

@@ -60,8 +60,10 @@ def financial_agent(state: AgentState) -> Dict[str, Any]:
     if cached_result:
         return {"financial_analysis": cached_result}
 
-    if len(context) > 25000:
-        context = context[:25000] + "..."
+    # Check token limit roughly (characters / 4)
+    # Reduced to 15000 to fit within Groq's 6000 TPM limit (approx 3750 tokens)
+    if len(context) > 15000:
+        context = context[:15000] + "..."
 
     prompt = f"""You are a Financial Analyst. Analyze the following financial statements for {state['company_name']}.
     Calculate key ratios (Net Margin, PE if price available, Debt-to-Equity, etc.) where possible.

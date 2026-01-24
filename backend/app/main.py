@@ -12,17 +12,12 @@ app = FastAPI(
 
 # ... (app init)
 
-origins = [
-    "http://localhost:3000",
-    "http://localhost",
-]
-
 # Add Tenant Isolation Middleware
 app.add_middleware(TenantMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,13 +28,13 @@ def on_startup():
     create_db_and_tables()
 
 # Include routers
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(google_auth.router)
-app.include_router(documents.router)  # New: Document management
-app.include_router(chat.router)       # New: RAG chat
-app.include_router(health.router)     # New: Health checks
-app.include_router(webhooks.router, prefix="/webhooks", tags=["Webhooks"]) # New: Feature 3.4
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
+app.include_router(google_auth.router, prefix="/api/v1")
+app.include_router(documents.router, prefix="/api/v1")  # New: Document management
+app.include_router(chat.router, prefix="/api/v1")       # New: RAG chat
+app.include_router(health.router, prefix="/api/v1")     # New: Health checks
+app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["Webhooks"]) # New: Feature 3.4
 app.include_router(watchlist.router, prefix="/api/v1") # New: Watchlist
 app.include_router(companies.router, prefix="/api/v1") # New: Companies
 app.include_router(news.router, prefix="/api/v1") # New: News Feed
