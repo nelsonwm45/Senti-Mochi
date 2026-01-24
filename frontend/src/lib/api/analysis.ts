@@ -12,6 +12,8 @@ export interface AnalysisReport {
 	risk_factors: string;
 	esg_analysis: ESGAnalysisOutput;
 	financial_analysis: FinancialAnalysisOutput;
+	verdict?: Verdict; // [NEW] Feature 4
+	debate?: DebateSynthesis; // [NEW] Feature 3
 	created_at: string;
 	agent_logs?: any[];
 }
@@ -59,6 +61,31 @@ export type AnalysisJobStatus =
 	| 'FAILED'
 	| 'no_analysis';
 
+export type UserRole = 'investor' | 'credit_risk' | 'relationship_manager' | 'market_analyst';
+
+export interface SourceReference {
+	id: string; // "N1", "F2", "D3"
+	type: 'news' | 'financial' | 'document';
+	title: string;
+	url?: string;
+	date?: string;
+	page?: number;
+}
+
+export interface DebateSynthesis {
+	bull_arguments: string[];
+	bear_arguments: string[];
+	evidence_clashes: string[];
+}
+
+export interface Verdict {
+	action: 'BUY' | 'SELL' | 'HOLD';
+	headline_reasoning: string;
+	deep_dive_justification: string;
+	winning_debate_side: 'bull' | 'bear' | 'undecided';
+	key_citations: string[];
+}
+
 export interface AnalysisJobStatusResponse {
 	job_id?: string;
 	status: AnalysisJobStatus;
@@ -72,8 +99,12 @@ export interface AnalysisJobStatusResponse {
 }
 
 export const analysisApi = {
-	triggerAnalysis: async (companyId: string) => {
-		return apiClient.post(`/api/v1/analysis/${companyId}`);
+	triggerAnalysis: async (companyId: string, userRole: UserRole = 'investor') => {
+		// Send user_role in request body to match backend AnalysisRequest model
+		return apiClient.post(`/api/v1/analysis/${companyId}`, {
+			user_role: userRole,
+			max_loops: 3
+		});
 	},
 
 	getStatus: async (companyId: string): Promise<AnalysisJobStatusResponse> => {

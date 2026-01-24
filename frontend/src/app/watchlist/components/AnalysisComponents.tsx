@@ -12,12 +12,15 @@ import { GlassButton } from '@/components/ui/GlassButton';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { cn } from '@/lib/utils';
 import CompanyDocumentUpload from '@/components/documents/CompanyDocumentUpload';
-import { analysisApi, AnalysisReport, AnalysisJobStatusResponse } from '@/lib/api/analysis';
+import { analysisApi, AnalysisReport, AnalysisJobStatusResponse, UserRole } from '@/lib/api/analysis';
 import ReactMarkdown from 'react-markdown';
+import { RoleSelector } from './RoleSelector';
+import { VerdictFlipCard } from './VerdictFlipCard';
+import { DebateSynthesisView } from './DebateSynthesisView';
 
 // --- Types ---
 
-type AnalysisStep = 'topic' | 'upload' | 'progress' | 'results';
+type AnalysisStep = 'role' | 'topic' | 'upload' | 'progress' | 'results';
 type AnalysisTopic = 'esg' | 'financials' | 'general';
 type AnalysisStatus = 'waiting' | 'loading' | 'completed';
 
@@ -185,12 +188,13 @@ const FileUploadStep = ({ onNext, onBack, onCancel, companyId }: { onNext: () =>
 };
 
 // 3. Progress
-const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, companyId: string }) => {
+const ProgressStep = ({ onComplete, companyId, userRole }: { onComplete: () => void, companyId: string, userRole: UserRole }) => {
     const [stepIndex, setStepIndex] = useState(0);
     const [currentStep, setCurrentStep] = useState<string>("Starting analysis engine");
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const steps = [
+        { label: "Role Check", sub: "Setting analyst persona" },
         { label: "Initializing", sub: "Starting analysis engine" },
         { label: "Gathering Intel", sub: "Analyzing news, financials & documents" },
         { label: "Cross-Examination", sub: "Agents debating findings" },
@@ -204,31 +208,35 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
     const statusToStep = (status: string): number => {
         switch (status) {
             case 'PENDING': return 0;
-            case 'GATHERING_INTEL': return 1;
-            case 'CROSS_EXAMINATION': return 2;
-            case 'SYNTHESIZING': return 3;
-            case 'EMBEDDING': return 4;
-            case 'COMPLETED': return 5;
-            default: return 0;
+            case 'GATHERING_INTEL': return 2;
+            case 'CROSS_EXAMINATION': return 3;
+            case 'SYNTHESIZING': return 4;
+            case 'EMBEDDING': return 5;
+            case 'COMPLETED': return 6;
+            default: return 1;
         }
     };
 
     // 1. Trigger Effect (Runs once)
     useEffect(() => {
         const trigger = async () => {
+             // Wait a slightly longer delay to show the "Starting" step visually if needed
             if (hasTriggered.current) return;
             hasTriggered.current = true;
 
+            // Simple hack: wait 1s before triggering to let UI settle
+            await new Promise(r => setTimeout(r, 1000));
+
             try {
-                console.log("Triggering analysis for:", companyId);
-                await analysisApi.triggerAnalysis(companyId);
+                console.log("Triggering analysis for:", companyId, "Role:", userRole);
+                await analysisApi.triggerAnalysis(companyId, userRole);
             } catch (e) {
                 console.error("Trigger error:", e);
                 setError("Failed to start analysis.");
             }
         };
         trigger();
-    }, [companyId]);
+    }, [companyId, userRole]);
 
     // 2. Status Polling (uses new status endpoint)
     useEffect(() => {
@@ -379,76 +387,7 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
 
 
 // 5. Financial Analysis View
-export const FinancialAnalysisView = ({ report }: { report: AnalysisReport }) => {
-    const financial = report.financial_analysis || {};
-    const valuation = financial.valuation || { score: 0, summary: "No data", citations: [], sources: [] };
-    const profitability = financial.profitability || { score: 0, summary: "No data", citations: [], sources: [] };
-    const growth = financial.growth || { score: 0, summary: "No data", citations: [], sources: [] };
-    const health = financial.health || { score: 0, summary: "No data", citations: [], sources: [] };
 
-    const cards = [
-        { id: 'valuation', title: "Valuation", data: valuation, border: 'border-l-blue-500/50', bg: 'bg-blue-500/20', iconColor: 'text-blue-400' },
-        { id: 'profitability', title: "Profitability", data: profitability, border: 'border-l-amber-500/50', bg: 'bg-amber-500/20', iconColor: 'text-amber-400' },
-        { id: 'growth', title: "Growth", data: growth, border: 'border-l-emerald-500/50', bg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' },
-        { id: 'health', title: "Financial Health", data: health, border: 'border-l-indigo-500/50', bg: 'bg-indigo-500/20', iconColor: 'text-indigo-400' },
-    ];
-
-    const getScoreColor = (score: number) => {
-        if (score >= 80) return "text-emerald-500 bg-emerald-500/10 border-emerald-500/20";
-        if (score >= 60) return "text-amber-500 bg-amber-500/10 border-amber-500/20";
-        return "text-red-500 bg-red-500/10 border-red-500/20";
-    };
-
-    return (
-        <div className="space-y-6">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {cards.map(card => (
-                     <div key={card.id} className="min-h-[220px]">
-                        <GlassCard className={cn("h-full flex flex-col hover:border-white/20 transition-all border-l-2", card.border)}>
-                            <div className="flex justify-between items-start mb-4">
-                                 <div className="flex items-center gap-3">
-                                    <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", card.bg)}>
-                                        <BarChart3 size={18} className={card.iconColor} />
-                                    </div>
-                                    <h3 className="font-bold text-white text-lg">{card.title}</h3>
-                                 </div>
-                                 <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(card.data.score))}>
-                                     {card.data.score}%
-                                 </div>
-                            </div>
-
-                            <div className="text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white">
-                                <ReactMarkdown components={citationComponents}>{formatText(card.data.summary)}</ReactMarkdown>
-                            </div>
-                            
-                            {/* Highlights Section */}
-                            {card.data.highlights && card.data.highlights.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mb-4">
-                                    {card.data.highlights.map((h: string, idx: number) => (
-                                        <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5">
-                                            {h}
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-
-                            <div className="mt-auto border-t border-white/10 pt-4">
-                                <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                                    <FileText size={12}/> Sources
-                                </div>
-                                {card.data.sources.map((source, i) => (
-                                    <div key={i} className="text-xs text-indigo-300 truncate hover:text-indigo-200">
-                                        [{i+1}] {source}
-                                    </div>
-                                ))}
-                            </div>
-                        </GlassCard>
-                     </div>
-                 ))}
-            </div>
-        </div>
-    );
-};
 
 // ... (TopicSelectionStep, FileUploadStep, ProgressStep remain unchanged) ...
 
@@ -457,20 +396,8 @@ export const FinancialAnalysisView = ({ report }: { report: AnalysisReport }) =>
 // --- Helpers ---
 const formatText = (text: string | null | undefined) => {
     if (!text) return "";
-    return text.replace(/\[(\d+)\]/g, '[$&](#source-$1)');
-};
-
-const citationComponents = {
-    a: ({ href, children, ...props }: any) => {
-        if (href && href.startsWith('#source-')) {
-            return (
-                <span className="text-cyan-400 font-bold mx-0.5 cursor-help hover:underline decoration-dash" title="Citation Source">
-                    {children}
-                </span>
-            );
-        }
-        return <a href={href} className="text-blue-400 hover:underline" {...props}>{children}</a>;
-    }
+    // Regex for [N1], [F23], [D5] etc.
+    return text.replace(/\[([A-Z]?\d+)\]/g, '[$&](#source-$1)'); 
 };
 
 export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report: AnalysisReport, onReanalyze: () => void, onDelete?: () => void }) => {
@@ -483,9 +410,56 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
         setFlippedCard(prev => prev === cardId ? null : cardId);
     };
 
+    // Calculate source map from agent logs
+    const sourceMap = new Map<string, string>();
+    try {
+        const sourcesLog = report.agent_logs?.find((l: any) => l.agent === 'sources');
+        if (sourcesLog && Array.isArray(sourcesLog.output)) {
+            sourcesLog.output.forEach((s: any) => {
+                if (s.id && s.url) sourceMap.set(s.id, s.url);
+            });
+        }
+    } catch (e) {
+        console.warn("Failed to parse sources map:", e);
+    }
 
+    // Dynamic Citation Renderer
+    const citationComponents = {
+        a: ({ href, children, ...props }: any) => {
+            if (href && href.startsWith('#source-')) {
+                const id = href.replace('#source-', '');
+                const url = sourceMap.get(id);
+                
+                if (url) {
+                     return (
+                        <a 
+                            href={url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-cyan-400 font-bold mx-0.5 hover:underline decoration-solid cursor-pointer" 
+                            title={`Open Source: ${id}`}
+                            onClick={(e) => e.stopPropagation()} 
+                         >
+                            {children}
+                            <ExternalLink size={10} className="inline ml-0.5 -mt-2" />
+                        </a>
+                    );
+                }
+                
+                return (
+                    <span className="text-cyan-400 font-bold mx-0.5 cursor-help hover:underline decoration-dash" title="Source URL not available">
+                        {children}
+                    </span>
+                );
+            }
+            return <a href={href} className="text-blue-400 hover:underline" {...props}>{children}</a>;
+        }
+    };
 
-    // Safely access esg_analysis from report
+    // [NEW] Feature 4: Default Verdict if missing
+    // Since backend might not return it yet, we mock a safe default or hide it
+    const verdict = report.verdict; 
+    const debate = report.debate;
     const esg = report.esg_analysis || {};
     const overview = esg.overview || { score: 0, summary: "No data", citations: [], sources: [] };
     const governance = esg.governance || { score: 0, summary: "No data", citations: [], sources: [] };
@@ -505,6 +479,73 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
         if (score >= 80) return "text-emerald-500 bg-emerald-500/10 border-emerald-500/20";
         if (score >= 60) return "text-amber-500 bg-amber-500/10 border-amber-500/20";
         return "text-red-500 bg-red-500/10 border-red-500/20";
+    };
+
+    // Render logic for financial view to share components
+    const FinancialView = () => {
+         const financial = report.financial_analysis || {};
+         const valuation = financial.valuation || { score: 0, summary: "No data", citations: [], sources: [] };
+         const profitability = financial.profitability || { score: 0, summary: "No data", citations: [], sources: [] };
+         const growth = financial.growth || { score: 0, summary: "No data", citations: [], sources: [] };
+         const health = financial.health || { score: 0, summary: "No data", citations: [], sources: [] };
+     
+         const fCards = [
+             { id: 'valuation', title: "Valuation", data: valuation, border: 'border-l-blue-500/50', bg: 'bg-blue-500/20', iconColor: 'text-blue-400' },
+             { id: 'profitability', title: "Profitability", data: profitability, border: 'border-l-amber-500/50', bg: 'bg-amber-500/20', iconColor: 'text-amber-400' },
+             { id: 'growth', title: "Growth", data: growth, border: 'border-l-emerald-500/50', bg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' },
+             { id: 'health', title: "Financial Health", data: health, border: 'border-l-indigo-500/50', bg: 'bg-indigo-500/20', iconColor: 'text-indigo-400' },
+         ];
+
+         return (
+            <div className="space-y-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     {fCards.map(card => (
+                         <div key={card.id} className="min-h-[220px]">
+                            <GlassCard className={cn("h-full flex flex-col hover:border-white/20 transition-all border-l-2", card.border)}>
+                                <div className="flex justify-between items-start mb-4">
+                                     <div className="flex items-center gap-3">
+                                        <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", card.bg)}>
+                                            <BarChart3 size={18} className={card.iconColor} />
+                                        </div>
+                                        <h3 className="font-bold text-white text-lg">{card.title}</h3>
+                                     </div>
+                                     <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(card.data.score))}>
+                                         {card.data.score}%
+                                     </div>
+                                </div>
+    
+                                <div className="text-base text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-p:text-gray-300 prose-strong:text-white max-h-[300px] overflow-y-auto custom-scrollbar">
+                                    <ReactMarkdown components={citationComponents}>{formatText(card.data.detail || card.data.summary)}</ReactMarkdown>
+                                </div>
+                                
+                                {card.data.highlights && card.data.highlights.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mb-4">
+                                        {card.data.highlights.map((h: string, idx: number) => (
+                                            <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5">
+                                                {h}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+    
+                                <div className="mt-auto border-t border-white/10 pt-4">
+                                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                                        <FileText size={12}/> Citations & Sources
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {card.data.citations && card.data.citations.map((cite, i) => (
+                                            <span key={i} className="text-xs text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                                                {cite}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            </GlassCard>
+                         </div>
+                     ))}
+                </div>
+            </div>
+         );
     };
 
     return (
@@ -582,7 +623,7 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                                      <h3 className="font-semibold text-white">Investment Summary</h3>
                                  </div>
                                  <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none max-h-[300px] overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white">
-                                    <ReactMarkdown>{report.summary}</ReactMarkdown>
+                                    <ReactMarkdown components={citationComponents}>{report.summary}</ReactMarkdown>
                                  </div>
                              </GlassCard>
                              <GlassCard className="space-y-4 border-l-2 border-l-emerald-500/50">
@@ -593,7 +634,7 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                                      <h3 className="font-semibold text-white">Bull Case (Claims)</h3>
                                  </div>
                                  <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none max-h-[300px] overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300">
-                                    <ReactMarkdown>{report.bull_case}</ReactMarkdown>
+                                    <ReactMarkdown components={citationComponents}>{report.bull_case}</ReactMarkdown>
                                  </div>
                              </GlassCard>
                              <GlassCard className="space-y-4 border-l-2 border-l-amber-500/50">
@@ -604,7 +645,7 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                                      <h3 className="font-semibold text-white">Risks & Concerns</h3>
                                  </div>
                                  <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none max-h-[300px] overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300 prose-li:marker:text-amber-400">
-                                    <ReactMarkdown>{report.risk_factors}</ReactMarkdown>
+                                    <ReactMarkdown components={citationComponents}>{report.risk_factors}</ReactMarkdown>
                                  </div>
                              </GlassCard>
                         </div>
@@ -616,13 +657,25 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
              <div className="flex items-center justify-center gap-6 text-xs text-gray-500 pt-2 pb-4">
                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"/> High Confidence (80%+)</div>
                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500"/> Medium Confidence (60-79%)</div>
-                 <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500"/> Low Confidence (60%)</div>
+                 <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500"/> Low Confidence ({'<'} 60%)</div>
              </div>
 
-
+             {/* [NEW] Feature 4: Verdict Flip Card */}
+            {verdict && (
+                 <div className="pt-0 pb-12 relative z-10 border-b border-white/10 mb-20">
+                     <VerdictFlipCard verdict={verdict} confidence={report.confidence_score} />
+                 </div>
+             )}
              
+             {/* [NEW] Feature 3: Debate Synthesis View */}
+             {debate && viewMode === 'esg' && (
+                 <div className="mt-12 mb-8 relative z-0">
+                     <DebateSynthesisView debate={debate} />
+                 </div>
+             )}
+
              {viewMode === 'financial' ? (
-                 <FinancialAnalysisView report={report} />
+                 <FinancialView />
              ) : (
                 <>
                 {/* ESG Overview Card - Full Width */}
@@ -656,11 +709,11 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                                 </div>
 
                                 <div className={cn(
-                                    "text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300",
-                                    !isFlipped ? "line-clamp-5" : "max-h-[300px] overflow-y-auto custom-scrollbar"
+                                    "text-base text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300",
+                                    !isFlipped ? "line-clamp-6" : "max-h-[350px] overflow-y-auto custom-scrollbar"
                                 )}>
                                     <ReactMarkdown components={citationComponents}>
-                                        {formatText((isFlipped && overviewCard.data.detail) || overviewCard.data.summary)}
+                                        {formatText(isFlipped ? (overviewCard.data.detail || overviewCard.data.summary) : overviewCard.data.summary)}
                                     </ReactMarkdown>
                                 </div>
 
@@ -677,13 +730,13 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
 
                                 <div className="mt-auto border-t border-white/10 pt-4">
                                     <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                                        <FileText size={12}/> Sources
+                                        <FileText size={12}/> Citations & Sources
                                     </div>
-                                    <div className="flex flex-wrap gap-4">
-                                        {(overviewCard.data.sources || []).map((source, i) => (
-                                            <div key={i} className="text-xs text-indigo-300 hover:text-indigo-200">
-                                                [{i+1}] {source}
-                                            </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {(overviewCard.data.citations || []).map((cite, i) => (
+                                            <span key={i} className="text-xs text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                                                {cite}
+                                            </span>
                                         ))}
                                     </div>
                                 </div>
@@ -750,11 +803,11 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
 
 
                                     <div className={cn(
-                                        "text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300",
-                                        !isFlipped ? "line-clamp-4" : "max-h-[250px] overflow-y-auto custom-scrollbar"
+                                        "text-base text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300",
+                                        !isFlipped ? "line-clamp-6" : "max-h-[300px] overflow-y-auto custom-scrollbar"
                                     )}>
                                         <ReactMarkdown components={citationComponents}>
-                                            {formatText((isFlipped && card.data.detail) || card.data.summary)}
+                                            {formatText(isFlipped ? (card.data.detail || card.data.summary) : card.data.summary)}
                                         </ReactMarkdown>
                                     </div>
 
@@ -771,15 +824,18 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
 
                                     <div className="mt-auto border-t border-white/10 pt-4">
                                         <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                                            <FileText size={12}/> Sources
+                                            <FileText size={12}/> Citations & Sources
                                         </div>
-                                        {(card.data.sources || []).map((source, i) => (
-                                            <div key={i} className="text-xs text-indigo-300 truncate hover:text-indigo-200">
-                                                [{i+1}] {source}
-                                            </div>
-                                        ))}
+                                         {/* Use citations field which has ids instead of loose strings */}
+                                         <div className="flex flex-wrap gap-2">
+                                            {(card.data.citations || []).map((cite, i) => (
+                                                <span key={i} className="text-xs text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                                                    {cite}
+                                                </span>
+                                            ))}
+                                        </div>
                                     </div>
-
+                                    
                                     <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 flex items-center gap-1">
                                         <RefreshCw size={12}/> {isFlipped ? "Close details" : "View analysis"}
                                     </div>
@@ -802,22 +858,25 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
 // --- Main Wizard Component ---
 
 export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, companyId }: AnalysisWizardModalProps) {
-    const [step, setStep] = useState<AnalysisStep>('topic');
-    const [topic, setTopic] = useState<AnalysisTopic | null>(null);
+    const [step, setStep] = useState<AnalysisStep>('role');
+    const [selectedTopic, setSelectedTopic] = useState<AnalysisTopic | null>(null);
+    const [selectedRole, setSelectedRole] = useState<UserRole>('investor');
 
     // Reset when closed
     useEffect(() => {
         if (!isOpen) {
             // small delay to reset after animation
             setTimeout(() => {
-                setStep('topic');
-                setTopic(null);
+                setStep('role');
+                setSelectedTopic(null);
+                setSelectedRole('investor');
             }, 300);
         }
     }, [isOpen]);
 
     const getTitle = () => {
         switch(step) {
+            case 'role': return "Select Analyst Persona";
             case 'topic': return "Select Analysis Type";
             case 'upload': return "Upload Documents";
             case 'progress': return ""; // Custom header in component
@@ -828,8 +887,9 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
 
     const getDescription = () => {
         switch(step) {
+            case 'role': return "Who should perform this analysis?";
             case 'topic': return "Choose the type of analysis you want to perform";
-            case 'upload': return `Upload PDF files for ${topic ? topic.toUpperCase() : ''} analysis`;
+            case 'upload': return `Upload PDF files for ${selectedTopic ? selectedTopic.toUpperCase() : ''} analysis`;
             default: return undefined;
         }
     };
@@ -841,72 +901,83 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
     }
 
     return (
-        <GlassModal
-            isOpen={isOpen}
-            onClose={onClose}
-            title={getTitle()}
-            description={getDescription()}
-            size={getSize()}
-            // Hide default close button for progress/results if needed, keeping consistent for now
+        <GlassModal 
+            isOpen={isOpen} 
+            onClose={onClose} 
+            title={`Analyze ${companyName}`}
+            // Optional: Dynamic size based on step
+            size={step === 'progress' ? 'lg' : 'md'}
             showCloseButton={step !== 'progress'}
             closeOnOverlayClick={step !== 'progress'}
         >
-            <AnimatePresence mode="wait">
-                {step === 'topic' && (
-                    <motion.div 
-                        key="topic"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                    >
-                        <TopicSelectionStep 
-                            selected={topic}
-                            onSelect={setTopic}
-                            onNext={() => setStep('upload')}
-                            onCancel={onClose}
-                        />
-                    </motion.div>
-                )}
+            <div className="p-1">
+                <AnimatePresence mode="wait">
+                    {step === 'role' && (
+                        <motion.div
+                            key="role"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                        >
+                            <RoleSelector selectedRole={selectedRole} onSelect={setSelectedRole} />
+                            <GlassModalFooter>
+                                <GlassButton variant="ghost" onClick={onClose}>Cancel</GlassButton>
+                                <GlassButton onClick={() => setStep('topic')}>Next</GlassButton>
+                            </GlassModalFooter>
+                        </motion.div>
+                    )}
 
-                {step === 'upload' && (
-                    <motion.div 
-                        key="upload"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                    >
-                        <FileUploadStep 
-                            companyId={companyId}
-                            onNext={() => setStep('progress')}
-                            onBack={() => setStep('topic')}
-                            onCancel={onClose}
-                        />
-                    </motion.div>
-                )}
+                    {step === 'topic' && (
+                        <motion.div
+                            key="topic"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                        >
+                            <TopicSelectionStep 
+                                selected={selectedTopic} 
+                                onSelect={setSelectedTopic} 
+                                onNext={() => setStep('upload')}
+                                onCancel={onClose}
+                            />
+                        </motion.div>
+                    )}
 
-                {step === 'progress' && (
-                    <motion.div 
-                        key="progress"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                    >
-                        <ProgressStep 
-                            companyId={companyId}
-                            onComplete={() => {
-                                onClose();
-                                onComplete();
-                                setTimeout(() => {
-                                    setStep('topic');
-                                    setTopic(null);
-                                }, 500); 
-                            }}
-                        />
-                    </motion.div>
-                )}
+                    {step === 'upload' && (
+                        <motion.div
+                            key="upload"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                        >
+                            <FileUploadStep 
+                                companyId={companyId}
+                                onNext={() => setStep('progress')}
+                                onBack={() => setStep('topic')}
+                                onCancel={onClose}
+                            />
+                        </motion.div>
+                    )}
 
-                {/* Results Step Removed from Modal - handled externally */}
-            </AnimatePresence>
+                    {step === 'progress' && (
+                        <motion.div
+                            key="progress"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                        >
+                            <ProgressStep 
+                                companyId={companyId} 
+                                userRole={selectedRole}
+                                onComplete={() => {
+                                    onComplete();
+                                    onClose();
+                                }} 
+                            />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
         </GlassModal>
     );
 }

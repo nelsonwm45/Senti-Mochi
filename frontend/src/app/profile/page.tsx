@@ -15,12 +15,14 @@ interface User {
   full_name: string | null;
   avatar_url: string | null;
   role: string;
+  persona: string | null;
   created_at: string;
 }
 
 export default function Profile() {
   const [user, setUser] = useState<User | null>(null);
   const [fullName, setFullName] = useState('');
+  const [persona, setPersona] = useState('investor');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -39,6 +41,7 @@ export default function Profile() {
         });
         setUser(res.data);
         setFullName(res.data.full_name || '');
+        setPersona(res.data.persona || 'investor');
         setAvatarPreview(res.data.avatar_url);
       } catch (err) {
         console.error('Failed to fetch user data:', err);
@@ -55,11 +58,11 @@ export default function Profile() {
     try {
       const res = await axios.patch(
         '/api/v1/users/me',
-        { full_name: fullName },
+        { full_name: fullName, persona: persona },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setUser(res.data);
-      toast.success('Display name updated successfully');
+      toast.success('Profile updated successfully');
     } catch (err) {
       toast.error('Failed to update display name');
     } finally {
@@ -302,6 +305,33 @@ export default function Profile() {
                     />
                     <p className="mt-2 text-xs text-foreground-muted ml-1">
                       This is how others will see your name
+                    </p>
+                  </div>
+
+                  {/* Persona Field */}
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2 ml-1">
+                      Analysis Persona
+                    </label>
+                    <div className="relative">
+                      <select 
+                        value={persona} 
+                        onChange={(e) => setPersona(e.target.value)}
+                        className="w-full bg-glass-bg border border-glass-border rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 appearance-none"
+                      >
+                        <option value="investor">Retail Investor</option>
+                        <option value="credit_risk">Credit Risk Officer</option>
+                        <option value="relationship_manager">Relationship Manager</option>
+                        <option value="market_analyst">Market Analyst</option>
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-foreground-muted">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-foreground-muted ml-1">
+                      Default perspective used for new analyses
                     </p>
                   </div>
 
