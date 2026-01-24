@@ -7,6 +7,7 @@ class AgentState(TypedDict):
     company_id: str  # UUID as string
     company_name: str
     job_id: Optional[str]  # Analysis job ID for status tracking
+    analysis_persona: str  # INVESTOR, RELATIONSHIP_MANAGER, CREDIT_RISK, MARKET_ANALYST
 
     # Inputs/Data gathered
     news_data: Optional[str] # Raw or summarized news content

@@ -7,6 +7,7 @@ from app.models import AnalysisReport, ReportChunk
 from app.services.rag import RAGService
 from app.agents.base import get_llm
 from app.agents.state import AgentState
+from app.agents.persona_config import get_persona_config
 from langchain_core.messages import SystemMessage, HumanMessage
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
@@ -67,7 +68,7 @@ class FinancialAnalysisOutput(BaseModel):
     health: FinancialTopic = Field(default_factory=lambda: FinancialTopic(score=0, summary="Data Not Available"))
 
 class InvestmentDecision(BaseModel):
-    rating: str = Field(description="Investment rating: BUY, SELL, or HOLD")
+    rating: str = Field(description="Investment rating based on persona (e.g., BUY/SELL/HOLD, ENGAGE/MONITOR/AVOID, etc.)")
     confidence_score: int = Field(description="Confidence score between 0 and 100")
     summary: str = Field(description="Executive summary of the investment thesis (Markdown)")
     bull_case: str = Field(description="Key arguments for the bull case (Markdown)")
@@ -77,6 +78,8 @@ class InvestmentDecision(BaseModel):
     esg_analysis: ESGAnalysisOutput = Field(description="Detailed ESG Breakdown matching UI requirements")
     # Add Financial Analysis
     financial_analysis: FinancialAnalysisOutput = Field(description="Detailed Financial Breakdown")
+    # Add role-specific metrics summary
+    analysis_focus_area: Dict[str, Any] = Field(default={}, description="Role-specific key metrics (e.g., Altman Z-Score for Credit Risk)")
 
 def normalize_detail(topic: Any):
     """Helper to convert list detail to string, force sources, and clean highlights"""
@@ -98,61 +101,88 @@ def normalize_detail(topic: Any):
 def judge_agent(state: AgentState) -> Dict[str, Any]:
     """
     Synthesizes all analyses and generates a final report.
+    Uses persona-specific decision framework.
     """
-    print(f"Judge Agent: deliberating for {state['company_name']}")
-    
-    prompt = f"""You are a Chief Investment Officer (Judge). Review the following analyses for {state['company_name']} provided by your team.
-    
+    persona = state.get('analysis_persona', 'INVESTOR')
+    config = get_persona_config(persona)
+    persona_label = persona.replace('_', ' ').title()
+    print(f"Judge Agent: deliberating for {state['company_name']} [Persona: {persona}]")
+
+    # Build persona-specific decision context
+    decision_options = " | ".join(config['decision_options'])
+    focus_metrics = ", ".join(config['financial_focus'])
+
+    # Build focus area instructions based on persona
+    focus_area_instructions = {
+        "INVESTOR": "Revenue Growth %, EPS, ROE, ROIC, Dividend Yield",
+        "RELATIONSHIP_MANAGER": "Liquidity Ratio, Recent Trigger Events, CSR Score, Values Alignment",
+        "CREDIT_RISK": "Debt-to-Equity, Current Ratio, Interest Coverage, Altman Z-Score, Governance Score",
+        "MARKET_ANALYST": "P/E vs Sector, DCF Fair Value, Market Share %, Macro Sensitivity"
+    }
+
+    prompt = f"""You are a Chief Investment Officer (Judge) acting as a {persona_label}.
+
+    DECISION FRAMEWORK:
+    - Decision Type: {config['decision_label']}
+    - Available Options: {decision_options}
+    - Primary Metric: {config['decision_metric']}
+
+    TIE-BREAKER RULES:
+    {config['tie_breaker_rules']}
+
+    Review the following analyses for {state['company_name']} provided by your team.
+
     1. NEWS ANALYSIS:
     {state.get('news_analysis', 'No data')}
-    
+
     2. FINANCIAL ANALYSIS:
     {state.get('financial_analysis', 'No data')}
-    
+
     3. CLAIMS/DOCUMENTS ANALYSIS:
     {state.get('claims_analysis', 'No data')}
-    
-    Synthesize these findings into a cohesive investment report.
+
+    Synthesize these findings into a cohesive report.
     - Resolve any conflicts between agents.
-    - Assign a Rating (BUY/SELL/HOLD) and Confidence Score.
+    - Assign a Rating from: {decision_options}
+    - Assign a Confidence Score (0-100).
     - Detail the Bull and Bear cases.
 
     --- DEBATE / CROSS-EXAMINATION PHASE ---
     Your team has critiqued each other's findings. Use these critiques to refine your judgment.
-    
+
     4. NEWS CRITIQUE (Critiquing Claims & Financials):
     {state.get('news_critique', 'No critique')}
-    
+
     5. FINANCIAL CRITIQUE (Critiquing News & Claims):
     {state.get('financial_critique', 'No critique')}
-    
+
     6. CLAIMS CRITIQUE (Critiquing News & Financials):
     {state.get('claims_critique', 'No critique')}
     -------------------------------------------
-    
+
     CRITICAL: YOU MUST ALSO PERFORM A DETAILED ESG (Environmental, Social, Governance) ANALYSIS.
     For each category (Overview, Governance, Environmental, Social, Disclosure), provide:
     - A score (0-100)
     - A concise summary (1-2 sentences). **Use bolding** for key terms. Avoid generic openers like "The company has...". Start directly with the insight.
     - **Highlights**: A list of 3-5 SPECIFIC data points (e.g. "Scope 3: 15.2M tCO2"). **PLAIN TEXT ONLY. NO MARKDOWN.**
-    - A detailed analysis (detail): **COMPREHENSIVE MARKDOWN BULLET POINTS** (8-10 bullets). 
+    - A detailed analysis (detail): **COMPREHENSIVE MARKDOWN BULLET POINTS** (8-10 bullets).
       - Go deep. Explain the 'Why' and 'How'. Connect dots between different data sources.
       - **IMPORTANT:** Use **bolding** for ALL key metrics, numbers, dates, and important entity names (e.g. "**$50M revenue**", "**Scope 1**", "**2025 Target**").
     - Citations and Sources based on the input data provided.
-    
+
     CRITICAL: YOU MUST ALSO PERFORM A DETAILED FINANCIAL ANALYSIS.
     For each category (Valuation, Profitability, Growth, Health), provide:
     - A score (0-100)
     - A concise summary (1-2 sentences). **Use bolding** for key metrics. Avoid generic openers.
     - **Highlights**: A list of 3-5 SPECIFIC financial metrics. **PLAIN TEXT ONLY. NO MARKDOWN.**
-    - A detailed analysis (detail): **COMPREHENSIVE MARKDOWN BULLET POINTS** (8-10 bullets). 
+    - A detailed analysis (detail): **COMPREHENSIVE MARKDOWN BULLET POINTS** (8-10 bullets).
       - Go deep. Analyze trends, risks, and strategic implications.
       - **IMPORTANT:** Use **bolding** for ALL key metrics, numbers, dates, and important entity names.
     - Citations and Sources
-    
+
     The 'Valuation' category should assess if the stock is over/undervalued.
     The 'Health' category should assess balance sheet strength.
-    
+
     The 'Overview' category should summarize the overall ESG posture.
     The 'Disclosure' category should evaluate the quality and transparency of their reporting.
 
@@ -161,16 +191,21 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     [1] -> NEWS ANALYSIS
     [2] -> FINANCIAL ANALYSIS
     [3] -> CLAIMS/DOCUMENTS ANALYSIS
-    
+
     When writing your detailed analysis:
     - Use `[1]` when citing News.
     - Use `[2]` when citing Financials.
     - Use `[3]` when citing Claims/Documents.
-    
+
     The `sources` list will be auto-populated by the system, so focus on getting the citation numbers right in all your text fields.
 
+    CRITICAL: POPULATE THE `analysis_focus_area` FIELD
+    As a {persona_label}, include these specific metrics in `analysis_focus_area`:
+    {focus_area_instructions.get(persona, focus_area_instructions['INVESTOR'])}
+    Format as a dictionary with metric names as keys and their values/assessments.
+
     CRITICAL: YOU MUST POPULATE ALL FIELDS IN THE JSON. DO NOT LEAVE ANY "analysis" OBJECTS EMPTY.
-    - If specific numeric data is missing, provide a qualitative assessment based on the available text/news context. 
+    - If specific numeric data is missing, provide a qualitative assessment based on the available text/news context.
     - DO NOT just say "Insufficient data" unless there is absolutely zero mention of the topic in any of sources.
     - Synthesize findings from ALL sources to fill gaps. For example, use News to estimate Environmental posture if exact metrics are missing.
     """
@@ -208,7 +243,7 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
         with Session(engine) as session:
             # Convert nested Pydantic model to dict for JSON storage
             # (Directly using response.model_dump in model init below is cleaner, but keeping explicit for clarity if needed)
-            
+
             report = AnalysisReport(
                 company_id=state['company_id'],
                 rating=response.rating,
@@ -219,6 +254,8 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
                 risk_factors=response.risk_factors,
                 esg_analysis=response.esg_analysis.model_dump(),
                 financial_analysis=response.financial_analysis.model_dump(),
+                analysis_persona=persona,
+                analysis_focus_area=response.analysis_focus_area if response.analysis_focus_area else {},
                 agent_logs=[
                     {"agent": "news", "output": state.get('news_analysis')},
                     {"agent": "financial", "output": state.get('financial_analysis')},
@@ -331,6 +368,8 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
                 risk_factors=mock_decision.risk_factors,
                 esg_analysis=mock_decision.esg_analysis.model_dump(),
                 financial_analysis=mock_decision.financial_analysis.model_dump(),
+                analysis_persona=persona,
+                analysis_focus_area={},
                 agent_logs=[
                     {"agent": "news", "output": state.get('news_analysis')},
                     {"agent": "financial", "output": state.get('financial_analysis')},

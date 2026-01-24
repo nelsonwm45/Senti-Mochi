@@ -2,12 +2,14 @@
 import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { Camera, User as UserIcon, Mail, Shield, Calendar, Save, Upload } from 'lucide-react';
+import { Camera, User as UserIcon, Mail, Shield, Calendar, Save, Upload, TrendingUp, Users, ShieldCheck, BarChart3, Briefcase } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput';
 import { GlassButton } from '@/components/ui/GlassButton';
+
+type AnalysisPersona = 'INVESTOR' | 'RELATIONSHIP_MANAGER' | 'CREDIT_RISK' | 'MARKET_ANALYST';
 
 interface User {
   id: string;
@@ -15,14 +17,60 @@ interface User {
   full_name: string | null;
   avatar_url: string | null;
   role: string;
+  analysis_persona: AnalysisPersona;
   created_at: string;
 }
+
+interface PersonaOption {
+  id: AnalysisPersona;
+  label: string;
+  description: string;
+  icon: React.ElementType;
+  focusAreas: string[];
+  decisionType: string;
+}
+
+const PERSONAS: PersonaOption[] = [
+  {
+    id: 'INVESTOR',
+    label: 'Investor',
+    description: 'Growth & Return Focus',
+    icon: TrendingUp,
+    focusAreas: ['Revenue Growth', 'EPS', 'ROE', 'ROIC'],
+    decisionType: 'BUY | SELL | HOLD'
+  },
+  {
+    id: 'RELATIONSHIP_MANAGER',
+    label: 'Relationship Manager',
+    description: 'Client & Sales Focus',
+    icon: Users,
+    focusAreas: ['Liquidity Events', 'Trigger Events', 'CSR'],
+    decisionType: 'ENGAGE | MONITOR | AVOID'
+  },
+  {
+    id: 'CREDIT_RISK',
+    label: 'Credit Risk',
+    description: 'Safety & Downside Focus',
+    icon: ShieldCheck,
+    focusAreas: ['Debt/Equity', 'Interest Coverage', 'Z-Score'],
+    decisionType: 'APPROVE | REJECT | COLLATERAL'
+  },
+  {
+    id: 'MARKET_ANALYST',
+    label: 'Market Analyst',
+    description: 'Big Picture Focus',
+    icon: BarChart3,
+    focusAreas: ['DCF', 'P/E Relative', 'Market Share'],
+    decisionType: 'OVER | EQUAL | UNDERWEIGHT'
+  }
+];
 
 export default function Profile() {
   const [user, setUser] = useState<User | null>(null);
   const [fullName, setFullName] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [savingPersona, setSavingPersona] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,6 +92,27 @@ export default function Profile() {
         console.error('Failed to fetch user data:', err);
         toast.error('Failed to load profile');
       }
+    }
+  };
+
+  const handleUpdatePersona = async (newPersona: AnalysisPersona) => {
+    if (!user || newPersona === user.analysis_persona) return;
+
+    setSavingPersona(true);
+    const token = localStorage.getItem('token');
+
+    try {
+      const res = await axios.patch(
+        '/api/v1/users/me/persona',
+        { analysis_persona: newPersona },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setUser(res.data);
+      toast.success(`Analysis persona updated to ${PERSONAS.find(p => p.id === newPersona)?.label}`);
+    } catch (err) {
+      toast.error('Failed to update analysis persona');
+    } finally {
+      setSavingPersona(false);
     }
   };
 
@@ -319,6 +388,72 @@ export default function Profile() {
                     </GlassButton>
                   </div>
                 </form>
+              </GlassCard>
+
+              {/* Analysis Persona Card */}
+              <GlassCard className="p-8">
+                <div className="flex items-center gap-4 mb-8 pb-6 border-b border-glass-border">
+                  <div className="p-3 bg-gradient-brand rounded-xl shadow-lg shadow-accent/20">
+                    <Briefcase className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-foreground">
+                      Analysis Persona
+                    </h2>
+                    <p className="text-sm text-foreground-muted">
+                      Choose how the AI analyzes companies for you
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {PERSONAS.map((persona) => {
+                    const Icon = persona.icon;
+                    const isSelected = user?.analysis_persona === persona.id;
+
+                    return (
+                      <motion.button
+                        key={persona.id}
+                        onClick={() => handleUpdatePersona(persona.id)}
+                        disabled={savingPersona}
+                        className={`p-4 rounded-xl border text-left transition-all ${
+                          isSelected
+                            ? 'border-accent bg-accent/10 ring-2 ring-accent/50'
+                            : 'border-glass-border bg-glass-bg hover:border-accent/50'
+                        } ${savingPersona ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        whileHover={{ scale: savingPersona ? 1 : 1.02 }}
+                        whileTap={{ scale: savingPersona ? 1 : 0.98 }}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`p-2 rounded-lg ${
+                            isSelected ? 'bg-accent text-white' : 'bg-glass-border'
+                          }`}>
+                            <Icon size={20} />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-foreground">{persona.label}</h4>
+                            <p className="text-sm text-foreground-muted">{persona.description}</p>
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {persona.focusAreas.map((area) => (
+                                <span key={area} className="text-xs px-2 py-0.5 bg-glass-border rounded">
+                                  {area}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="mt-2 text-xs text-accent font-mono">
+                              {persona.decisionType}
+                            </p>
+                          </div>
+                        </div>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+
+                <p className="mt-6 text-sm text-foreground-muted">
+                  Your selected persona determines which metrics the AI prioritizes
+                  and what type of recommendations it provides during company analysis.
+                </p>
               </GlassCard>
 
               {/* Tips Card */}

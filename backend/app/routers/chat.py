@@ -11,7 +11,7 @@ from app.models import User, ChatMessage, AuditLog
 from app.auth import get_current_user
 from app.services.rag import RAGService
 
-router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
+router = APIRouter(prefix="/chat", tags=["chat"])
 
 # Request/Response models using camelCase
 class QueryRequest(BaseModel):

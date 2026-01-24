@@ -6,6 +6,7 @@ from app.models import DocumentChunk
 from app.agents.base import get_llm
 from app.agents.state import AgentState
 from app.agents.cache import generate_cache_key, hash_content, get_cached_result, set_cached_result
+from app.agents.persona_config import get_persona_config
 from langchain_core.messages import SystemMessage, HumanMessage
 from sentence_transformers import SentenceTransformer
 import warnings
@@ -20,21 +21,21 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
     """
     Analyzes documents via RAG.
     Uses caching to ensure consistent results for unchanged data.
+    Adapts queries based on analysis_persona.
     """
-    print(f"Claims Agent: Analyzing documents for company {state['company_name']}")
+    persona = state.get('analysis_persona', 'INVESTOR')
+    config = get_persona_config(persona)
+    print(f"Claims Agent: Analyzing documents for company {state['company_name']} [Persona: {persona}]")
 
     try:
-        # 1. Environment & Climate Query
-        env_query = "Net Zero 2050 NZBA, Just Transition, SBTi, Sectoral Decarbonisation Pathways (Palm Oil, Power, O&G), PCAF Financed Emissions Scope 3, Carbon Neutrality, Green Energy Tariff, RECs, Stranded Assets, Climate Scenario Analysis NGFS, Physical Risk Acute Chronic, TNFD Nature-positive, NDPE, HCV."
-        
-        # 2. Social & Impact Query
-        social_query = "Humanising Financial Services, VBI Values-based Intermediation, Financial Inclusion MSMEs B40, Human Rights Due Diligence, Modern Slavery, FPIC, Supply Chain ESG screening, Future-Fit Talent, DEIB Diversity Equity Inclusion Belonging, Psychological safety, Employee Engagement Index."
-        
-        # 3. Governance & Risk Query
-        gov_query = "Double Materiality, Board Sustainability Committee BSC, Shariah Governance, Three Lines of Defence, Enterprise Risk Management ERM, Climate Risk Stress Testing CRST, ICAAP, Watchlist Supplier, Anti-Bribery Corruption ABC, Clawback provisions, Scorecard weightage."
+        # Use persona-specific queries for each ESG category
+        env_query = config['claims_queries']['environmental']
+        social_query = config['claims_queries']['social']
+        gov_query = config['claims_queries']['governance']
+        disclosure_query = config['claims_queries']['disclosure']
 
-        # 4. Disclosure & Standards Query
-        disclosure_query = "ISSB IFRS S1 S2, SASB Commercial Banks, TCFD, NSRF National Sustainability Reporting Framework, Limited Assurance ISAE 3000, Data coverage ratios, Interoperability, Materiality Assessment."
+        # For Credit Risk persona, governance is highest priority - fetch more governance chunks
+        is_credit_risk = persona == 'CREDIT_RISK'
 
         # Encode all queries
         env_vector = embedding_service.generate_embeddings([env_query])[0]
@@ -66,12 +67,14 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
             social_chunks = session.exec(social_statement).all()
             
             # Fetch Governance Chunks
+            # For Credit Risk persona, governance is highest priority - fetch more
+            gov_limit = 150 if is_credit_risk else 100
             gov_statement = (
                 select(DocumentChunk)
                 .join(Document)
                 .where(Document.company_id == state["company_id"])
                 .order_by(DocumentChunk.embedding.l2_distance(gov_vector))
-                .limit(100)
+                .limit(gov_limit)
             )
             gov_chunks = session.exec(gov_statement).all()
 
@@ -126,26 +129,35 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
         if cached_result:
             return {"claims_analysis": cached_result}
 
-        prompt = f"""You are a Claims Analyst. Your job is to verify and analyze the claims made by the company in their documents.
-        Focus on:
-        1. Strategic goals
-        2. Reported risks
-        3. Future guidance/outlook
-        4. ESG (Environmental, Social, Governance) commitments and performance (CRITICAL)
+        # Build persona-specific prompt
+        focus_areas = ", ".join(config['claims_focus'])
+        persona_label = persona.replace('_', ' ').title()
+
+        # Build priority note for Credit Risk
+        priority_note = ""
+        if is_credit_risk:
+            priority_note = "\n\n**HIGHEST PRIORITY: Governance** - Flag any fraud risks, weak internal controls, board independence issues, or related party transactions."
+
+        prompt = f"""You are a Claims/Documents Analyst serving a {persona_label}.
+
+        YOUR SPECIFIC FOCUS AREAS: {focus_areas}{priority_note}
+
+        Your job is to verify and analyze the claims made by the company in their documents.
+        Prioritize extracting information relevant to: {focus_areas}
 
         Document Excerpts:
         {context}
 
         Synthesize these findings into a Markdown report.
-        
+
         CRITICAL INSTRUCTION:
         Do NOT summarize generic statements (e.g. "Company is committed to ESG").
-        EXTRACT AND LIST SPECIFIC DATA POINTS:
-        - Exact Emissions figures (Scope 1, 2, 3 in tCO2e)
-        - Specific Frameworks (NZBA, TNFD, ISSB, GRI) -> Cite them!
-        - Concrete Targets (e.g. "Net Zero by 2050", "RM 50B Sustainable Finance by 2024")
-        - Policy names (e.g. "Group Sustainability Policy", "NDPE Policy")
-        
+        EXTRACT AND LIST SPECIFIC DATA POINTS relevant to a {persona_label}:
+        - Exact figures, dates, targets
+        - Specific frameworks and certifications
+        - Policy names and commitments
+        - Risk disclosures and mitigation measures
+
         If precise numbers are found, bold them."""
 
         llm = get_llm("llama-3.1-8b-instant")
@@ -163,21 +175,31 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
 def claims_critique(state: AgentState) -> Dict[str, Any]:
     """
     Critiques other agents' findings based on Internal Claims/Documents.
+    Uses persona-specific debate stances.
     """
-    print(f"Claims Agent: Critiquing findings for {state['company_name']}")
-    
+    persona = state.get('analysis_persona', 'INVESTOR')
+    config = get_persona_config(persona)
+    persona_label = persona.replace('_', ' ').title()
+    print(f"Claims Agent: Critiquing findings for {state['company_name']} [Persona: {persona}]")
+
     news_analysis = state.get("news_analysis", "No news analysis provided.")
     financial_analysis = state.get("financial_analysis", "No financial analysis provided.")
     my_analysis = state.get("claims_analysis", "No claims analysis provided.")
 
-    prompt = f"""You are a Claims/Documents Analyst. You have already provided your analysis based on company documents.
-    Now, review the findings from the News Analyst and the Financial Analyst.
-    
+    prompt = f"""You are a Claims/Documents Analyst in a structured debate for a {persona_label}.
+
+    DEBATE CONTEXT:
+    - GOVERNMENT (Pro) Stance: {config['government_stance']}
+    - OPPOSITION (Skeptic) Stance: {config['opposition_stance']}
+
+    You are providing an OBJECTIVE assessment. Use official documents to verify or challenge other findings.
+
     Your Task:
-    Critique their findings based on the official company documents/claims.
-    - Does the News misinterpret the company's stated strategy?
-    - Do the Financials align with the company's guidance and outlook?
-    
+    Critique the findings from the News Analyst and Financial Analyst based on official company documents.
+    - Does News misinterpret the company's stated strategy?
+    - Do Financials align with company guidance and outlook?
+    - Are there undisclosed risks in documents that others missed?
+
     1. CLAIMS ANALYSIS (Your Context):
     {my_analysis}
 
@@ -187,10 +209,10 @@ def claims_critique(state: AgentState) -> Dict[str, Any]:
     3. FINANCIAL ANALYSIS (To Critique):
     {financial_analysis}
 
-    Provide a concise critique (max 200 words) focusing on ALIGNMENT WITH COMPANY STATEMENTS.
+    Provide a concise critique (max 200 words) focusing on document evidence.
     """
 
     llm = get_llm("llama-3.1-8b-instant")
-    response = llm.invoke([SystemMessage(content="You are a diligent compliance and strategy analyst."), HumanMessage(content=prompt)])
-    
+    response = llm.invoke([SystemMessage(content=f"You are a diligent document analyst serving a {persona_label}."), HumanMessage(content=prompt)])
+
     return {"claims_critique": response.content}

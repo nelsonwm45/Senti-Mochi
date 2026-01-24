@@ -6,14 +6,18 @@ from app.models import NewsArticle, NewsChunk, Company
 from app.agents.base import get_llm
 from app.agents.state import AgentState
 from app.agents.cache import generate_cache_key, hash_content, get_cached_result, set_cached_result
+from app.agents.persona_config import get_persona_config
 from langchain_core.messages import SystemMessage, HumanMessage
 
 def news_agent(state: AgentState) -> Dict[str, Any]:
     """
     Fetches recent news and generates an analysis.
     Uses caching to ensure consistent results for unchanged data.
+    Adapts focus based on analysis_persona.
     """
-    print(f"News Agent: Analyzing for company {state['company_name']} ({state['company_id']})")
+    persona = state.get('analysis_persona', 'INVESTOR')
+    config = get_persona_config(persona)
+    print(f"News Agent: Analyzing for company {state['company_name']} ({state['company_id']}) [Persona: {persona}]")
 
     with Session(engine) as session:
         # Fetch recent 5 articles
@@ -45,12 +49,12 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
 
             news_content.append(f"Date: {article.published_at}\nTitle: {article.title}\nContent:\n{article_text}\n---")
             
-        # [NEW] Semantic Search for extra context
+        # [NEW] Semantic Search for extra context - PERSONA-AWARE
         try:
             from app.services.embedding_service import embedding_service
-            
-            # Query for key risks and events
-            query = f"Key risks, financial performance, major events, ESG controversies, greenwashing, labor disputes, governance scandals, deforestation for {state['company_name']}"
+
+            # Use persona-specific query for semantic search
+            query = f"{config['news_query']} for {state['company_name']}"
             query_vec = embedding_service.generate_embeddings([query])[0]
             
             vector_stmt = (
@@ -88,13 +92,21 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
     if len(context) > 15000:
         context = context[:15000] + "..."
 
-    prompt = f"""You are a News Analyst. Analyze the following recent news articles for {state['company_name']}.
-    Identify key events, market sentiment, and potential risks or opportunities.
+    # Build persona-specific prompt
+    focus_areas = ", ".join(config['news_focus'])
+    persona_label = persona.replace('_', ' ').title()
+
+    prompt = f"""You are a News Analyst serving a {persona_label}.
+
+    YOUR SPECIFIC FOCUS AREAS: {focus_areas}
+
+    Analyze the following recent news articles for {state['company_name']}.
+    Prioritize signals relevant to: {focus_areas}
 
     News Context:
     {context}
 
-    Provide a concise summary analysis in Markdown."""
+    Provide a focused analysis in Markdown, emphasizing the signals most relevant to a {persona_label}."""
 
     llm = get_llm("llama-3.1-8b-instant")
     response = llm.invoke([SystemMessage(content="You are a helpful financial news analyst."), HumanMessage(content=prompt)])
@@ -108,21 +120,30 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
 def news_critique(state: AgentState) -> Dict[str, Any]:
     """
     Critiques other agents' findings based on News data.
+    Uses persona-specific debate stances.
     """
-    print(f"News Agent: Critiquing findings for {state['company_name']}")
-    
+    persona = state.get('analysis_persona', 'INVESTOR')
+    config = get_persona_config(persona)
+    persona_label = persona.replace('_', ' ').title()
+    print(f"News Agent: Critiquing findings for {state['company_name']} [Persona: {persona}]")
+
     financial_analysis = state.get("financial_analysis", "No financial analysis provided.")
     claims_analysis = state.get("claims_analysis", "No claims analysis provided.")
     my_analysis = state.get("news_analysis", "No news analysis provided.")
 
-    prompt = f"""You are a News Analyst. You have already provided your analysis.
-    Now, review the findings from the Financial Analyst and the Claims (Documents) Analyst.
-    
+    prompt = f"""You are a News Analyst in a structured debate for a {persona_label}.
+
+    DEBATE CONTEXT:
+    - GOVERNMENT (Pro) Stance: {config['government_stance']}
+    - OPPOSITION (Skeptic) Stance: {config['opposition_stance']}
+
+    You are playing the OPPOSITION role. Use news signals to challenge overly optimistic conclusions.
+
     Your Task:
-    Critique their findings based *only* on the news signals you have.
-    - If Financials say "Growth is up" but News says "Major layoffs", point out the discrepancy.
-    - If Claims say "We are eco-friendly" but News deals with "Pollution Scandal", flag it.
-    - Confirm agreement if news supports their claims.
+    Critique the findings from the Financial Analyst and Claims Analyst based on news signals.
+    - Point out discrepancies between their conclusions and news reality.
+    - Flag any contradictions with recent events.
+    - Confirm agreement where news supports their claims.
 
     1. NEWS ANALYSIS (Your Context):
     {my_analysis}
@@ -133,10 +154,10 @@ def news_critique(state: AgentState) -> Dict[str, Any]:
     3. CLAIMS ANALYSIS (To Critique):
     {claims_analysis}
 
-    Provide a concise critique (max 200 words) focusing on CONSISTENCY and CONTRADICTIONS.
+    Provide a concise critique (max 200 words) applying the Opposition stance where relevant.
     """
 
     llm = get_llm("llama-3.1-8b-instant")
-    response = llm.invoke([SystemMessage(content="You are a critical news analyst."), HumanMessage(content=prompt)])
-    
+    response = llm.invoke([SystemMessage(content=f"You are a critical news analyst serving a {persona_label}."), HumanMessage(content=prompt)])
+
     return {"news_critique": response.content}

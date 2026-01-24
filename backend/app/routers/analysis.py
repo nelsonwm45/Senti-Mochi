@@ -2,7 +2,8 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select, col
 from app.database import get_session
-from app.models import Company, AnalysisReport, AnalysisJob, AnalysisStatus
+from app.models import Company, AnalysisReport, AnalysisJob, AnalysisStatus, User
+from app.auth import get_current_user
 from app.agents.workflow import app_workflow
 from uuid import UUID
 from typing import List, Optional
@@ -37,14 +38,25 @@ def update_job_status(
         session.commit()
 
 @router.post("/{company_id}", status_code=202)
-def trigger_analysis(company_id: UUID, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
+def trigger_analysis(
+    company_id: UUID,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
     """
     Triggers the Multi-Agent Investment Analysis for a company.
+    Uses the user's analysis_persona to determine analysis focus.
     Returns a job_id for status tracking.
     """
     company = session.get(Company, company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+
+    # Get user's analysis persona (default to INVESTOR)
+    analysis_persona = getattr(current_user, 'analysis_persona', 'INVESTOR')
+    if hasattr(analysis_persona, 'value'):
+        analysis_persona = analysis_persona.value  # Convert enum to string
 
     # Check for existing running analysis
     existing_job = session.exec(
@@ -58,12 +70,14 @@ def trigger_analysis(company_id: UUID, background_tasks: BackgroundTasks, sessio
             "message": "Analysis already in progress",
             "company_id": company_id,
             "job_id": existing_job.id,
-            "status": existing_job.status
+            "status": existing_job.status,
+            "analysis_persona": existing_job.analysis_persona
         }
 
-    # Create new analysis job
+    # Create new analysis job with persona
     job = AnalysisJob(
         company_id=company_id,
+        analysis_persona=analysis_persona,
         status=AnalysisStatus.PENDING,
         current_step="Initializing analysis",
         progress=0
@@ -72,11 +86,14 @@ def trigger_analysis(company_id: UUID, background_tasks: BackgroundTasks, sessio
     session.commit()
     session.refresh(job)
 
+    # Capture persona for background task
+    job_persona = analysis_persona
+
     def run_workflow():
         from app.database import engine
         from sqlmodel import Session as SyncSession
 
-        print(f"Starting background work for {company.name} (Job: {job.id})")
+        print(f"Starting background work for {company.name} (Job: {job.id}) [Persona: {job_persona}]")
         try:
             # Update status: Starting
             with SyncSession(engine) as db:
@@ -86,6 +103,7 @@ def trigger_analysis(company_id: UUID, background_tasks: BackgroundTasks, sessio
                 "company_id": str(company.id),
                 "company_name": company.name,
                 "job_id": str(job.id),  # Pass job_id for status updates
+                "analysis_persona": job_persona,  # Pass persona for polymorphic analysis
                 "errors": []
             }
             result = app_workflow.invoke(initial_state)
@@ -115,7 +133,12 @@ def trigger_analysis(company_id: UUID, background_tasks: BackgroundTasks, sessio
 
     background_tasks.add_task(run_workflow)
 
-    return {"message": "Analysis started", "company_id": company_id, "job_id": job.id}
+    return {
+        "message": "Analysis started",
+        "company_id": company_id,
+        "job_id": job.id,
+        "analysis_persona": job_persona
+    }
 
 @router.get("/{company_id}/status")
 def get_analysis_status(company_id: UUID, session: Session = Depends(get_session)):

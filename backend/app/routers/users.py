@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlmodel import Session, select
 from app.database import get_session
-from app.models import User, ClientProfile
+from app.models import User, ClientProfile, AnalysisPersona
 from app.auth import get_current_user
 from app.ai_service import get_financial_advice
 from pydantic import BaseModel
@@ -29,6 +29,9 @@ BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'avatars')
 class UserUpdate(BaseModel):
     full_name: str
 
+class PersonaUpdate(BaseModel):
+    analysis_persona: AnalysisPersona
+
 class ProfileUpdate(BaseModel):
     financial_goals: str
     risk_tolerance: str
@@ -45,6 +48,20 @@ def read_users_me(current_user: User = Depends(get_current_user)):
 def update_user(user_data: UserUpdate, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     """Update user's display name"""
     current_user.full_name = user_data.full_name
+    current_user.updated_at = datetime.now(timezone.utc)
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+    return current_user
+
+@router.patch("/me/persona", response_model=User)
+def update_persona(
+    data: PersonaUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    """Update user's analysis persona for polymorphic analysis."""
+    current_user.analysis_persona = data.analysis_persona
     current_user.updated_at = datetime.now(timezone.utc)
     session.add(current_user)
     session.commit()

@@ -27,6 +27,12 @@ class AnalysisStatus(str, Enum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
+class AnalysisPersona(str, Enum):
+    INVESTOR = "INVESTOR"  # Growth & Return focused
+    RELATIONSHIP_MANAGER = "RELATIONSHIP_MANAGER"  # Client & Sales focused
+    CREDIT_RISK = "CREDIT_RISK"  # Safety & Downside focused
+    MARKET_ANALYST = "MARKET_ANALYST"  # Big Picture focused
+
 # Tenant Model
 class Tenant(SQLModel, table=True):
     __tablename__ = "tenants"
@@ -47,11 +53,12 @@ class User(SQLModel, table=True):
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
     role: UserRole = Field(default=UserRole.USER)
+    analysis_persona: AnalysisPersona = Field(default=AnalysisPersona.INVESTOR)
     tenant_id: Optional[UUID] = Field(default=None, index=True)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
+
     watchlist: list["Watchlist"] = Relationship(back_populates="user")
 
 class ClientProfile(SQLModel, table=True):
@@ -212,21 +219,25 @@ class AnalysisReport(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     company_id: UUID = Field(foreign_key="companies.id", index=True)
     current_price: Optional[float] = None
-    rating: str  # BUY, SELL, HOLD
+    rating: str  # BUY, SELL, HOLD (or role-specific: ENGAGE/MONITOR/AVOID, etc.)
     confidence_score: int  # 0-100
     summary: str = Field(sa_column=Column(Text)) # Markdown text
     bull_case: str = Field(sa_column=Column(Text))
     bear_case: str = Field(sa_column=Column(Text))
     risk_factors: str = Field(sa_column=Column(Text))
-    
+
     # ESG Analysis Data (JSON) to match Frontend UI
     esg_analysis: dict = Field(default={}, sa_column=Column(JSON))
 
     # Financial Analysis Data (JSON)
     financial_analysis: dict = Field(default={}, sa_column=Column(JSON))
-    
+
+    # Polymorphic Analysis Fields
+    analysis_persona: Optional[str] = None  # Which persona was used for this analysis
+    analysis_focus_area: dict = Field(default={}, sa_column=Column(JSON))  # Role-specific metrics
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    
+
     # Store agent steps/debate logs for transparency
     agent_logs: list[dict] = Field(default=[], sa_column=Column(JSON))
 
@@ -250,6 +261,7 @@ class AnalysisJob(SQLModel, table=True):
     __tablename__ = "analysis_jobs"
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     company_id: UUID = Field(foreign_key="companies.id", index=True)
+    analysis_persona: Optional[str] = None  # Which persona to use for this analysis
     status: AnalysisStatus = Field(default=AnalysisStatus.PENDING)
     current_step: Optional[str] = None  # Human-readable step description
     progress: int = Field(default=0)  # 0-100 percentage
