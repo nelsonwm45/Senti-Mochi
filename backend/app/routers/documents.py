@@ -5,7 +5,7 @@ from uuid import UUID
 from datetime import datetime, timezone
 
 from app.database import get_session
-from app.models import Document, User, DocumentStatus, AuditLog
+from app.models import Document, DocumentChunk, User, DocumentStatus, AuditLog
 from app.auth import get_current_user
 from app.services.storage import S3StorageService
 from app.tasks.document_tasks import process_document_task
@@ -25,7 +25,9 @@ class DocumentResponse(BaseModel):
     processingStarted: Optional[str] = None
     processingCompleted: Optional[str] = None
     errorMessage: Optional[str] = None
-    
+    company_id: Optional[str] = None
+    chunk_count: Optional[int] = None
+
     class Config:
         from_attributes = True
 
@@ -120,7 +122,7 @@ async def upload_document(
         errorMessage=document.error_message
     )
 
-@router.get("/", response_model=DocumentListResponse)
+@router.get("", response_model=DocumentListResponse)
 async def list_documents(
     skip: int = 0,
     limit: int = 20,
@@ -158,7 +160,19 @@ async def list_documents(
     # Get paginated results
     query = query.offset(skip).limit(limit).order_by(Document.upload_date.desc())
     documents = session.exec(query).all()
-    
+
+    # Get chunk counts for all documents
+    doc_ids = [doc.id for doc in documents]
+    chunk_counts = {}
+    if doc_ids:
+        chunk_count_query = (
+            select(DocumentChunk.document_id, func.count(DocumentChunk.id).label('count'))
+            .where(DocumentChunk.document_id.in_(doc_ids))
+            .group_by(DocumentChunk.document_id)
+        )
+        for row in session.exec(chunk_count_query):
+            chunk_counts[row.document_id] = row.count
+
     return DocumentListResponse(
         documents=[
             DocumentResponse(
@@ -171,7 +185,9 @@ async def list_documents(
                 uploadDate=doc.upload_date.isoformat(),
                 processingStarted=doc.processing_started.isoformat() if doc.processing_started else None,
                 processingCompleted=doc.processing_completed.isoformat() if doc.processing_completed else None,
-                errorMessage=doc.error_message
+                errorMessage=doc.error_message,
+                company_id=str(doc.company_id) if doc.company_id else None,
+                chunk_count=chunk_counts.get(doc.id, 0)
             )
             for doc in documents
         ],
@@ -310,20 +326,39 @@ async def get_document_content(
 @router.get("/{document_id}/download")
 async def download_document(
     document_id: UUID,
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session)
+    token: Optional[str] = None, 
+    session: Session = Depends(get_session),
 ):
     """
     Stream the document content directly from S3 through the backend.
-    This avoids DNS/Network issues with internal MinIO URLs.
+    Supports auth via Query Param 'token' (for new tab links).
     """
     from fastapi.responses import StreamingResponse
+    from app.auth import SECRET_KEY, ALGORITHM, jwt, User
+    from fastapi.security import OAuth2PasswordBearer
     
+    # Manual Auth Resolution
+    auth_token = token
+    
+    if not auth_token:
+         raise HTTPException(status_code=401, detail="Not authenticated: Missing token")
+
+    try:
+        payload = jwt.decode(auth_token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+             raise HTTPException(status_code=401, detail="Invalid token")
+        user = session.query(User).filter(User.email == email).first()
+        if user is None:
+             raise HTTPException(status_code=401, detail="User not found")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
     document = session.get(Document, document_id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
         
-    if document.user_id != current_user.id:
+    if document.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
         
     storage = S3StorageService()

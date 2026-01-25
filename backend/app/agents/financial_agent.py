@@ -1,3 +1,10 @@
+"""
+Financial Agent - The Accountant
+
+Analyzes financial statements with citation tracking.
+Generates [F1], [F2], [F3], ... citations mapping to {document_name, row_line}.
+Focus: Valuation, Profitability, Growth, Financial Health.
+"""
 
 from typing import Dict, Any, List
 from sqlmodel import Session, select, col
@@ -7,99 +14,164 @@ from app.agents.base import get_llm
 from app.agents.state import AgentState
 from app.agents.cache import generate_cache_key, hash_content, get_cached_result, set_cached_result
 from app.agents.persona_config import get_persona_config
+from app.agents.prompts import FINANCIAL_AGENT_SYSTEM, get_financial_agent_prompt, get_critique_prompt
+from app.agents.citation_models import SourceMetadata
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
 
+
+# Mapping of statement types to citation IDs
+STATEMENT_TYPE_CITATION_MAP = {
+    "income_statement": "F1",
+    "balance_sheet": "F2",
+    "cash_flow": "F3",
+}
+
+
 def financial_agent(state: AgentState) -> Dict[str, Any]:
     """
-    Analyzes financial statements.
-    Uses caching to ensure consistent results for unchanged data.
-    Adapts focus based on analysis_persona.
+    Analyzes financial statements with citation tracking.
+
+    Citation Protocol:
+    - [F1] -> Income Statement
+    - [F2] -> Balance Sheet
+    - [F3] -> Cash Flow Statement
+    - Additional sources get [F4], [F5], etc.
+
+    Returns:
+        Dict with financial_analysis and citation_registry updates
     """
     persona = state.get('analysis_persona', 'INVESTOR')
     config = get_persona_config(persona)
-    print(f"Financial Agent: Analyzing for company {state['company_name']} [Persona: {persona}]")
+    company_id = state["company_id"]
+    company_name = state["company_name"]
+
+    print(f"Financial Agent: Analyzing for {company_name} [Persona: {persona}]")
+
+    # Initialize citation registry if not present
+    citation_registry = dict(state.get('citation_registry', {}))
 
     with Session(engine) as session:
         # Fetch detailed statements
         statement = (
             select(FinancialStatement)
-            .where(FinancialStatement.company_id == state["company_id"])
+            .where(FinancialStatement.company_id == company_id)
             .order_by(col(FinancialStatement.period).desc())
         )
         financials = session.exec(statement).all()
 
         if not financials:
-            return {"financial_analysis": "No financial data found."}
+            return {
+                "financial_analysis": "No financial data found.",
+                "citation_registry": citation_registry
+            }
 
-        # Organize by type
+        # Organize by type and create citation metadata
         data_summary = {}
+        source_list_parts = []
+        next_citation_idx = 4  # Start at F4 for additional sources
+
         for f in financials:
-            if f.statement_type not in data_summary:
-                data_summary[f.statement_type] = []
-            data_summary[f.statement_type].append({
+            st_type = f.statement_type.lower()
+
+            # Get or assign citation ID
+            if st_type in STATEMENT_TYPE_CITATION_MAP:
+                citation_id = STATEMENT_TYPE_CITATION_MAP[st_type]
+            else:
+                citation_id = f"F{next_citation_idx}"
+                next_citation_idx += 1
+
+            # Create SourceMetadata for this statement (only once per type)
+            if citation_id not in citation_registry:
+                source_metadata = {
+                    "id": citation_id,
+                    "title": f"{st_type.replace('_', ' ').title()} ({f.period})",
+                    "url_or_path": f"financial_statement/{f.id}",
+                    "type": "Financial",
+                    "date": f.period,
+                    "row_line": f"Period: {f.period}"
+                }
+                citation_registry[citation_id] = source_metadata
+
+                # Add to source list for prompt
+                source_list_parts.append(
+                    f"[{citation_id}] - {st_type.replace('_', ' ').title()} (Period: {f.period})"
+                )
+
+            # Organize data
+            if st_type not in data_summary:
+                data_summary[st_type] = []
+            data_summary[st_type].append({
                 "period": f.period,
-                "data": f.data
+                "data": f.data,
+                "citation_id": citation_id
             })
 
-    # Prepare context
+    # Prepare context with embedded citation references
     context_parts = []
     for st_type, records in data_summary.items():
         # Sort by period descending
         records.sort(key=lambda x: x['period'], reverse=True)
         recent_records = records[:3]
-        context_parts.append(f"### {st_type.upper()}")
+
+        # Get the citation ID for this statement type
+        citation_id = STATEMENT_TYPE_CITATION_MAP.get(st_type, records[0]['citation_id'])
+
+        context_parts.append(f"### {st_type.upper()} [{citation_id}]")
         for r in recent_records:
             context_parts.append(f"Period: {r['period']}")
             context_parts.append(json.dumps(r['data'], indent=2))
 
     context = "\n".join(context_parts)
+    source_list = "\n".join(source_list_parts)
 
     # Generate cache key based on content hash
     content_hash = hash_content(context)
-    cache_key = generate_cache_key("financial", state["company_id"], content_hash)
+    cache_key = generate_cache_key("financial_v3", company_id, content_hash)
 
     # Check cache first
     cached_result = get_cached_result(cache_key)
     if cached_result:
-        return {"financial_analysis": cached_result}
+        return {
+            "financial_analysis": cached_result,
+            "citation_registry": citation_registry
+        }
 
-    # Check token limit roughly (characters / 4)
-    # Reduced to 15000 to fit within Groq's 6000 TPM limit (approx 3750 tokens)
-    if len(context) > 15000:
-        context = context[:15000] + "..."
+    # Truncate if too long
+    # Truncate if too long (Groq Free Tier Limit: 6000 TPM total)
+    # 4500 chars is roughly 1100 tokens (JSON is token-heavy)
+    if len(context) > 4500:
+        context = context[:4500] + "... [TRUNCATED]"
 
-    # Build persona-specific prompt
-    focus_metrics = ", ".join(config['financial_focus'])
-    persona_label = persona.replace('_', ' ').title()
-
-    prompt = f"""You are a Financial Analyst serving a {persona_label}.
-
-    PRIORITY METRICS TO CALCULATE: {focus_metrics}
-
-    Analyze the following financial statements for {state['company_name']}.
-    Focus on calculating and assessing: {focus_metrics}
-
-    Financial Data:
-    {context}
-
-    Provide a professional assessment in Markdown, prioritizing metrics most relevant to a {persona_label}."""
+    # Build prompt with citation instructions
+    prompt = get_financial_agent_prompt(
+        company_name=company_name,
+        persona=persona,
+        financial_context=context,
+        source_list=source_list
+    )
 
     llm = get_llm("llama-3.1-8b-instant")
-    response = llm.invoke([SystemMessage(content="You are an expert financial analyst."), HumanMessage(content=prompt)])
+    response = llm.invoke([
+        SystemMessage(content=FINANCIAL_AGENT_SYSTEM),
+        HumanMessage(content=prompt)
+    ])
 
     # Cache the result
     set_cached_result(cache_key, response.content)
 
-    return {"financial_analysis": response.content}
+    return {
+        "financial_analysis": response.content,
+        "citation_registry": citation_registry
+    }
+
 
 def financial_critique(state: AgentState) -> Dict[str, Any]:
     """
     Critiques other agents' findings based on Financial data.
-    Uses persona-specific debate stances.
+    Preserves and references all citation IDs.
     """
     persona = state.get('analysis_persona', 'INVESTOR')
-    config = get_persona_config(persona)
     persona_label = persona.replace('_', ' ').title()
     print(f"Financial Agent: Critiquing findings for {state['company_name']} [Persona: {persona}]")
 
@@ -107,33 +179,20 @@ def financial_critique(state: AgentState) -> Dict[str, Any]:
     claims_analysis = state.get("claims_analysis", "No claims analysis provided.")
     my_analysis = state.get("financial_analysis", "No financial analysis provided.")
 
-    prompt = f"""You are a Financial Analyst in a structured debate for a {persona_label}.
-
-    DEBATE CONTEXT:
-    - GOVERNMENT (Pro) Stance: {config['government_stance']}
-    - OPPOSITION (Skeptic) Stance: {config['opposition_stance']}
-
-    You are playing the GOVERNMENT role. Use hard financial numbers to support or defend.
-
-    Your Task:
-    Critique the findings from the News Analyst and Claims Analyst based on actual financial data.
-    - Point out where sentiment doesn't match financial reality.
-    - Verify or challenge claims with hard numbers.
-    - Highlight positive fundamentals if news/claims are overly negative.
-
-    1. FINANCIAL ANALYSIS (Your Context):
-    {my_analysis}
-
-    2. NEWS ANALYSIS (To Critique):
-    {news_analysis}
-
-    3. CLAIMS ANALYSIS (To Critique):
-    {claims_analysis}
-
-    Provide a concise critique (max 200 words) applying the Government stance where relevant.
-    """
+    prompt = get_critique_prompt(
+        agent_type="financial",
+        persona=persona,
+        my_analysis=my_analysis,
+        other_analysis_1=news_analysis,
+        other_analysis_2=claims_analysis,
+        analysis_1_name="News Analysis",
+        analysis_2_name="Claims Analysis"
+    )
 
     llm = get_llm("llama-3.1-8b-instant")
-    response = llm.invoke([SystemMessage(content=f"You are a data-driven financial analyst serving a {persona_label}."), HumanMessage(content=prompt)])
+    response = llm.invoke([
+        SystemMessage(content=f"You are a data-driven financial analyst serving a {persona_label}. PRESERVE all citation IDs."),
+        HumanMessage(content=prompt)
+    ])
 
     return {"financial_critique": response.content}

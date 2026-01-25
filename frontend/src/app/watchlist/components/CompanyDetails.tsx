@@ -6,7 +6,6 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { formatDistanceToNow, format } from 'date-fns';
 import { getKeyMetrics, formatValue, formatPercent } from '../utils';
 import CompanyDocumentUpload from '@/components/documents/CompanyDocumentUpload';
-import CompanyDocumentList from '@/components/documents/CompanyDocumentList';
 import { AnalysisWizardModal, AnalysisResultsView } from './AnalysisComponents';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { Sparkles } from 'lucide-react';
@@ -576,13 +575,9 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                 )}
 
                 {activeTab === 'uploads' && (
-                    <div className="space-y-6">
-                        <GlassCard>
-                            <h3 className="text-lg font-semibold text-white mb-4">Upload Documents for {company.ticker}</h3>
-                            <CompanyDocumentUpload companyId={company.id} />
-                        </GlassCard>
-                        <CompanyDocumentList companyId={company.id} />
-                    </div>
+                    <GlassCard>
+                        <CompanyDocumentUpload companyId={company.id} companyTicker={company.ticker} />
+                    </GlassCard>
                 )}
 
                 {activeTab === 'annual-reports' && (

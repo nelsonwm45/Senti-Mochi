@@ -57,7 +57,11 @@ class RAGService:
             company_filter = ""
             if company_ids and len(company_ids) > 0:
                 ids_str = ",".join([f"'{str(cid)}'" for cid in company_ids])
-                company_filter = f"AND (d.company_id IN ({ids_str}) OR d.company_id IS NULL)"
+                # STRICT mode: Only get docs for this specific company. Do not include global (NULL) docs
+                # unless explicitly requested. Ideally, common docs should be handled separately.
+                # For now, we STRICTLY filter to avoid "AMMB in Maybank" contamination.
+                # ALSO: Exclude deleted documents.
+                company_filter = f"AND d.company_id IN ({ids_str}) AND d.is_deleted = false"
 
             query_sql = f"""
                 SELECT 
@@ -70,8 +74,10 @@ class RAGService:
                     d.filename,
                     d.user_id,
                     1 - (dc.embedding <=> '{embedding_str}'::vector) as similarity,
+                    1 - (dc.embedding <=> '{embedding_str}'::vector) as similarity,
                     dc.start_line,
-                    dc.end_line
+                    dc.end_line,
+                    d.company_id
                 FROM document_chunks dc
                 JOIN documents d ON dc.document_id = d.id
                 WHERE d.user_id = '{str(user_id)}'
@@ -88,6 +94,16 @@ class RAGService:
             # Format results
             chunks = []
             for row in results:
+                # INTEGRITY CHECK: Verify company_id (from JOIN) matches requested company_ids
+                doc_company_id = row[11] # 12th column (index 11) is d.company_id
+                
+                # If we are strictly filtering by company, verify logic
+                if company_ids:
+                    allowed_ids = [str(cid) for cid in company_ids]
+                    if doc_company_id and str(doc_company_id) not in allowed_ids:
+                         print(f"WARNING: Data Integrity Mismatch! Skipped chunk {row[0]} for company {doc_company_id} (Expected in {allowed_ids})")
+                         continue
+
                 chunks.append({
                     "id": row[0],
                     "document_id": row[1],
@@ -100,7 +116,7 @@ class RAGService:
                     "start_line": row[9],
                     "end_line": row[10],
                     # Construct URL for frontend redirection
-                    "url": f"{os.getenv('API_URL', 'http://localhost:8000')}/api/v1/documents/{row[1]}/download"
+                    "url": f"/api/v1/documents/{row[1]}/download"
                 })
             
             return chunks
@@ -153,6 +169,11 @@ class RAGService:
         
         chunks = []
         for row in results:
+            # INTEGRITY CHECK: Verify company_id (joined table) matches requested company_id
+            # Although the SQL WHERE clause handles this, double-checking prevents subtle bugs
+            # We don't have the company_id in the SELECT, but we trust the query for now.
+            # If we wanted to be paranoid, we'd add 'na.company_id' to SELECT.
+            
             chunks.append({
                 "id": row[0],
                 "document_id": None, # Distinct type

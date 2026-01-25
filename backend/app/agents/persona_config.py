@@ -47,20 +47,20 @@ PERSONA_CONFIG: Dict[str, PersonaDirectives] = {
         "news_focus": [
             "M&A Rumors",
             "Product Launches",
-            "Market Sentiment (hyped vs beaten down)",
+            "Market Sentiment (hyped vs. beaten down)",
             "Analyst Upgrades/Downgrades"
         ],
         "claims_focus": [
             "Materiality (do ESG risks hurt profits?)",
             "Green Alpha (competitive moats like proprietary tech)"
         ],
-        "financial_query": "Revenue growth YoY, EPS earnings per share, profit margin, ROE return on equity, ROIC return on invested capital, dividend yield, free cash flow, earnings quality",
-        "news_query": "M&A acquisition merger rumors, product launch, market sentiment, analyst rating upgrade downgrade, expansion growth plans",
+        "financial_query": "Revenue growth YoY, EPS earnings per share trend, profit margin expansion, ROE return on equity, ROIC return on invested capital, dividend payout ratio, earnings quality",
+        "news_query": "M&A rumors, product launches, market sentiment hype, analyst rating upgrade downgrade, expansion growth plans",
         "claims_queries": {
-            "environmental": "Green Alpha, sustainable competitive advantage, clean technology, proprietary green tech, climate investment opportunities",
-            "social": "Customer satisfaction impact on revenue, employee productivity, talent retention affecting growth",
-            "governance": "Executive compensation alignment with shareholders, capital allocation strategy, shareholder returns",
-            "disclosure": "Forward guidance quality, earnings transparency, guidance accuracy, materiality assessment"
+            "environmental": "Net Zero 2050, 2030 Decarbonisation Targets, sector pathways Thermal Coal Cement Palm Oil Power Oil & Gas Real Estate. Scope 1 2 3 GHG emissions, Financed Emissions, Carbon Intensity, Internal Carbon Pricing ICP. NDPE No Deforestation No Peat No Exploitation, Biodiversity Nature Statement, Nature-related risks, High Conservation Value HCV. Sustainable Finance GSSIPS, Sustainability-linked financing SLF, Transition finance, Green Bonds Sukuk. Physical risk, Transition risk, Climate Scenario Analysis, Climate Stress Testing. NZBA, TFF, SBTi, PCAF, TNFD, RECs.",
+            "social": "Human Rights Due Diligence, Grievance Mechanism, Modern Slavery, Labor Standards. Women in leadership, Gender pay gap, Diversity Equity Inclusion DEI. Economic Inclusion, Financial Literacy, Underserved communities, B40, SME empowerment. Customer Experience CX, Net Promoter Score NPS, Data Privacy, Cybersecurity, Anti-scam Fraud prevention. Employee volunteerism, Occupational Health and Safety OHS, Talent retention, Sustainability culture. Humanising Financial Services, Targeted Relief and Recovery Facility, MSMEs empowerment, VBI.",
+            "governance": "Board Oversight, Group Sustainability Governance Committee GSGC, Group Sustainability Council, Three Lines of Defence. Sustainability-linked KPIs, Remuneration linkage, Executive compensation. EWRM Enterprise-Wide Risk Management, Sustainability Risk Management Framework, Climate Risk Management Standard, Sustainability Watchlist. Anti-Bribery Corruption, Whistleblowing Policy, Tax Management, Vendor Code of Conduct VCOC. Shariah Governance for ESG.",
+            "disclosure": "GRI Standards 2021, ISSB IFRS S1 S2, TCFD alignment, National Sustainability Reporting Framework NSRF. Double Materiality, Material Matters, Stakeholder Engagement. Limited Assurance, Independent Third-Party Verification, Data Reliability, ISAE 3000. Greenwashing risk mitigation, Science-based targets, Data completeness. SASB Standards, Data coverage ratios, Scope 3 data quality."
         },
         "government_stance": "Argue that the company is a Growth Machine. Highlight rising ROIC, new product success, and 'Green Alpha' moats that create sustainable competitive advantages.",
         "opposition_stance": "Argue that the stock is a Value Trap. Highlight slowing EPS, margin compression, or 'fluffy' ESG claims with no measurable profit impact.",
@@ -95,13 +95,13 @@ PERSONA_CONFIG: Dict[str, PersonaDirectives] = {
             "Values Alignment (e.g., Net Zero goals matching bank products)",
             "CSR Initiatives (co-sponsorship opportunities)"
         ],
-        "financial_query": "Liquidity position, cash raise, divestiture, capex capital expenditure investment, working capital, revenue stability predictability, banking relationships",
+        "financial_query": "Liquidity position, cash raise, divestiture, capex capital expenditure investment, working capital trends, revenue stability predictability, banking relationships",
         "news_query": "New CEO CFO executive appointment, office expansion, awards recognition, crisis management, partnership deal, strategic initiative",
         "claims_queries": {
-            "environmental": "Net Zero commitment, sustainability products for clients, green banking offerings, renewable energy targets",
-            "social": "Community investment, financial inclusion, CSR corporate social responsibility, co-sponsorship opportunities",
-            "governance": "Client data protection, ethical business practices, values alignment",
-            "disclosure": "Client communication quality, transparency, stakeholder engagement"
+            "environmental": "Sustainable Finance GSSIPS, Sustainability-linked financing SLF, Transition finance, Green Bonds Sukuk. Net Zero commitment, renewable energy targets, Green Energy Tariff GET, RECs. Transition Finance Framework TFF, Sectoral Decarbonisation Pathways.",
+            "social": "Financial Inclusion, Economic Inclusion, Underserved communities, B40, SME empowerment, Micro Small Medium Enterprises MSMEs. Customer Experience CX, NPS. Employee volunteerism, Sustainability culture. Humanising Financial Services, VBI Values-based Intermediation.",
+            "governance": "Client data protection, Cybersecurity, Anti-scam Fraud prevention. Ethical business practices, Anti-Bribery Corruption, Vendor Code of Conduct VCOC. Shariah Governance.",
+            "disclosure": "Client communication quality, transparency, stakeholder engagement, integrated reporting. Assurance Reliability ISAE 3000."
         },
         "government_stance": "Argue that the client is Thriving & Needs Support. Highlight new awards, expansion plans, and alignment with our Green Bonds and sustainable finance products.",
         "opposition_stance": "Argue that the client is Stressed & Hidden Risk. Highlight leadership churn (New CEO), bad PR needing damage control, or lack of liquidity suggesting financial distress.",
@@ -125,8 +125,7 @@ PERSONA_CONFIG: Dict[str, PersonaDirectives] = {
             "Current Ratio",
             "Interest Coverage Ratio",
             "Operating Cash Flow Consistency",
-            "Altman Z-Score (Bankruptcy prediction)",
-            "Quick Ratio"
+            "Altman Z-Score (Bankruptcy prediction)"
         ],
         "news_focus": [
             "Litigation & Fines",
@@ -138,13 +137,13 @@ PERSONA_CONFIG: Dict[str, PersonaDirectives] = {
             "Transition Risk (business model viability)",
             "Governance (fraud, board independence, internal controls) - HIGHEST PRIORITY"
         ],
-        "financial_query": "Debt to equity ratio, current ratio, interest coverage, operating cash flow, Altman Z-score bankruptcy prediction, leverage, default probability, quick ratio, liquidity",
+        "financial_query": "Debt to equity ratio, current ratio, interest coverage, operating cash flow consistency, Altman Z-score bankruptcy prediction, leverage, default probability, quick ratio",
         "news_query": "Litigation lawsuit fine penalty, regulatory action ban tariff, credit rating downgrade, default bankruptcy rumors, covenant breach",
         "claims_queries": {
-            "environmental": "Climate transition risk, stranded assets, carbon liabilities, physical climate risk",
-            "social": "Labor disputes, supply chain disruption risk, human rights violations, workforce stability",
-            "governance": "Board independence, audit quality, internal controls, fraud risk, related party transactions, management integrity",
-            "disclosure": "Contingent liability disclosure, off-balance sheet items, risk factor transparency"
+            "environmental": "Climate Risk, Physical risk, Transition risk, Climate Scenario Analysis, Climate Stress Testing. Stranded Assets, Carbon liabilities, Internal Carbon Pricing ICP. Financed Emissions PCAF, Scope 3 GHG. NGFS Scenarios Orderly Disorderly Hot House World.",
+            "social": "Labor disputes, Modern Slavery, Human Rights Due Diligence. Supply chain disruption risk, NDPE. Occupational Health and Safety OHS. Data Privacy, Cybersecurity risks.",
+            "governance": "Board Oversight, Three Lines of Defence, Group Sustainability Governance Committee. EWRM Enterprise-Wide Risk Management, Sustainability Risk Management Framework. Anti-Bribery Corruption, Whistleblowing Policy, Tax Management. Management integrity.",
+            "disclosure": "Assurance Reliability ISAE 3000, Data Reliability, Greenwashing risk. Contingent liability disclosure, risk factor transparency. TCFD alignment, ISSB IFRS S1 S2."
         },
         "government_stance": "Argue that the company is a Fortress. Highlight strong Interest Coverage Ratio, consistent Operating Cash Flow, and clean Governance with independent board oversight.",
         "opposition_stance": "Argue that the company is a Default Risk. Highlight low Altman Z-Scores (distress zone < 1.8), pending lawsuits, and regulatory threats to their core business model.",
@@ -180,13 +179,13 @@ PERSONA_CONFIG: Dict[str, PersonaDirectives] = {
             "Market Share Trends",
             "Peer Comparison (Margins vs. Competitors)"
         ],
-        "financial_query": "DCF discounted cash flow valuation, WACC, terminal value, P/E ratio vs historical, PEG ratio, quality of earnings, revenue segmentation by segment",
-        "news_query": "Interest rate impact sensitivity, FX foreign exchange currency exposure, supply chain reliance disruption, sector trend rotation, industry consolidation, regulatory change",
+        "financial_query": "DCF discounted cash flow valuation, WACC, terminal growth, P/E ratio, historical P/E, quality of earnings, revenue mix by segment",
+        "news_query": "Macro factors interest rate sensitivity, FX exposure, supply chain dynamics, sector rotation, regulatory changes",
         "claims_queries": {
-            "environmental": "Industry decarbonization trends, peer comparison on emissions intensity, sector sustainability benchmarks",
-            "social": "Labor market dynamics vs peers, talent acquisition competitive position, workforce productivity comparison",
-            "governance": "Board expertise vs sector peers, strategic planning capability, management track record",
-            "disclosure": "Segment reporting quality, peer benchmarking data, industry comparison metrics"
+            "environmental": "Sector-specific pathways Thermal Coal Cement Palm Oil Power Oil & Gas. Net Zero Banking Alliance NZBA, SBTi targets. Green Alpha, Carbon Intensity vs peers. Transition Finance Framework TFF.",
+            "social": "Diversity Equity Inclusion DEI comparison. Talent retention, Future-Fit Talent. Financial Inclusion impact B40 SME. Customer Welfare NPS comparison.",
+            "governance": "Remuneration linkage, Sustainability-linked KPIs for executives. Board composition diversity. Anti-Bribery Corruption standards.",
+            "disclosure": "GRI Standards 2021, ISSB IFRS S1 S2, TCFD, NSRF. Double Materiality assessment. Data coverage ratios, Scope 3 data quality. Independent Third-Party Verification."
         },
         "government_stance": "Argue that the company is a Sector Leader. Highlight pricing power, market share gains, and resilience to macro headwinds like interest rate changes.",
         "opposition_stance": "Argue that the company is Losing Relevance. Highlight superior competitors taking share, forex exposure risks, and weak 'Quality of Earnings' with one-time items.",

@@ -11,6 +11,8 @@ export interface Document {
 	processingStarted?: string;
 	processingCompleted?: string;
 	errorMessage?: string;
+	company_id?: string;
+	chunk_count?: number;
 }
 
 export interface DocumentListResponse {

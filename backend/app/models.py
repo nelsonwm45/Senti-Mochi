@@ -222,6 +222,11 @@ class AnalysisReport(SQLModel, table=True):
     rating: str  # BUY, SELL, HOLD (or role-specific: ENGAGE/MONITOR/AVOID, etc.)
     confidence_score: int  # 0-100
     summary: str = Field(sa_column=Column(Text)) # Markdown text
+    
+    # New Role-Based Fields
+    justification: Optional[str] = Field(default=None, sa_column=Column(Text))
+    key_concerns: list[str] = Field(default=[], sa_column=Column(JSON))
+
     bull_case: str = Field(sa_column=Column(Text))
     bear_case: str = Field(sa_column=Column(Text))
     risk_factors: str = Field(sa_column=Column(Text))

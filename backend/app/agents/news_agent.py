@@ -1,5 +1,12 @@
+"""
+News Agent - The Scout
 
-from typing import Dict, Any
+Fetches and analyzes recent news articles with citation tracking.
+Generates [N1], [N2], ... citations mapping to {url, title, date}.
+Focus: Market Sentiment and Recent Scandals.
+"""
+
+from typing import Dict, Any, List
 from sqlmodel import Session, select, col
 from app.database import engine
 from app.models import NewsArticle, NewsChunk, Company
@@ -7,34 +14,71 @@ from app.agents.base import get_llm
 from app.agents.state import AgentState
 from app.agents.cache import generate_cache_key, hash_content, get_cached_result, set_cached_result
 from app.agents.persona_config import get_persona_config
+from app.agents.prompts import NEWS_AGENT_SYSTEM, get_news_agent_prompt, get_critique_prompt
+from app.agents.citation_models import SourceMetadata
 from langchain_core.messages import SystemMessage, HumanMessage
+
 
 def news_agent(state: AgentState) -> Dict[str, Any]:
     """
-    Fetches recent news and generates an analysis.
-    Uses caching to ensure consistent results for unchanged data.
-    Adapts focus based on analysis_persona.
+    Fetches recent news and generates an analysis with citation tracking.
+
+    Citation Protocol:
+    - Each article gets an ID: [N1], [N2], [N3], etc.
+    - Returns citation_registry updates with SourceMetadata
+
+    Returns:
+        Dict with news_analysis and citation_registry updates
     """
     persona = state.get('analysis_persona', 'INVESTOR')
     config = get_persona_config(persona)
-    print(f"News Agent: Analyzing for company {state['company_name']} ({state['company_id']}) [Persona: {persona}]")
+    company_id = state["company_id"]
+    company_name = state["company_name"]
+
+    print(f"News Agent: Analyzing for {company_name} ({company_id}) [Persona: {persona}]")
+
+    # Initialize citation registry if not present
+    citation_registry = dict(state.get('citation_registry', {}))
 
     with Session(engine) as session:
         # Fetch recent 5 articles
         statement = (
             select(NewsArticle)
-            .where(NewsArticle.company_id == state["company_id"])
+            .where(NewsArticle.company_id == company_id)
             .order_by(col(NewsArticle.published_at).desc())
-            .limit(5)
+            .limit(15)
         )
         articles = session.exec(statement).all()
 
         if not articles:
-            return {"news_analysis": "No recent news found for this company."}
+            return {
+                "news_analysis": "No recent news found for this company.",
+                "citation_registry": citation_registry
+            }
 
-        # Collect chunks from these articles
+        # Build citation metadata and content
         news_content = []
-        for article in articles:
+        source_list_parts = []
+
+        for idx, article in enumerate(articles, start=1):
+            citation_id = f"N{idx}"
+
+            # Create SourceMetadata for this article
+            source_metadata = {
+                "id": citation_id,
+                "title": article.title,
+                "url_or_path": article.url,
+                "type": "News",
+                "date": article.published_at.isoformat() if article.published_at else None
+            }
+            citation_registry[citation_id] = source_metadata
+
+            # Add to source list for prompt
+            source_list_parts.append(
+                f"[{citation_id}] - \"{article.title}\" ({article.published_at.strftime('%Y-%m-%d') if article.published_at else 'Unknown date'})"
+            )
+
+            # Collect article content
             chunk_stmt = (
                 select(NewsChunk)
                 .where(NewsChunk.news_id == article.id)
@@ -47,83 +91,87 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
             else:
                 article_text = article.content or ""
 
-            news_content.append(f"Date: {article.published_at}\nTitle: {article.title}\nContent:\n{article_text}\n---")
-            
-        # [NEW] Semantic Search for extra context - PERSONA-AWARE
+            news_content.append(
+                f"[{citation_id}] Date: {article.published_at}\n"
+                f"Title: {article.title}\n"
+                f"Content:\n{article_text}\n---"
+            )
+
+        # Semantic Search for extra context - PERSONA-AWARE
         try:
             from app.services.embedding_service import embedding_service
 
-            # Use persona-specific query for semantic search
-            query = f"{config['news_query']} for {state['company_name']}"
+            query = f"{config['news_query']} for {company_name}"
             query_vec = embedding_service.generate_embeddings([query])[0]
-            
+
             vector_stmt = (
                 select(NewsChunk)
                 .join(NewsArticle)
-                .where(NewsArticle.company_id == state["company_id"])
+                .where(NewsArticle.company_id == company_id)
                 .order_by(NewsChunk.embedding.l2_distance(query_vec))
                 .limit(8)
             )
-            
+
             relevant_chunks = session.exec(vector_stmt).all()
-            
+
             if relevant_chunks:
                 news_content.append("\n### Relevant Excerpts (Semantic Search):")
                 for rc in relevant_chunks:
-                    # Avoid duplicates if possible, or just append
                     news_content.append(f"- ...{rc.content}...")
-                    
+
         except Exception as e:
             print(f"Vector search failed (ignoring): {e}")
 
     context = "\n".join(news_content)
+    source_list = "\n".join(source_list_parts)
 
     # Generate cache key based on content hash
     content_hash = hash_content(context)
-    cache_key = generate_cache_key("news", state["company_id"], content_hash)
+    cache_key = generate_cache_key("news_v3", company_id, content_hash)
 
     # Check cache first
     cached_result = get_cached_result(cache_key)
     if cached_result:
-        return {"news_analysis": cached_result}
+        return {
+            "news_analysis": cached_result,
+            "citation_registry": citation_registry
+        }
 
-    # Check token limit roughly (characters / 4)
-    # Reduced to 15000 to fit within Groq's 6000 TPM limit (approx 3750 tokens)
-    if len(context) > 15000:
-        context = context[:15000] + "..."
+    # Truncate if too long
+    # Truncate if too long (Groq Free Tier Limit: 6000 TPM total)
+    # 3500 chars is roughly 900-1000 tokens, leaving room for output + metadata
+    if len(context) > 3500:
+        context = context[:3500] + "... [TRUNCATED]"
 
-    # Build persona-specific prompt
-    focus_areas = ", ".join(config['news_focus'])
-    persona_label = persona.replace('_', ' ').title()
-
-    prompt = f"""You are a News Analyst serving a {persona_label}.
-
-    YOUR SPECIFIC FOCUS AREAS: {focus_areas}
-
-    Analyze the following recent news articles for {state['company_name']}.
-    Prioritize signals relevant to: {focus_areas}
-
-    News Context:
-    {context}
-
-    Provide a focused analysis in Markdown, emphasizing the signals most relevant to a {persona_label}."""
+    # Build prompt with citation instructions
+    prompt = get_news_agent_prompt(
+        company_name=company_name,
+        persona=persona,
+        news_context=context,
+        source_list=source_list
+    )
 
     llm = get_llm("llama-3.1-8b-instant")
-    response = llm.invoke([SystemMessage(content="You are a helpful financial news analyst."), HumanMessage(content=prompt)])
+    response = llm.invoke([
+        SystemMessage(content=NEWS_AGENT_SYSTEM),
+        HumanMessage(content=prompt)
+    ])
 
     # Cache the result
     set_cached_result(cache_key, response.content)
 
+    return {
+        "news_analysis": response.content,
+        "citation_registry": citation_registry
+    }
 
-    return {"news_analysis": response.content}
 
 def news_critique(state: AgentState) -> Dict[str, Any]:
     """
     Critiques other agents' findings based on News data.
-    Uses persona-specific debate stances.
+    Preserves and references all citation IDs.
     """
     persona = state.get('analysis_persona', 'INVESTOR')
-    config = get_persona_config(persona)
     persona_label = persona.replace('_', ' ').title()
     print(f"News Agent: Critiquing findings for {state['company_name']} [Persona: {persona}]")
 
@@ -131,33 +179,20 @@ def news_critique(state: AgentState) -> Dict[str, Any]:
     claims_analysis = state.get("claims_analysis", "No claims analysis provided.")
     my_analysis = state.get("news_analysis", "No news analysis provided.")
 
-    prompt = f"""You are a News Analyst in a structured debate for a {persona_label}.
-
-    DEBATE CONTEXT:
-    - GOVERNMENT (Pro) Stance: {config['government_stance']}
-    - OPPOSITION (Skeptic) Stance: {config['opposition_stance']}
-
-    You are playing the OPPOSITION role. Use news signals to challenge overly optimistic conclusions.
-
-    Your Task:
-    Critique the findings from the Financial Analyst and Claims Analyst based on news signals.
-    - Point out discrepancies between their conclusions and news reality.
-    - Flag any contradictions with recent events.
-    - Confirm agreement where news supports their claims.
-
-    1. NEWS ANALYSIS (Your Context):
-    {my_analysis}
-
-    2. FINANCIAL ANALYSIS (To Critique):
-    {financial_analysis}
-
-    3. CLAIMS ANALYSIS (To Critique):
-    {claims_analysis}
-
-    Provide a concise critique (max 200 words) applying the Opposition stance where relevant.
-    """
+    prompt = get_critique_prompt(
+        agent_type="news",
+        persona=persona,
+        my_analysis=my_analysis,
+        other_analysis_1=financial_analysis,
+        other_analysis_2=claims_analysis,
+        analysis_1_name="Financial Analysis",
+        analysis_2_name="Claims Analysis"
+    )
 
     llm = get_llm("llama-3.1-8b-instant")
-    response = llm.invoke([SystemMessage(content=f"You are a critical news analyst serving a {persona_label}."), HumanMessage(content=prompt)])
+    response = llm.invoke([
+        SystemMessage(content=f"You are a critical news analyst serving a {persona_label}. PRESERVE all citation IDs."),
+        HumanMessage(content=prompt)
+    ])
 
     return {"news_critique": response.content}

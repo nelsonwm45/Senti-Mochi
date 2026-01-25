@@ -1,31 +1,54 @@
+"""
+Claims Agent - The Auditor
+
+Analyzes documents via RAG with citation tracking.
+Generates [D1], [D2], ... citations mapping to {file_name, page_number, file_link}.
+Focus: Governance, Environmental, Social, Disclosure Quality.
+"""
 
 from typing import Dict, Any, List
 from sqlmodel import Session, select, col
 from app.database import engine
-from app.models import DocumentChunk
+from app.models import DocumentChunk, Document
 from app.agents.base import get_llm
 from app.agents.state import AgentState
 from app.agents.cache import generate_cache_key, hash_content, get_cached_result, set_cached_result
 from app.agents.persona_config import get_persona_config
+from app.agents.prompts import CLAIMS_AGENT_SYSTEM, get_claims_agent_prompt, get_critique_prompt
+from app.agents.citation_models import SourceMetadata
 from langchain_core.messages import SystemMessage, HumanMessage
 from sentence_transformers import SentenceTransformer
 import warnings
+import itertools
+import os
 
-# Suppress connection warnings if any
+# Suppress connection warnings
 warnings.filterwarnings("ignore")
 
-# Global model instance to avoid reloading (lazy load?)
+# Global embedding service
 from app.services.embedding_service import embedding_service
+
 
 def claims_agent(state: AgentState) -> Dict[str, Any]:
     """
-    Analyzes documents via RAG.
-    Uses caching to ensure consistent results for unchanged data.
-    Adapts queries based on analysis_persona.
+    Analyzes documents via RAG with citation tracking.
+
+    Citation Protocol:
+    - Each document chunk gets a [D#] citation
+    - Maps to {file_name, page_number, file_link}
+
+    Returns:
+        Dict with claims_analysis and citation_registry updates
     """
     persona = state.get('analysis_persona', 'INVESTOR')
     config = get_persona_config(persona)
-    print(f"Claims Agent: Analyzing documents for company {state['company_name']} [Persona: {persona}]")
+    company_id = state["company_id"]
+    company_name = state["company_name"]
+
+    print(f"Claims Agent: Analyzing documents for {company_name} [Persona: {persona}]")
+
+    # Initialize citation registry if not present
+    citation_registry = dict(state.get('citation_registry', {}))
 
     try:
         # Use persona-specific queries for each ESG category
@@ -34,7 +57,7 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
         gov_query = config['claims_queries']['governance']
         disclosure_query = config['claims_queries']['disclosure']
 
-        # For Credit Risk persona, governance is highest priority - fetch more governance chunks
+        # For Credit Risk persona, governance is highest priority
         is_credit_risk = persona == 'CREDIT_RISK'
 
         # Encode all queries
@@ -43,36 +66,56 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
         gov_vector = embedding_service.generate_embeddings([gov_query])[0]
         disclosure_vector = embedding_service.generate_embeddings([disclosure_query])[0]
 
+        # WAIT FOR DOCUMENTS: Check if any documents are still processing
         with Session(engine) as session:
-            from app.models import Document
+            import time
+            from app.models import DocumentStatus
 
+            max_retries = 15  # 30 seconds max
+            for _ in range(max_retries):
+                pending_docs = session.exec(
+                    select(Document)
+                    .where(Document.company_id == company_id)
+                    .where(col(Document.status).in_([DocumentStatus.PENDING, DocumentStatus.PROCESSING]))
+                    .where(Document.is_deleted == False)
+                ).all()
+
+                if not pending_docs:
+                    break
+                
+                print(f"Claims Agent: Waiting for {len(pending_docs)} documents to process...")
+                time.sleep(2)
+
+        with Session(engine) as session:
             # Fetch Environment Chunks
             env_statement = (
                 select(DocumentChunk)
                 .join(Document)
-                .where(Document.company_id == state["company_id"])
+                .where(Document.company_id == company_id)
+                .where(Document.is_deleted == False)
                 .order_by(DocumentChunk.embedding.l2_distance(env_vector))
                 .limit(100)
             )
             env_chunks = session.exec(env_statement).all()
-            
+
             # Fetch Social Chunks
             social_statement = (
                 select(DocumentChunk)
                 .join(Document)
-                .where(Document.company_id == state["company_id"])
+                .where(Document.company_id == company_id)
+                .where(Document.is_deleted == False)
                 .order_by(DocumentChunk.embedding.l2_distance(social_vector))
                 .limit(100)
             )
             social_chunks = session.exec(social_statement).all()
-            
-            # Fetch Governance Chunks
-            # For Credit Risk persona, governance is highest priority - fetch more
+
+            # Fetch Governance Chunks (more for Credit Risk)
             gov_limit = 150 if is_credit_risk else 100
             gov_statement = (
                 select(DocumentChunk)
                 .join(Document)
-                .where(Document.company_id == state["company_id"])
+                .where(Document.company_id == company_id)
+                .where(Document.is_deleted == False)
                 .order_by(DocumentChunk.embedding.l2_distance(gov_vector))
                 .limit(gov_limit)
             )
@@ -82,7 +125,8 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
             disc_statement = (
                 select(DocumentChunk)
                 .join(Document)
-                .where(Document.company_id == state["company_id"])
+                .where(Document.company_id == company_id)
+                .where(Document.is_deleted == False)
                 .order_by(DocumentChunk.embedding.l2_distance(disclosure_vector))
                 .limit(100)
             )
@@ -91,94 +135,143 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
             # Combine and deduplicate
             unique_chunks = []
             seen_content = set()
-            
+
             # Interleave results
-            import itertools
-            for chunk in itertools.chain.from_iterable(itertools.zip_longest(env_chunks, social_chunks, gov_chunks, disc_chunks)):
+            for chunk in itertools.chain.from_iterable(
+                itertools.zip_longest(env_chunks, social_chunks, gov_chunks, disc_chunks)
+            ):
                 if chunk and chunk.content not in seen_content:
                     unique_chunks.append(chunk)
                     seen_content.add(chunk.content)
-            
-            # Limit to top 20 unique chunks (increased from 15 to cover more ground)
-            all_chunks = unique_chunks[:20]
+
+            # Limit to top 30 unique chunks (increased from 20)
+            all_chunks = unique_chunks[:30]
 
             if not all_chunks:
                 print("Claims Agent: No chunks found!")
-                return {"claims_analysis": "No relevant document chunks found."}
-            
+                return {
+                    "claims_analysis": "No relevant document chunks found.",
+                    "citation_registry": citation_registry
+                }
+
             print(f"Claims Agent: Retrieved {len(all_chunks)} unique chunks.")
 
-            chunk_texts = [f"Source: Doc {c.document_id} (Page {c.page_number})\nContent: {c.content}" for c in all_chunks]
-            
-        context = "\n---\n".join(chunk_texts)
+            # Build citation metadata and content
+            chunk_texts = []
+            source_list_parts = []
 
-        # Check token limit roughly (characters / 4)
-        # Reduced to 15000 to fit within Groq's 6000 TPM limit (approx 3750 tokens)
-        if len(context) > 15000:
-            context = context[:15000] + "..."
+            # Get document info for each chunk
+            doc_cache = {}
+
+            # Group chunks by document to consolidate citations
+            doc_to_citation = {}
+            citation_counter = 1
+            
+            # Map chunk IDs for cache key stability
+            chunk_ids = [str(c.id) for c in all_chunks]
+            
+            for chunk in all_chunks:
+                # Assign citation ID based on Document ID
+                if chunk.document_id not in doc_to_citation:
+                    doc_to_citation[chunk.document_id] = f"D{citation_counter}"
+                    citation_counter += 1
+                
+                citation_id = doc_to_citation[chunk.document_id]
+
+                # Get document info (cached)
+                if chunk.document_id not in doc_cache:
+                    doc = session.get(Document, chunk.document_id)
+                    doc_cache[chunk.document_id] = doc
+
+                doc = doc_cache.get(chunk.document_id)
+                doc_name = doc.filename if doc else f"Document {chunk.document_id}"
+                
+                # Update registry only if not present (or update if needed)
+                if citation_id not in citation_registry:
+                    print(f"Claims Agent: Registering NEW source {citation_id} -> {doc_name}")
+                    citation_registry[citation_id] = {
+                        "id": citation_id,
+                        "title": doc_name,
+                        "url_or_path": f"/api/v1/documents/{doc.id}/download" if doc else "",
+                        "type": "Document",
+                        "page_number": None, # Consolidated, so page is variable
+                        "row_line": "Multiple Chunks"
+                    }
+                    
+                    # Add to source list for prompt (once per doc)
+                    source_list_parts.append(f"[{citation_id}] - \"{doc_name}\"")
+
+                # Add content to context with specific page reference
+                page_info = f"Page {chunk.page_number}" if chunk.page_number else "N/A"
+                chunk_texts.append(
+                    f"[{citation_id}] Source: {doc_name} ({page_info})\n"
+                    f"Content: {chunk.content}"
+                )
+
+        print(f"Claims Agent: Final registry keys before return: {list(citation_registry.keys())}")
+        
+        context = "\n---\n".join(chunk_texts)
+        source_list = "\n".join(source_list_parts)
+
+        # Truncate if too long (increased buffer)
+        if len(context) > 8000:
+            context = context[:8000] + "..."
 
         # Generate cache key based on content hash
-        # Include chunk IDs in hash to detect if documents changed
-        chunk_ids = [str(c.id) for c in all_chunks]
+        # Use v5 to invalidate previous caches AGAIN to be sure
         content_for_hash = context + "|" + ",".join(chunk_ids)
         content_hash = hash_content(content_for_hash)
-        cache_key = generate_cache_key("claims", state["company_id"], content_hash)
+        cache_key = generate_cache_key("claims_v5", company_id, content_hash)
 
         # Check cache first
         cached_result = get_cached_result(cache_key)
         if cached_result:
-            return {"claims_analysis": cached_result}
+            print("Claims Agent: Cache HIT. Returning registry.")
+            return {
+                "claims_analysis": cached_result,
+                "citation_registry": citation_registry
+            }
 
-        # Build persona-specific prompt
-        focus_areas = ", ".join(config['claims_focus'])
-        persona_label = persona.replace('_', ' ').title()
-
-        # Build priority note for Credit Risk
-        priority_note = ""
-        if is_credit_risk:
-            priority_note = "\n\n**HIGHEST PRIORITY: Governance** - Flag any fraud risks, weak internal controls, board independence issues, or related party transactions."
-
-        prompt = f"""You are a Claims/Documents Analyst serving a {persona_label}.
-
-        YOUR SPECIFIC FOCUS AREAS: {focus_areas}{priority_note}
-
-        Your job is to verify and analyze the claims made by the company in their documents.
-        Prioritize extracting information relevant to: {focus_areas}
-
-        Document Excerpts:
-        {context}
-
-        Synthesize these findings into a Markdown report.
-
-        CRITICAL INSTRUCTION:
-        Do NOT summarize generic statements (e.g. "Company is committed to ESG").
-        EXTRACT AND LIST SPECIFIC DATA POINTS relevant to a {persona_label}:
-        - Exact figures, dates, targets
-        - Specific frameworks and certifications
-        - Policy names and commitments
-        - Risk disclosures and mitigation measures
-
-        If precise numbers are found, bold them."""
+        print("Claims Agent: Cache MISS. Calling LLM...")
+        # Build prompt with citation instructions
+        prompt = get_claims_agent_prompt(
+            company_name=company_name,
+            persona=persona,
+            claims_context=context,
+            source_list=source_list
+        )
 
         llm = get_llm("llama-3.1-8b-instant")
-        response = llm.invoke([SystemMessage(content="You are an expert due diligence analyst."), HumanMessage(content=prompt)])
+        response = llm.invoke([
+            SystemMessage(content=CLAIMS_AGENT_SYSTEM),
+            HumanMessage(content=prompt)
+        ])
 
         # Cache the result
         set_cached_result(cache_key, response.content)
 
-        return {"claims_analysis": response.content}
+        return {
+            "claims_analysis": response.content,
+            "citation_registry": citation_registry
+        }
 
     except Exception as e:
         print(f"Error in Claims Agent: {e}")
-        return {"claims_analysis": f"Error analyzing documents: {str(e)}", "errors": [str(e)]}
+        import traceback
+        traceback.print_exc()
+        return {
+            "claims_analysis": f"Error analyzing documents: {str(e)}",
+            "citation_registry": citation_registry,
+            "errors": [str(e)]
+        }
+
 
 def claims_critique(state: AgentState) -> Dict[str, Any]:
     """
     Critiques other agents' findings based on Internal Claims/Documents.
-    Uses persona-specific debate stances.
+    Preserves and references all citation IDs.
     """
     persona = state.get('analysis_persona', 'INVESTOR')
-    config = get_persona_config(persona)
     persona_label = persona.replace('_', ' ').title()
     print(f"Claims Agent: Critiquing findings for {state['company_name']} [Persona: {persona}]")
 
@@ -186,33 +279,20 @@ def claims_critique(state: AgentState) -> Dict[str, Any]:
     financial_analysis = state.get("financial_analysis", "No financial analysis provided.")
     my_analysis = state.get("claims_analysis", "No claims analysis provided.")
 
-    prompt = f"""You are a Claims/Documents Analyst in a structured debate for a {persona_label}.
-
-    DEBATE CONTEXT:
-    - GOVERNMENT (Pro) Stance: {config['government_stance']}
-    - OPPOSITION (Skeptic) Stance: {config['opposition_stance']}
-
-    You are providing an OBJECTIVE assessment. Use official documents to verify or challenge other findings.
-
-    Your Task:
-    Critique the findings from the News Analyst and Financial Analyst based on official company documents.
-    - Does News misinterpret the company's stated strategy?
-    - Do Financials align with company guidance and outlook?
-    - Are there undisclosed risks in documents that others missed?
-
-    1. CLAIMS ANALYSIS (Your Context):
-    {my_analysis}
-
-    2. NEWS ANALYSIS (To Critique):
-    {news_analysis}
-
-    3. FINANCIAL ANALYSIS (To Critique):
-    {financial_analysis}
-
-    Provide a concise critique (max 200 words) focusing on document evidence.
-    """
+    prompt = get_critique_prompt(
+        agent_type="claims",
+        persona=persona,
+        my_analysis=my_analysis,
+        other_analysis_1=news_analysis,
+        other_analysis_2=financial_analysis,
+        analysis_1_name="News Analysis",
+        analysis_2_name="Financial Analysis"
+    )
 
     llm = get_llm("llama-3.1-8b-instant")
-    response = llm.invoke([SystemMessage(content=f"You are a diligent document analyst serving a {persona_label}."), HumanMessage(content=prompt)])
+    response = llm.invoke([
+        SystemMessage(content=f"You are a diligent document analyst serving a {persona_label}. PRESERVE all citation IDs."),
+        HumanMessage(content=prompt)
+    ])
 
     return {"claims_critique": response.content}
