@@ -528,7 +528,7 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     # Total budget ~9000 chars for analyses, leaving room for prompt template + output
     news_an, fin_an, claims_an = content_optimizer.optimize_for_judge(
         news_an, fin_an, claims_an,
-        max_total_tokens=2250  # ~9000 chars for all three analyses
+        max_total_tokens=2800  # Increased to ~11k chars to capture more ESG detail
     )
 
     prompt = get_judge_prompt(

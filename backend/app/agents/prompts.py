@@ -169,6 +169,7 @@ CRITICAL CITATION RULES:
 2. Every claim extracted from documents MUST have a [D#] citation
 3. Include page numbers where available
 4. Focus on ESG claims: Governance, Environmental, Social, Disclosure Quality
+5. EXTRACT DETAILS: Do not just say "Available", provide the specific numbers, dates, or names found.
 
 Example of CORRECT citation:
 "The company targets Net Zero by 2050 [D1]. Board independence is at 60% [D3]."
@@ -193,13 +194,15 @@ OUTPUT FORMAT (MANDATORY - use bullet points):
 • Risk framework: [details] [D#]
 
 ## Environmental
-• Net Zero target: [year] [D#]
-• Scope 1/2/3 emissions: [values] [D#]
-• Certifications: [SBTi/TCFD/etc] [D#]
+• Net Zero/Carbon Neutral target: [year] [D#]
+• GHG Emissions (Scope 1/2/3): [values] [D#]
+• Energy/Water/Waste metrics: [values] [D#]
+• Certifications/Green initiatives: [details] [D#]
 
 ## Social
-• DEI metrics: [specific numbers] [D#]
-• Employee programs: [names] [D#]
+• DEI/Gender diversity: [statistics] [D#]
+• Employee training/turnover: [metrics] [D#]
+• Community/CSR initiatives: [details] [D#]
 
 ## Disclosure Quality
 • Frameworks adopted: [GRI/ISSB/TCFD] [D#]
@@ -209,8 +212,9 @@ RULES:
 1. BULLET POINTS ONLY - one data point per line
 2. ONLY include data explicitly stated in documents
 3. Format: "• [Item]: [Specific value/name] [D#]"
-4. If no data for a section, write "• No data available"
-5. Max 4 bullets per section - prioritize material items
+4. If specific metrics are not found, include ANY relevant qualitative or quantitative data for that section with citations.
+5. Do NOT write "No data available" unless the document truly contains ZERO relevant information for that category.
+6. Max 6 bullets per section - prioritize material items
 
 Provide your analysis:"""
 
