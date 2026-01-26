@@ -34,6 +34,7 @@ from app.agents.citation_models import (
 )
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.exceptions import OutputParserException
+from app.services.content_optimizer import content_optimizer
 
 import re
 import time
@@ -492,18 +493,18 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     role_specific_instructions = ROLE_INSTRUCTIONS.get(persona, ROLE_INSTRUCTIONS['INVESTOR'])
 
     # Build the comprehensive prompt
-    # Truncate inputs to avoid Rate Limit (Total context should be < 12k chars for safety)
+    # Use content optimizer for smart truncation (preserves key insights)
     news_an = state.get('news_analysis', 'No data')
     fin_an = state.get('financial_analysis', 'No data')
     claims_an = state.get('claims_analysis', 'No data')
-    
-    # AGGRESSIVE Truncation logic (Target < 6000 tokens total)
-    # 1 token approx 4 chars. 6000 tokens = 24000 chars. 
-    # But overhead + output reserve means we should aim for ~12000 input chars.
-    news_an = news_an[:2500] + "..." if len(news_an) > 2500 else news_an
-    fin_an = fin_an[:2500] + "..." if len(fin_an) > 2500 else fin_an
-    # Claims is critical for ESG, giving it more room, but capping at 4000
-    claims_an = claims_an[:4000] + "..." if len(claims_an) > 4000 else claims_an
+
+    # Smart content optimization (Target < 6000 tokens total)
+    # Allocation: News 25%, Financial 30%, Claims 45% (ESG critical)
+    # Total budget ~9000 chars for analyses, leaving room for prompt template + output
+    news_an, fin_an, claims_an = content_optimizer.optimize_for_judge(
+        news_an, fin_an, claims_an,
+        max_total_tokens=2250  # ~9000 chars for all three analyses
+    )
 
     prompt = get_judge_prompt(
         company_name=company_name,

@@ -16,6 +16,8 @@ from app.agents.cache import generate_cache_key, hash_content, get_cached_result
 from app.agents.persona_config import get_persona_config
 from app.agents.prompts import NEWS_AGENT_SYSTEM, get_news_agent_prompt, get_critique_prompt
 from app.agents.citation_models import SourceMetadata
+from app.services.news_relevance import news_relevance_filter
+from app.services.content_optimizer import content_optimizer
 from langchain_core.messages import SystemMessage, HumanMessage
 
 
@@ -41,20 +43,40 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
     citation_registry = dict(state.get('citation_registry', {}))
 
     with Session(engine) as session:
-        # Fetch recent 5 articles
+        # Fetch recent articles (fetch more to allow for filtering)
         statement = (
             select(NewsArticle)
             .where(NewsArticle.company_id == company_id)
             .order_by(col(NewsArticle.published_at).desc())
-            .limit(15)
+            .limit(25)  # Fetch extra to account for filtering
         )
-        articles = session.exec(statement).all()
+        articles = list(session.exec(statement).all())
 
         if not articles:
             return {
                 "news_analysis": "No recent news found for this company.",
                 "citation_registry": citation_registry
             }
+
+        # Get company for relevance filtering
+        company = session.get(Company, company_id)
+        company_sector = company.sector if company else None
+
+        # Filter for relevance (removes "Malayan tiger" type irrelevant articles)
+        articles = news_relevance_filter.filter_news_articles_db(
+            session, articles, company
+        ) if company else articles
+
+        # Limit to top 15 most relevant
+        articles = articles[:15]
+
+        if not articles:
+            return {
+                "news_analysis": "No relevant news found for this company after filtering.",
+                "citation_registry": citation_registry
+            }
+
+        print(f"News Agent: Processing {len(articles)} relevant articles for {company_name}")
 
         # Build citation metadata and content
         news_content = []
@@ -137,11 +159,10 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
             "citation_registry": citation_registry
         }
 
-    # Truncate if too long
-    # Truncate if too long (Groq Free Tier Limit: 6000 TPM total)
-    # 3500 chars is roughly 900-1000 tokens, leaving room for output + metadata
+    # Smart truncation (Groq Free Tier Limit: 6000 TPM total)
+    # Uses content_optimizer to preserve key information instead of blind truncation
     if len(context) > 3500:
-        context = context[:3500] + "... [TRUNCATED]"
+        context = content_optimizer._smart_truncate(context, 3500)
 
     # Build prompt with citation instructions
     prompt = get_news_agent_prompt(
