@@ -295,22 +295,30 @@ SYNTHESIS INSTRUCTIONS:
    - Justify with citations: "The company shows [reason] [N1] and [reason] [F2]"
    - List 3-5 key concerns specific to {persona_label}
 
-2. ESG ANALYSIS (for each: Overview, Governance, Environmental, Social, Disclosure):
+2. MARKET SENTIMENT (from News Analysis [N#]):
+   - sentiment: POSITIVE | NEUTRAL | NEGATIVE
+   - summary: 2-3 sentences describing market perception with [N#] citations
+   - key_events: 3-5 recent events affecting the company [N#]
+   - risks_from_news: 2-3 news-based risks or concerns [N#]
+
+3. ESG ANALYSIS (for each: Overview, Governance, Environmental, Social, Disclosure):
    - preview_summary: 3-5 comprehensive sentences describing key findings, their significance, and implications with citations [D#]
    - detailed_findings: 5-8 bullet points with [D#] citations. Use **bold** for important metrics and key terms.
    - confidence_score: 0-100 based on data quality
    - highlights: 3-5 specific data points (plain text)
 
-3. FINANCIAL ANALYSIS (for each: Valuation, Profitability, Growth, Health):
+4. FINANCIAL ANALYSIS (for each: Valuation, Profitability, Growth, Health):
    - preview_summary: 3-5 comprehensive sentences describing key metrics, their interpretation, and what they mean for investors with citations [F#]
    - detailed_findings: 5-8 bullet points with [F#] citations. Use **bold** for important metrics and key terms.
    - confidence_score: 0-100 based on data availability
    - highlights: 3-5 key metrics (plain text)
 
-4. DEBATE REPORT:
-   - Government (Pro) stance summary and arguments with citations
-   - Opposition (Skeptic) stance summary and arguments with citations
-   - Your verdict resolving the debate
+5. DEBATE REPORT:
+   - Government (Pro): Use [F#] financial citations to argue bullish case
+   - Opposition (Skeptic): Use [N#] news citations to argue bearish case, highlight market risks and recent negative events
+   - verdict: Your decision (e.g., "{decision_options}")
+   - verdict_reasoning: 2-3 sentences explaining WHY you reached this verdict, referencing both news [N#] and financial [F#] evidence
+   - verdict_key_factors: 3-5 key factors with citations [N#], [F#], [D#]
 
 CRITICAL: You MUST preserve ALL [N#], [F#], [D#] citations from the sub-agents.
 Do NOT write conclusions without citing the source evidence.

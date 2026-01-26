@@ -22,7 +22,8 @@ import {
     SourceMetadata,
     getDebateReport,
     getCitationRegistry,
-    getRoleBasedInsight
+    getRoleBasedInsight,
+    getMarketSentiment
 } from '@/lib/api/analysis';
 import ReactMarkdown from 'react-markdown';
 
@@ -1234,7 +1235,7 @@ const RoleAnalysisView = ({ report }: { report: AnalysisReport }) => {
 // =============================================================================
 
 const MarketSentimentCard = ({ report, registry }: { report: AnalysisReport; registry: Record<string, SourceMetadata> }) => {
-    const sentiment = report.market_sentiment;
+    const sentiment = getMarketSentiment(report);
     const citationComponents = createCitationComponents(registry);
 
     if (!sentiment) {

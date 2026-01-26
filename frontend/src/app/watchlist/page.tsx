@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WatchlistTable } from './components/WatchlistTable';
 import { ComparisonView } from './components/ComparisonView';
@@ -12,7 +12,7 @@ import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 
 import { useSearchParams } from 'next/navigation';
 
-export default function WatchlistPage() {
+function WatchlistContent() {
   const searchParams = useSearchParams();
   const initialTicker = searchParams.get('ticker');
 
@@ -46,52 +46,60 @@ export default function WatchlistPage() {
   };
 
   return (
+    <div className="container mx-auto px-4 py-8">
+      <AnimatePresence mode="wait">
+        {view === 'list' && (
+          <motion.div
+            key="list"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+          >
+            <WatchlistTable
+              onCompare={handleCompare}
+              onViewDetails={handleViewDetails}
+            />
+          </motion.div>
+        )}
+
+        {view === 'comparison' && (
+          <motion.div
+            key="comparison"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <ComparisonView
+              tickers={comparisonTickers}
+              onBack={() => setView('list')}
+            />
+          </motion.div>
+        )}
+
+        {view === 'details' && detailTicker && (
+          <motion.div
+            key="details"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+          >
+            <CompanyDetails
+              ticker={detailTicker}
+              onBack={() => setView('list')}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+export default function WatchlistPage() {
+  return (
     <ProtectedLayout>
-      <div className="container mx-auto px-4 py-8">
-        <AnimatePresence mode="wait">
-          {view === 'list' && (
-            <motion.div
-              key="list"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-            >
-              <WatchlistTable
-                onCompare={handleCompare}
-                onViewDetails={handleViewDetails}
-              />
-            </motion.div>
-          )}
-
-          {view === 'comparison' && (
-            <motion.div
-              key="comparison"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-            >
-              <ComparisonView
-                tickers={comparisonTickers}
-                onBack={() => setView('list')}
-              />
-            </motion.div>
-          )}
-
-          {view === 'details' && detailTicker && (
-            <motion.div
-              key="details"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-            >
-              <CompanyDetails
-                ticker={detailTicker}
-                onBack={() => setView('list')}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      <Suspense fallback={<div className="container mx-auto px-4 py-8">Loading...</div>}>
+         <WatchlistContent />
+      </Suspense>
     </ProtectedLayout>
   );
 }

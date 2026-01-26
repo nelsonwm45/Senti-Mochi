@@ -147,6 +147,7 @@ export function getRoleBasedInsight(report: AnalysisReport): RoleBasedInsight {
 			.slice(0, 5);
 	}
 
+
 	return {
 		user_role: report.analysis_persona || 'INVESTOR',
 		decision: report.rating,
@@ -154,6 +155,21 @@ export function getRoleBasedInsight(report: AnalysisReport): RoleBasedInsight {
 		key_concerns: keyConcerns,
 		confidence_score: report.confidence_score
 	};
+}
+
+// Helper to extract Market Sentiment from agent_logs
+export function getMarketSentiment(report: AnalysisReport): MarketSentiment | null {
+	// First check top-level field (future proofing)
+	if (report.market_sentiment && report.market_sentiment.sentiment) {
+		return report.market_sentiment;
+	}
+
+	if (!report.agent_logs) return null;
+
+	const sentimentLog = report.agent_logs.find(log => log.agent === 'market_sentiment');
+	if (!sentimentLog) return null;
+
+	return sentimentLog.output as MarketSentiment;
 }
 
 // =============================================================================

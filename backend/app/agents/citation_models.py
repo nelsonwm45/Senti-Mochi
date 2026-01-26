@@ -181,7 +181,34 @@ class FinancialReport(BaseModel):
 
 
 # =============================================================================
-# UI SECTION 4: DEBATE REPORT
+# UI SECTION 4: MARKET SENTIMENT (from News)
+# =============================================================================
+
+class MarketSentiment(BaseModel):
+    """
+    Market sentiment derived from news analysis.
+    Uses [N#] citations from news sources.
+    """
+    sentiment: str = Field(
+        default="NEUTRAL",
+        description="POSITIVE | NEUTRAL | NEGATIVE"
+    )
+    summary: str = Field(
+        default="No recent news available.",
+        description="2-3 sentences on market perception with [N#] citations"
+    )
+    key_events: List[str] = Field(
+        default_factory=list,
+        description="3-5 recent events affecting the company with [N#] citations"
+    )
+    risks_from_news: List[str] = Field(
+        default_factory=list,
+        description="2-3 news-based risks or concerns with [N#] citations"
+    )
+
+
+# =============================================================================
+# UI SECTION 5: DEBATE REPORT
 # =============================================================================
 
 class DebateStance(BaseModel):
@@ -220,6 +247,15 @@ class DebateReport(BaseModel):
         default="Verdict pending.",
         description="Final judge synthesis resolving the debate"
     )
+    # Optional enhanced verdict fields
+    verdict_reasoning: str = Field(
+        default="",
+        description="2-3 sentence explanation of why this verdict was reached"
+    )
+    verdict_key_factors: List[str] = Field(
+        default_factory=list,
+        description="3-5 key factors with citations [N#], [F#], [D#] that influenced the verdict"
+    )
 
 
 # =============================================================================
@@ -247,6 +283,10 @@ class FinalAnalysisOutput(BaseModel):
     financial_report: FinancialReport = Field(
         default_factory=FinancialReport,
         description="Financial analysis accordion section"
+    )
+    market_sentiment: MarketSentiment = Field(
+        default_factory=MarketSentiment,
+        description="Market sentiment from news analysis with [N#] citations"
     )
     debate_report: DebateReport = Field(
         default_factory=DebateReport,

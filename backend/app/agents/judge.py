@@ -25,6 +25,7 @@ from app.agents.citation_models import (
     RoleBasedInsight,
     ESGReport,
     FinancialReport,
+    MarketSentiment,
     DebateReport,
     DebateStance,
     SectionContent,
@@ -116,6 +117,14 @@ class JudgeFinancialOutput(BaseModel):
     health: JudgeSectionOutput = Field(default_factory=JudgeSectionOutput)
 
 
+class JudgeMarketSentimentOutput(BaseModel):
+    """Market sentiment from news analysis."""
+    sentiment: str = Field(default="NEUTRAL", description="POSITIVE | NEUTRAL | NEGATIVE")
+    summary: str = Field(default="No recent news available.", description="2-3 sentences on market perception with [N#] citations")
+    key_events: List[str] = Field(default_factory=list, description="3-5 recent events affecting the company [N#]")
+    risks_from_news: List[str] = Field(default_factory=list, description="2-3 news-based risks or concerns [N#]")
+
+
 class JudgeDebateOutput(BaseModel):
     """Debate report structured output."""
     government_summary: str = Field(default="Pro stance pending.")
@@ -123,6 +132,9 @@ class JudgeDebateOutput(BaseModel):
     opposition_summary: str = Field(default="Skeptic stance pending.")
     opposition_arguments: List[str] = Field(default_factory=list)
     verdict: str = Field(default="Verdict pending.")
+    # New optional fields for enhanced verdict display
+    verdict_reasoning: str = Field(default="", description="2-3 sentence explanation of why this verdict was reached")
+    verdict_key_factors: List[str] = Field(default_factory=list, description="3-5 key factors with citations that influenced the verdict")
 
 
 class JudgeDecisionOutput(BaseModel):
@@ -135,6 +147,7 @@ class JudgeDecisionOutput(BaseModel):
     bull_case: str = Field(..., description="Bull case arguments")
     bear_case: str = Field(..., description="Bear case arguments")
     risk_factors: str = Field(..., description="Key risks")
+    market_sentiment: JudgeMarketSentimentOutput = Field(default_factory=JudgeMarketSentimentOutput)
     esg_analysis: JudgeESGOutput = Field(default_factory=JudgeESGOutput)
     financial_analysis: JudgeFinancialOutput = Field(default_factory=JudgeFinancialOutput)
     debate: JudgeDebateOutput = Field(default_factory=JudgeDebateOutput)
@@ -310,6 +323,14 @@ def build_final_output(
         financial_health=convert_section_to_content(judge_output.financial_analysis.health)
     )
 
+    # Build Market Sentiment (from news analysis)
+    market_sentiment = MarketSentiment(
+        sentiment=judge_output.market_sentiment.sentiment,
+        summary=judge_output.market_sentiment.summary,
+        key_events=judge_output.market_sentiment.key_events,
+        risks_from_news=judge_output.market_sentiment.risks_from_news
+    )
+
     # Build Debate Report
     debate_report = DebateReport(
         government_stand=DebateStance(
@@ -320,7 +341,9 @@ def build_final_output(
             stance_summary=judge_output.debate.opposition_summary,
             arguments=judge_output.debate.opposition_arguments
         ),
-        judge_verdict=judge_output.debate.verdict
+        judge_verdict=judge_output.debate.verdict,
+        verdict_reasoning=judge_output.debate.verdict_reasoning,
+        verdict_key_factors=judge_output.debate.verdict_key_factors
     )
 
     # Build Role-Based Insight
@@ -354,6 +377,7 @@ def build_final_output(
         role_report=role_report,
         esg_report=esg_report,
         financial_report=financial_report,
+        market_sentiment=market_sentiment,
         debate_report=debate_report,
         citation_registry=typed_registry,
         # Legacy compatibility
@@ -396,6 +420,7 @@ def save_report_to_db(
                     {"agent": "financial", "output": state.get('financial_analysis')},
                     {"agent": "claims", "output": state.get('claims_analysis')},
                     {"agent": "debate", "output": final_output.debate_report.model_dump()},
+                    {"agent": "market_sentiment", "output": final_output.market_sentiment.model_dump()},
                     {"agent": "citation_registry", "output": {
                         k: v.model_dump() if hasattr(v, 'model_dump') else v
                         for k, v in final_output.citation_registry.items()
@@ -548,8 +573,8 @@ Output valid JSON matching the schema below:
 """
 
     # Use lighter model to respect Rate Limits
-    # llm = get_llm("llama-3.3-70b-versatile") 
-    llm = get_llm("llama-3.1-8b-instant")
+    llm = get_llm("llama-3.3-70b-versatile") 
+    # llm = get_llm("llama-3.1-8b-instant")
     # structured_llm = llm.with_structured_output(JudgeDecisionOutput) # REMOVED
 
     try:
