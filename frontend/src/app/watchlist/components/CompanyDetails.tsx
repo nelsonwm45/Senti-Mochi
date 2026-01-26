@@ -122,7 +122,7 @@ const RatingBadge = ({ rating }: { rating: string }) => {
                 {r} RATING
                 <Info size={14} className="opacity-70 ml-1" />
             </div>
-            
+
             {/* Tooltip */}
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-900/95 backdrop-blur-md border border-white/10 rounded-xl text-xs text-gray-300 shadow-xl opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all z-50">
                 <div className="font-semibold text-white mb-1 border-b border-white/10 pb-1">{r} Logic</div>
@@ -342,8 +342,8 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg transition-all border-b-2 whitespace-nowrap ${isActive
-                                    ? 'border-accent text-accent bg-white/5'
-                                    : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'
+                                ? 'border-accent text-accent bg-white/5'
+                                : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'
                                 }`}
                         >
                             <Icon size={16} />
@@ -431,8 +431,8 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.5 }}
                             >
-                                <AnalysisResultsView 
-                                    report={latestAnalysisReport} 
+                                <AnalysisResultsView
+                                    report={latestAnalysisReport}
                                     onReanalyze={() => setIsAnalyzeModalOpen(true)}
                                     onDelete={() => {
                                         if (confirm('Are you sure you want to delete this analysis report?')) {
@@ -451,7 +451,7 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                 <Sparkles size={48} className="mx-auto text-indigo-400 mb-4" />
                                 <h3 className="text-xl font-semibold text-white mb-2">No Analysis Available</h3>
                                 <p className="text-gray-400 mb-6">Run a company analysis to see detailed insights about this company.</p>
-                                <GlassButton onClick={() => setIsAnalyzeModalOpen(true)} leftIcon={<Sparkles size={16}/>}>
+                                <GlassButton onClick={() => setIsAnalyzeModalOpen(true)} leftIcon={<Sparkles size={16} />}>
                                     Analyze Company
                                 </GlassButton>
                             </GlassCard>
@@ -469,7 +469,7 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                         size="sm"
                                         variant="ghost"
                                         onClick={() => setIsAnalyzeModalOpen(true)}
-                                        leftIcon={<Sparkles size={14}/>}
+                                        leftIcon={<Sparkles size={14} />}
                                     >
                                         New Analysis
                                     </GlassButton>
@@ -484,11 +484,10 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                         return (
                                             <div
                                                 key={report.id}
-                                                className={`flex flex-col sm:flex-row gap-4 p-4 rounded-xl transition-colors ${
-                                                    isCurrent
-                                                    ? 'bg-indigo-500/10 border border-indigo-500/30'
-                                                    : 'bg-white/5 border border-white/10 hover:bg-white/[0.07] cursor-pointer group'
-                                                }`}
+                                                className={`flex flex-col sm:flex-row gap-4 p-4 rounded-xl transition-colors ${isCurrent
+                                                        ? 'bg-indigo-500/10 border border-indigo-500/30'
+                                                        : 'bg-white/5 border border-white/10 hover:bg-white/[0.07] cursor-pointer group'
+                                                    }`}
                                             >
                                                 {/* Left Section: Rating & Time */}
                                                 <div className="flex items-start gap-4 flex-1">
@@ -502,15 +501,15 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        
+
                                                         <div className="flex flex-col">
                                                             <div className="flex items-center gap-2 text-sm text-gray-300 font-medium">
                                                                 <Clock size={12} className="text-gray-500" />
                                                                 {(() => {
-                                                                    const dateStr = report.created_at.endsWith('Z') || report.created_at.includes('+') 
-                                                                        ? report.created_at 
+                                                                    const dateStr = report.created_at.endsWith('Z') || report.created_at.includes('+')
+                                                                        ? report.created_at
                                                                         : report.created_at + 'Z';
-                                                                    
+
                                                                     let date = new Date(dateStr);
                                                                     const now = new Date();
                                                                     // Fix: If date is > 7 hours in the future (timezone mismatch artifact), subtract 8 hours
@@ -523,17 +522,17 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                                             </div>
                                                             <div className="text-xs text-gray-500 pl-5">
                                                                 {(() => {
-                                                                    const dateStr = report.created_at.endsWith('Z') || report.created_at.includes('+') 
-                                                                        ? report.created_at 
+                                                                    const dateStr = report.created_at.endsWith('Z') || report.created_at.includes('+')
+                                                                        ? report.created_at
                                                                         : report.created_at + 'Z';
-                                                                    
+
                                                                     let date = new Date(dateStr);
                                                                     const now = new Date();
                                                                     // Fix: If date is > 7 hours in the future, subtract 8 hours
                                                                     if (date.getTime() - now.getTime() > 1000 * 60 * 60 * 7) {
                                                                         date = new Date(date.getTime() - 1000 * 60 * 60 * 8);
                                                                     }
-                                                                        
+
                                                                     return format(date, "d MMM yyyy, h:mm a");
                                                                 })()}
                                                             </div>
@@ -549,7 +548,7 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                                         </div>
                                                         <div className="text-xs text-gray-500">AI Analysis Model</div>
                                                     </div>
-                                                    
+
                                                     <div className="flex items-center">
                                                         <button
                                                             onClick={(e) => handleDeleteReport(report.id, e)}
@@ -643,12 +642,13 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                 {activeTab === 'cf' && renderFinancialSection('Cash Flow', cashFlow, CF_ORDER, cfDate)}
             </div>
 
-            <AnalysisWizardModal 
+            <AnalysisWizardModal
                 isOpen={isAnalyzeModalOpen}
                 onClose={() => setIsAnalyzeModalOpen(false)}
                 onComplete={handleAnalysisComplete}
                 companyName={company.name}
                 companyId={company.id}
+                companyTicker={company.ticker}
             />
         </div>
     );

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-    Check, Upload, FileText, Leaf, BarChart3, 
+import {
+    Check, Upload, FileText, Leaf, BarChart3,
     Building2, Loader2, ChevronRight, X, ArrowLeft,
     RefreshCw, Info, ExternalLink, Trash2
 } from 'lucide-react';
@@ -27,6 +27,7 @@ interface AnalysisWizardModalProps {
     onComplete: () => void; // New prop for signaling completion
     companyName: string;
     companyId: string;
+    companyTicker: string;
 }
 
 // --- Mock Data ---
@@ -36,14 +37,14 @@ interface AnalysisWizardModalProps {
 // --- Sub-Components ---
 
 // 1. Topic Selection
-const TopicSelectionStep = ({ 
-    selected, 
-    onSelect, 
-    onNext, 
-    onCancel 
-}: { 
-    selected: AnalysisTopic | null, 
-    onSelect: (t: AnalysisTopic) => void, 
+const TopicSelectionStep = ({
+    selected,
+    onSelect,
+    onNext,
+    onCancel
+}: {
+    selected: AnalysisTopic | null,
+    onSelect: (t: AnalysisTopic) => void,
     onNext: () => void,
     onCancel: () => void
 }) => {
@@ -54,8 +55,8 @@ const TopicSelectionStep = ({
                     onClick={() => onSelect('esg')}
                     className={cn(
                         "flex items-center gap-4 p-4 rounded-xl border transition-all text-left group relative overflow-hidden",
-                        selected === 'esg' 
-                            ? "bg-emerald-500/10 border-emerald-500/50" 
+                        selected === 'esg'
+                            ? "bg-emerald-500/10 border-emerald-500/50"
                             : "bg-white/5 border-white/10 hover:bg-white/[0.07] hover:border-white/20"
                     )}
                 >
@@ -73,9 +74,9 @@ const TopicSelectionStep = ({
                         <div className="text-sm text-gray-400 mt-1">Environmental, Social & Governance analysis</div>
                     </div>
                     {selected === 'esg' && (
-                        <motion.div 
+                        <motion.div
                             layoutId="outline"
-                            className="absolute inset-0 border-2 border-emerald-500 rounded-xl" 
+                            className="absolute inset-0 border-2 border-emerald-500 rounded-xl"
                             initial={false}
                             transition={{ type: "spring", stiffness: 500, damping: 30 }}
                         />
@@ -86,8 +87,8 @@ const TopicSelectionStep = ({
                     onClick={() => onSelect('financials')}
                     className={cn(
                         "flex items-center gap-4 p-4 rounded-xl border transition-all text-left group relative overflow-hidden",
-                        selected === 'financials' 
-                            ? "bg-indigo-500/10 border-indigo-500/50" 
+                        selected === 'financials'
+                            ? "bg-indigo-500/10 border-indigo-500/50"
                             : "bg-white/5 border-white/10 hover:bg-white/[0.07] hover:border-white/20"
                     )}
                 >
@@ -105,9 +106,9 @@ const TopicSelectionStep = ({
                         <div className="text-sm text-gray-400 mt-1">Financial performance & metrics</div>
                     </div>
                     {selected === 'financials' && (
-                        <motion.div 
+                        <motion.div
                             layoutId="outline"
-                            className="absolute inset-0 border-2 border-indigo-500 rounded-xl" 
+                            className="absolute inset-0 border-2 border-indigo-500 rounded-xl"
                             initial={false}
                             transition={{ type: "spring", stiffness: 500, damping: 30 }}
                         />
@@ -118,8 +119,8 @@ const TopicSelectionStep = ({
                     onClick={() => onSelect('general')}
                     className={cn(
                         "flex items-center gap-4 p-4 rounded-xl border transition-all text-left group relative overflow-hidden",
-                        selected === 'general' 
-                            ? "bg-blue-500/10 border-blue-500/50" 
+                        selected === 'general'
+                            ? "bg-blue-500/10 border-blue-500/50"
                             : "bg-white/5 border-white/10 hover:bg-white/[0.07] hover:border-white/20"
                     )}
                 >
@@ -137,9 +138,9 @@ const TopicSelectionStep = ({
                         <div className="text-sm text-gray-400 mt-1">Comprehensive company overview</div>
                     </div>
                     {selected === 'general' && (
-                        <motion.div 
+                        <motion.div
                             layoutId="outline"
-                            className="absolute inset-0 border-2 border-blue-500 rounded-xl" 
+                            className="absolute inset-0 border-2 border-blue-500 rounded-xl"
                             initial={false}
                             transition={{ type: "spring", stiffness: 500, damping: 30 }}
                         />
@@ -156,25 +157,135 @@ const TopicSelectionStep = ({
 };
 
 // 2. File Upload
-const FileUploadStep = ({ onNext, onBack, onCancel, companyId }: { onNext: () => void, onBack: () => void, onCancel: () => void, companyId: string }) => {
-    // We can track upload count via callback if needed, but for now we trust the user to proceed
+interface AnnualReport {
+    id: string;
+    title: string;
+    date: string;
+    link: string;
+}
+
+const decodeHtml = (html: string): string => {
+    const txt = document.createElement('textarea');
+    txt.innerHTML = html;
+    return txt.value;
+};
+
+const parseHtmlLink = (htmlString: string): { text: string; link?: string } => {
+    const decoded = decodeHtml(htmlString);
+    const linkMatch = decoded.match(/<a[^>]+href=['"]([^'"]+)['"][^>]*>(.*?)<\/a>/i);
+    if (linkMatch) {
+        return {
+            text: linkMatch[2].replace(/<[^>]*>/g, '').trim(),
+            link: linkMatch[1]
+        };
+    }
+    const text = decoded.replace(/<[^>]*>/g, '').trim();
+    return { text };
+};
+
+const FileUploadStep = ({ onNext, onBack, onCancel, companyId, companyTicker }: { onNext: () => void, onBack: () => void, onCancel: () => void, companyId: string, companyTicker: string }) => {
     const [uploadCount, setUploadCount] = useState(0);
+    const [annualReports, setAnnualReports] = useState<AnnualReport[]>([]);
+    const [loadingReports, setLoadingReports] = useState(false);
+
+    useEffect(() => {
+        fetchAnnualReports();
+    }, [companyTicker]);
+
+    const fetchAnnualReports = async () => {
+        try {
+            setLoadingReports(true);
+            const reports: AnnualReport[] = [];
+            const bursaCode = companyTicker.split('.')[0];
+
+            console.log(`[ANNUAL REPORTS] Fetching for Bursa Code: ${bursaCode}`);
+
+            const url = `https://www.bursamalaysia.com/api/v1/announcements/search?ann_type=company&company=${bursaCode}&cat=AR,ARCO&per_page=20&page=0`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log(`[ANNUAL REPORTS] API returned ${data.data?.length || 0} items for ${bursaCode}`);
+
+                if (data.data) {
+                    for (const item of data.data) {
+                        const dateMatch = parseHtmlLink(item[1]);
+                        const titleMatch = parseHtmlLink(item[3]);
+                        const link = titleMatch.link ? `https://www.bursamalaysia.com${titleMatch.link}` : '';
+                        const idMatch = link.match(/ann_id=(\d+)/);
+                        const reportId = idMatch ? `ar-${bursaCode}-${idMatch[1]}` : `ar-${bursaCode}-${item[0]}`;
+
+                        reports.push({
+                            id: reportId,
+                            title: titleMatch.text,
+                            date: dateMatch.text,
+                            link: link
+                        });
+                    }
+                }
+            }
+
+            setAnnualReports(reports);
+        } catch (err) {
+            console.warn(`Error fetching annual reports:`, err);
+        } finally {
+            setLoadingReports(false);
+        }
+    };
 
     return (
-        <div className="space-y-6">
-            <div className="h-96 overflow-y-auto pr-2 custom-scrollbar">
-                <CompanyDocumentUpload 
-                    companyId={companyId} 
+        <div className="space-y-2 flex flex-col">
+            <div className="h-50 overflow-y-auto pr-2 custom-scrollbar">
+                <CompanyDocumentUpload
+                    companyId={companyId}
                     onUploadSuccess={() => setUploadCount(prev => prev + 1)}
                 />
             </div>
 
+            {/* Annual Reports Section */}
+            <div className="border-t border-white/10 pt-2">
+                <h3 className="text-sm font-semibold text-white mb-3">Relevant Annual Reports</h3>
+                {loadingReports ? (
+                    <div className="flex justify-center py-4">
+                        <Loader2 className="animate-spin text-gray-400" size={20} />
+                    </div>
+                ) : annualReports.length === 0 ? (
+                    <p className="text-xs text-gray-500 text-center py-4">No annual reports found</p>
+                ) : (
+                    <div className="h-40 overflow-y-auto pr-2 custom-scrollbar space-y-2">
+                        {annualReports.map((report) => (
+                            <a
+                                key={report.id}
+                                href={report.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-indigo-500/30 transition-all group cursor-pointer"
+                            >
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-medium text-white group-hover:text-indigo-400 transition-colors truncate">
+                                            {report.title}
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-1">{report.date}</div>
+                                    </div>
+                                    <ExternalLink size={14} className="text-gray-500 group-hover:text-indigo-400 flex-shrink-0 mt-0.5" />
+                                </div>
+                            </a>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             <GlassModalFooter className="justify-between">
-                <GlassButton variant="ghost" onClick={onBack} leftIcon={<ArrowLeft size={16}/>}>Back</GlassButton>
+                <GlassButton variant="ghost" onClick={onBack} leftIcon={<ArrowLeft size={16} />}>Back</GlassButton>
                 <div className="flex gap-2">
                     <GlassButton variant="ghost" onClick={onCancel}>Cancel</GlassButton>
-                    <GlassButton 
-                        onClick={onNext} 
+                    <GlassButton
+                        onClick={onNext}
                     >
                         {uploadCount > 0 ? `Continue (${uploadCount} uploaded)` : 'Continue'}
                     </GlassButton>
@@ -323,10 +434,10 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
             </div>
 
             <div className="max-w-md mx-auto relative px-8">
-                 {/* Vertical line connection */}
-                 <div className="absolute left-[47px] top-4 bottom-4 w-0.5 bg-white/10" />
+                {/* Vertical line connection */}
+                <div className="absolute left-[47px] top-4 bottom-4 w-0.5 bg-white/10" />
 
-                 <div className="space-y-6 relative z-10">
+                <div className="space-y-6 relative z-10">
                     {steps.map((step, idx) => {
                         const isCompleted = stepIndex > idx;
                         const isCurrent = stepIndex === idx;
@@ -357,7 +468,7 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
                             </motion.div>
                         );
                     })}
-                 </div>
+                </div>
             </div>
 
             {/* Progress bar at bottom - now using real progress from backend */}
@@ -401,26 +512,26 @@ export const FinancialAnalysisView = ({ report }: { report: AnalysisReport }) =>
 
     return (
         <div className="space-y-6">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {cards.map(card => (
-                     <div key={card.id} className="min-h-[220px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {cards.map(card => (
+                    <div key={card.id} className="min-h-[220px]">
                         <GlassCard className={cn("h-full flex flex-col hover:border-white/20 transition-all border-l-2", card.border)}>
                             <div className="flex justify-between items-start mb-4">
-                                 <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3">
                                     <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", card.bg)}>
                                         <BarChart3 size={18} className={card.iconColor} />
                                     </div>
                                     <h3 className="font-bold text-white text-lg">{card.title}</h3>
-                                 </div>
-                                 <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(card.data.score))}>
-                                     {card.data.score}%
-                                 </div>
+                                </div>
+                                <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(card.data.score))}>
+                                    {card.data.score}%
+                                </div>
                             </div>
 
                             <div className="text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white">
                                 <ReactMarkdown components={citationComponents}>{formatText(card.data.summary)}</ReactMarkdown>
                             </div>
-                            
+
                             {/* Highlights Section */}
                             {card.data.highlights && card.data.highlights.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mb-4">
@@ -434,17 +545,17 @@ export const FinancialAnalysisView = ({ report }: { report: AnalysisReport }) =>
 
                             <div className="mt-auto border-t border-white/10 pt-4">
                                 <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                                    <FileText size={12}/> Sources
+                                    <FileText size={12} /> Sources
                                 </div>
                                 {card.data.sources.map((source, i) => (
                                     <div key={i} className="text-xs text-indigo-300 truncate hover:text-indigo-200">
-                                        [{i+1}] {source}
+                                        [{i + 1}] {source}
                                     </div>
                                 ))}
                             </div>
                         </GlassCard>
-                     </div>
-                 ))}
+                    </div>
+                ))}
             </div>
         </div>
     );
@@ -511,10 +622,10 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
         <GlassCard className="space-y-6 mt-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                     <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
                         Analysis Results
-                     </h2>
-                     <p className="text-gray-400 mt-1">Comprehensive assessment based on uploaded documents and external sources</p>
+                    </h2>
+                    <p className="text-gray-400 mt-1">Comprehensive assessment based on uploaded documents and external sources</p>
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-white/5 border border-white/10">
@@ -523,7 +634,7 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                     </div>
                     {/* View Switcher */}
                     <div className="flex bg-white/5 p-1 rounded-lg border border-white/10">
-                        <button 
+                        <button
                             onClick={() => setViewMode('esg')}
                             className={cn(
                                 "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
@@ -532,7 +643,7 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                         >
                             ESG
                         </button>
-                        <button 
+                        <button
                             onClick={() => setViewMode('financial')}
                             className={cn(
                                 "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
@@ -542,9 +653,9 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                             Financials
                         </button>
                     </div>
-                    
+
                     {onDelete && (
-                         <button
+                        <button
                             onClick={onDelete}
                             className="p-2 rounded-lg bg-white/5 hover:bg-red-500/10 hover:text-red-400 text-gray-400 transition-colors border border-white/10"
                             title="Delete this report"
@@ -553,11 +664,11 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                         </button>
                     )}
 
-                    <GlassButton 
+                    <GlassButton
                         size="sm"
                         variant="ghost"
                         onClick={() => setShowDetails(!showDetails)}
-                        leftIcon={<Info size={16}/>}
+                        leftIcon={<Info size={16} />}
                     >
                         {showDetails ? "Hide Details" : "View Breakdown"}
                     </GlassButton>
@@ -567,202 +678,108 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
             {/* Analysis Overview Section - Toggled */}
             <AnimatePresence>
                 {showDetails && !flippedCard && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
                         className="overflow-hidden"
                     >
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-2">
-                             <GlassCard className="space-y-4 border-l-2 border-l-blue-500/50">
-                                 <div className="flex items-center gap-2">
-                                     <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                                         <FileText size={16} className="text-blue-400" />
-                                     </div>
-                                     <h3 className="font-semibold text-white">Investment Summary</h3>
-                                 </div>
-                                 <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none max-h-[300px] overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white">
+                            <GlassCard className="space-y-4 border-l-2 border-l-blue-500/50">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                        <FileText size={16} className="text-blue-400" />
+                                    </div>
+                                    <h3 className="font-semibold text-white">Investment Summary</h3>
+                                </div>
+                                <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none max-h-[300px] overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white">
                                     <ReactMarkdown>{report.summary}</ReactMarkdown>
-                                 </div>
-                             </GlassCard>
-                             <GlassCard className="space-y-4 border-l-2 border-l-emerald-500/50">
-                                 <div className="flex items-center gap-2">
-                                     <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                                         <BarChart3 size={16} className="text-emerald-400" />
-                                     </div>
-                                     <h3 className="font-semibold text-white">Bull Case (Claims)</h3>
-                                 </div>
-                                 <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none max-h-[300px] overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300">
+                                </div>
+                            </GlassCard>
+                            <GlassCard className="space-y-4 border-l-2 border-l-emerald-500/50">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                        <BarChart3 size={16} className="text-emerald-400" />
+                                    </div>
+                                    <h3 className="font-semibold text-white">Bull Case (Claims)</h3>
+                                </div>
+                                <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none max-h-[300px] overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300">
                                     <ReactMarkdown>{report.bull_case}</ReactMarkdown>
-                                 </div>
-                             </GlassCard>
-                             <GlassCard className="space-y-4 border-l-2 border-l-amber-500/50">
-                                 <div className="flex items-center gap-2">
-                                     <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                                         <Info size={16} className="text-amber-400" />
-                                     </div>
-                                     <h3 className="font-semibold text-white">Risks & Concerns</h3>
-                                 </div>
-                                 <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none max-h-[300px] overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300 prose-li:marker:text-amber-400">
+                                </div>
+                            </GlassCard>
+                            <GlassCard className="space-y-4 border-l-2 border-l-amber-500/50">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                        <Info size={16} className="text-amber-400" />
+                                    </div>
+                                    <h3 className="font-semibold text-white">Risks & Concerns</h3>
+                                </div>
+                                <div className="text-sm text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none max-h-[300px] overflow-y-auto custom-scrollbar prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300 prose-li:marker:text-amber-400">
                                     <ReactMarkdown>{report.risk_factors}</ReactMarkdown>
-                                 </div>
-                             </GlassCard>
+                                </div>
+                            </GlassCard>
                         </div>
                     </motion.div>
                 )}
             </AnimatePresence>
-            
+
             {/* Legend */}
-             <div className="flex items-center justify-center gap-6 text-xs text-gray-500 pt-2 pb-4">
-                 <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"/> High Confidence (80%+)</div>
-                 <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500"/> Medium Confidence (60-79%)</div>
-                 <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500"/> Low Confidence (60%)</div>
-             </div>
+            <div className="flex items-center justify-center gap-6 text-xs text-gray-500 pt-2 pb-4">
+                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500" /> High Confidence (80%+)</div>
+                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500" /> Medium Confidence (60-79%)</div>
+                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500" /> Low Confidence (60%)</div>
+            </div>
 
 
-             
-             {viewMode === 'financial' ? (
-                 <FinancialAnalysisView report={report} />
-             ) : (
+
+            {viewMode === 'financial' ? (
+                <FinancialAnalysisView report={report} />
+            ) : (
                 <>
-                {/* ESG Overview Card - Full Width */}
-                {(() => {
-                    const overviewCard = cards.find(c => c.id === 'overview')!;
-                    const isFlipped = flippedCard === overviewCard.id;
-                    return (
-                        <div
-                            className={cn(
-                                "relative perspective-1000 transition-all duration-500",
-                                isFlipped ? "min-h-[400px]" : "min-h-[220px]"
-                            )}
-                        >
-                            <GlassCard
-                                className="h-full cursor-pointer hover:border-white/20 transition-all group overflow-hidden flex flex-col border-l-2 border-l-emerald-500/50"
-                                onClick={() => toggleFlip(overviewCard.id)}
-                            >
-                                <div className="flex justify-between items-start mb-4">
-                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                                            <Leaf size={20} className="text-emerald-400" />
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">Main</span>
-                                            <h3 className="font-bold text-white text-lg mt-1">{overviewCard.title}</h3>
-                                        </div>
-                                     </div>
-                                     <div className={cn("px-3 py-1.5 rounded-lg text-sm font-bold border", getScoreColor(overviewCard.data.score))}>
-                                         {overviewCard.data.score}%
-                                     </div>
-                                </div>
-
-                                <div className={cn(
-                                    "text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300",
-                                    !isFlipped ? "line-clamp-5" : "max-h-[300px] overflow-y-auto custom-scrollbar"
-                                )}>
-                                    <ReactMarkdown components={citationComponents}>
-                                        {formatText((isFlipped && overviewCard.data.detail) || overviewCard.data.summary)}
-                                    </ReactMarkdown>
-                                </div>
-
-                                {/* Highlights Badge Section */}
-                                {!isFlipped && overviewCard.data.highlights && overviewCard.data.highlights.length > 0 && (
-                                    <div className="flex flex-wrap gap-2 mb-4">
-                                        {(overviewCard.data.highlights || []).map((h: string, idx: number) => (
-                                            <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5">
-                                                {h}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <div className="mt-auto border-t border-white/10 pt-4">
-                                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                                        <FileText size={12}/> Sources
-                                    </div>
-                                    <div className="flex flex-wrap gap-4">
-                                        {(overviewCard.data.sources || []).map((source, i) => (
-                                            <div key={i} className="text-xs text-indigo-300 hover:text-indigo-200">
-                                                [{i+1}] {source}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 flex items-center gap-1">
-                                    <RefreshCw size={12}/> {isFlipped ? "Close details" : "View analysis"}
-                                </div>
-                            </GlassCard>
-                        </div>
-                    );
-                })()}
-    
-                {/* Other 4 Cards - 2x2 Grid */}
-                <div className={cn(
-                    "grid gap-4 transition-all duration-500",
-                    flippedCard && flippedCard !== 'overview' ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
-                )}>
-                     {cards.filter(c => c.id !== 'overview').map(card => {
-                         if (flippedCard && flippedCard !== card.id) return null;
-
-                         const isFlipped = flippedCard === card.id;
-                        // Debug log
-                        if (isFlipped) {
-                             // console.log(`Card ${card.id} flipped. Report ID:`, report.id, 'Detail present:', !!card.data.detail, 'Length:', card.data.detail?.length);
-                             console.log('Full data:', card.data);
-                        }
-
-                         // Get card-specific styling
-                         const getCardStyle = (id: string) => {
-                             switch(id) {
-                                 case 'governance': return { border: 'border-l-amber-500/50', bg: 'bg-amber-500/20', text: 'text-amber-400', Icon: Building2 };
-                                 case 'environmental': return { border: 'border-l-emerald-500/50', bg: 'bg-emerald-500/20', text: 'text-emerald-400', Icon: Leaf };
-                                 case 'social': return { border: 'border-l-blue-500/50', bg: 'bg-blue-500/20', text: 'text-blue-400', Icon: Building2 };
-                                 case 'disclosure': return { border: 'border-l-indigo-500/50', bg: 'bg-indigo-500/20', text: 'text-indigo-400', Icon: FileText };
-                                 default: return { border: 'border-l-gray-500/50', bg: 'bg-gray-500/20', text: 'text-gray-400', Icon: Info };
-                             }
-                         };
-                         const style = getCardStyle(card.id);
-
-                         return (
-                             <div
-                                key={card.id}
+                    {/* ESG Overview Card - Full Width */}
+                    {(() => {
+                        const overviewCard = cards.find(c => c.id === 'overview')!;
+                        const isFlipped = flippedCard === overviewCard.id;
+                        return (
+                            <div
                                 className={cn(
                                     "relative perspective-1000 transition-all duration-500",
-                                    isFlipped ? "md:col-span-2 min-h-[400px]" : "min-h-[220px]"
+                                    isFlipped ? "min-h-[400px]" : "min-h-[220px]"
                                 )}
-                             >
+                            >
                                 <GlassCard
-                                    className={cn("h-full cursor-pointer hover:border-white/20 transition-all group overflow-hidden flex flex-col border-l-2", style.border)}
-                                    onClick={() => toggleFlip(card.id)}
+                                    className="h-full cursor-pointer hover:border-white/20 transition-all group overflow-hidden flex flex-col border-l-2 border-l-emerald-500/50"
+                                    onClick={() => toggleFlip(overviewCard.id)}
                                 >
                                     <div className="flex justify-between items-start mb-4">
-                                         <div className="flex items-center gap-3">
-                                            <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", style.bg)}>
-                                                <style.Icon size={18} className={style.text} />
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                                <Leaf size={20} className="text-emerald-400" />
                                             </div>
-                                            <h3 className="font-bold text-white text-lg">{card.title}</h3>
-                                         </div>
-                                         <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(card.data.score))}>
-                                             {card.data.score}%
-                                         </div>
+                                            <div>
+                                                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">Main</span>
+                                                <h3 className="font-bold text-white text-lg mt-1">{overviewCard.title}</h3>
+                                            </div>
+                                        </div>
+                                        <div className={cn("px-3 py-1.5 rounded-lg text-sm font-bold border", getScoreColor(overviewCard.data.score))}>
+                                            {overviewCard.data.score}%
+                                        </div>
                                     </div>
-
-
 
                                     <div className={cn(
                                         "text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300",
-                                        !isFlipped ? "line-clamp-4" : "max-h-[250px] overflow-y-auto custom-scrollbar"
+                                        !isFlipped ? "line-clamp-5" : "max-h-[300px] overflow-y-auto custom-scrollbar"
                                     )}>
                                         <ReactMarkdown components={citationComponents}>
-                                            {formatText((isFlipped && card.data.detail) || card.data.summary)}
+                                            {formatText((isFlipped && overviewCard.data.detail) || overviewCard.data.summary)}
                                         </ReactMarkdown>
                                     </div>
 
                                     {/* Highlights Badge Section */}
-                                    {!isFlipped && card.data.highlights && card.data.highlights.length > 0 && (
+                                    {!isFlipped && overviewCard.data.highlights && overviewCard.data.highlights.length > 0 && (
                                         <div className="flex flex-wrap gap-2 mb-4">
-                                            {card.data.highlights.map((h: string, idx: number) => (
-                                                <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5 truncate max-w-full">
+                                            {(overviewCard.data.highlights || []).map((h: string, idx: number) => (
+                                                <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5">
                                                     {h}
                                                 </span>
                                             ))}
@@ -771,26 +788,120 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
 
                                     <div className="mt-auto border-t border-white/10 pt-4">
                                         <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                                            <FileText size={12}/> Sources
+                                            <FileText size={12} /> Sources
                                         </div>
-                                        {(card.data.sources || []).map((source, i) => (
-                                            <div key={i} className="text-xs text-indigo-300 truncate hover:text-indigo-200">
-                                                [{i+1}] {source}
-                                            </div>
-                                        ))}
+                                        <div className="flex flex-wrap gap-4">
+                                            {(overviewCard.data.sources || []).map((source, i) => (
+                                                <div key={i} className="text-xs text-indigo-300 hover:text-indigo-200">
+                                                    [{i + 1}] {source}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
 
                                     <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 flex items-center gap-1">
-                                        <RefreshCw size={12}/> {isFlipped ? "Close details" : "View analysis"}
+                                        <RefreshCw size={12} /> {isFlipped ? "Close details" : "View analysis"}
                                     </div>
                                 </GlassCard>
-                             </div>
-                         );
-                     })}
-                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {/* Other 4 Cards - 2x2 Grid */}
+                    <div className={cn(
+                        "grid gap-4 transition-all duration-500",
+                        flippedCard && flippedCard !== 'overview' ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
+                    )}>
+                        {cards.filter(c => c.id !== 'overview').map(card => {
+                            if (flippedCard && flippedCard !== card.id) return null;
+
+                            const isFlipped = flippedCard === card.id;
+                            // Debug log
+                            if (isFlipped) {
+                                // console.log(`Card ${card.id} flipped. Report ID:`, report.id, 'Detail present:', !!card.data.detail, 'Length:', card.data.detail?.length);
+                                console.log('Full data:', card.data);
+                            }
+
+                            // Get card-specific styling
+                            const getCardStyle = (id: string) => {
+                                switch (id) {
+                                    case 'governance': return { border: 'border-l-amber-500/50', bg: 'bg-amber-500/20', text: 'text-amber-400', Icon: Building2 };
+                                    case 'environmental': return { border: 'border-l-emerald-500/50', bg: 'bg-emerald-500/20', text: 'text-emerald-400', Icon: Leaf };
+                                    case 'social': return { border: 'border-l-blue-500/50', bg: 'bg-blue-500/20', text: 'text-blue-400', Icon: Building2 };
+                                    case 'disclosure': return { border: 'border-l-indigo-500/50', bg: 'bg-indigo-500/20', text: 'text-indigo-400', Icon: FileText };
+                                    default: return { border: 'border-l-gray-500/50', bg: 'bg-gray-500/20', text: 'text-gray-400', Icon: Info };
+                                }
+                            };
+                            const style = getCardStyle(card.id);
+
+                            return (
+                                <div
+                                    key={card.id}
+                                    className={cn(
+                                        "relative perspective-1000 transition-all duration-500",
+                                        isFlipped ? "md:col-span-2 min-h-[400px]" : "min-h-[220px]"
+                                    )}
+                                >
+                                    <GlassCard
+                                        className={cn("h-full cursor-pointer hover:border-white/20 transition-all group overflow-hidden flex flex-col border-l-2", style.border)}
+                                        onClick={() => toggleFlip(card.id)}
+                                    >
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", style.bg)}>
+                                                    <style.Icon size={18} className={style.text} />
+                                                </div>
+                                                <h3 className="font-bold text-white text-lg">{card.title}</h3>
+                                            </div>
+                                            <div className={cn("px-2 py-1 rounded-lg text-xs font-bold border", getScoreColor(card.data.score))}>
+                                                {card.data.score}%
+                                            </div>
+                                        </div>
+
+
+
+                                        <div className={cn(
+                                            "text-sm text-gray-300 leading-relaxed mb-4 flex-1 prose prose-invert prose-sm max-w-none prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300",
+                                            !isFlipped ? "line-clamp-4" : "max-h-[250px] overflow-y-auto custom-scrollbar"
+                                        )}>
+                                            <ReactMarkdown components={citationComponents}>
+                                                {formatText((isFlipped && card.data.detail) || card.data.summary)}
+                                            </ReactMarkdown>
+                                        </div>
+
+                                        {/* Highlights Badge Section */}
+                                        {!isFlipped && card.data.highlights && card.data.highlights.length > 0 && (
+                                            <div className="flex flex-wrap gap-2 mb-4">
+                                                {card.data.highlights.map((h: string, idx: number) => (
+                                                    <span key={idx} className="text-[10px] font-semibold px-2 py-1 rounded bg-white/10 text-white border border-white/5 truncate max-w-full">
+                                                        {h}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        <div className="mt-auto border-t border-white/10 pt-4">
+                                            <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                                                <FileText size={12} /> Sources
+                                            </div>
+                                            {(card.data.sources || []).map((source, i) => (
+                                                <div key={i} className="text-xs text-indigo-300 truncate hover:text-indigo-200">
+                                                    [{i + 1}] {source}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 flex items-center gap-1">
+                                            <RefreshCw size={12} /> {isFlipped ? "Close details" : "View analysis"}
+                                        </div>
+                                    </GlassCard>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </>
-             )}
-            
+            )}
+
             <div className="text-center text-xs text-gray-600 mt-8">
                 Click on any card to flip and see the detailed analysis backing
             </div>
@@ -801,7 +912,7 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
 
 // --- Main Wizard Component ---
 
-export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, companyId }: AnalysisWizardModalProps) {
+export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, companyId, companyTicker }: AnalysisWizardModalProps) {
     const [step, setStep] = useState<AnalysisStep>('topic');
     const [topic, setTopic] = useState<AnalysisTopic | null>(null);
 
@@ -817,7 +928,7 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
     }, [isOpen]);
 
     const getTitle = () => {
-        switch(step) {
+        switch (step) {
             case 'topic': return "Select Analysis Type";
             case 'upload': return "Upload Documents";
             case 'progress': return ""; // Custom header in component
@@ -827,7 +938,7 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
     };
 
     const getDescription = () => {
-        switch(step) {
+        switch (step) {
             case 'topic': return "Choose the type of analysis you want to perform";
             case 'upload': return `Upload PDF files for ${topic ? topic.toUpperCase() : ''} analysis`;
             default: return undefined;
@@ -853,13 +964,13 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
         >
             <AnimatePresence mode="wait">
                 {step === 'topic' && (
-                    <motion.div 
+                    <motion.div
                         key="topic"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
                     >
-                        <TopicSelectionStep 
+                        <TopicSelectionStep
                             selected={topic}
                             onSelect={setTopic}
                             onNext={() => setStep('upload')}
@@ -869,14 +980,15 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
                 )}
 
                 {step === 'upload' && (
-                    <motion.div 
+                    <motion.div
                         key="upload"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
                     >
-                        <FileUploadStep 
+                        <FileUploadStep
                             companyId={companyId}
+                            companyTicker={companyTicker}
                             onNext={() => setStep('progress')}
                             onBack={() => setStep('topic')}
                             onCancel={onClose}
@@ -885,13 +997,13 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
                 )}
 
                 {step === 'progress' && (
-                    <motion.div 
+                    <motion.div
                         key="progress"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                     >
-                        <ProgressStep 
+                        <ProgressStep
                             companyId={companyId}
                             onComplete={() => {
                                 onClose();
@@ -899,7 +1011,7 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
                                 setTimeout(() => {
                                     setStep('topic');
                                     setTopic(null);
-                                }, 500); 
+                                }, 500);
                             }}
                         />
                     </motion.div>
