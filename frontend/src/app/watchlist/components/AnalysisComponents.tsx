@@ -923,9 +923,42 @@ const DebateReportSection = ({ report, registry }: { report: AnalysisReport; reg
                     </div>
                     <h3 className="font-semibold text-white">Judge's Verdict</h3>
                 </div>
-                <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none">
-                    <ReactMarkdown components={citationComponents}>{debateReport.judge_verdict}</ReactMarkdown>
+
+                {/* Verdict Decision */}
+                <div className="text-xl font-bold text-purple-400 mb-3">
+                    {debateReport.judge_verdict}
                 </div>
+
+                {/* Verdict Reasoning (only if present) */}
+                {debateReport.verdict_reasoning && (
+                    <div className="mb-4">
+                        <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Reasoning</div>
+                        <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none bg-white/5 p-3 rounded-lg border border-white/10">
+                            <ReactMarkdown components={citationComponents}>{debateReport.verdict_reasoning}</ReactMarkdown>
+                        </div>
+                    </div>
+                )}
+
+                {/* Key Deciding Factors (only if present) */}
+                {debateReport.verdict_key_factors && debateReport.verdict_key_factors.length > 0 && (
+                    <div>
+                        <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                            <Scale size={12} /> Key Deciding Factors
+                        </div>
+                        <div className="space-y-2">
+                            {debateReport.verdict_key_factors.map((factor, idx) => (
+                                <div key={idx} className="text-sm text-gray-300 flex items-start gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
+                                    <span className="text-purple-400 font-bold">{idx + 1}.</span>
+                                    <div className="prose prose-invert prose-sm max-w-none">
+                                        <ReactMarkdown components={citationComponents}>
+                                            {factor}
+                                        </ReactMarkdown>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </GlassCard>
         </div>
     );
@@ -1197,12 +1230,119 @@ const RoleAnalysisView = ({ report }: { report: AnalysisReport }) => {
 };
 
 // =============================================================================
+// MARKET SENTIMENT VIEW
+// =============================================================================
+
+const MarketSentimentCard = ({ report, registry }: { report: AnalysisReport; registry: Record<string, SourceMetadata> }) => {
+    const sentiment = report.market_sentiment;
+    const citationComponents = createCitationComponents(registry);
+
+    if (!sentiment) {
+        return (
+            <GlassCard className="border-l-4 border-l-gray-500/50">
+                <div className="text-gray-400 text-center py-8">
+                    <p>No market sentiment data available.</p>
+                </div>
+            </GlassCard>
+        );
+    }
+
+    const getSentimentColor = (sent: string) => {
+        switch (sent?.toUpperCase()) {
+            case 'POSITIVE': return 'text-emerald-400 bg-emerald-500/20 border-emerald-500/50';
+            case 'NEGATIVE': return 'text-red-400 bg-red-500/20 border-red-500/50';
+            default: return 'text-gray-400 bg-gray-500/20 border-gray-500/50';
+        }
+    };
+
+    const sentimentStyle = getSentimentColor(sentiment.sentiment);
+
+    return (
+        <div className="space-y-6">
+            <GlassCard className={cn("border-l-4", sentimentStyle.split(' ').pop())}>
+                <div className="flex items-center gap-4 mb-6">
+                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", sentimentStyle.split(' ')[1])}>
+                        <TrendingUp size={24} className={sentimentStyle.split(' ')[0]} />
+                    </div>
+                    <div>
+                        <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Market Sentiment</div>
+                        <h2 className={cn("text-2xl font-bold", sentimentStyle.split(' ')[0])}>
+                            {sentiment.sentiment}
+                        </h2>
+                    </div>
+                </div>
+
+                <div className="space-y-6">
+                    {/* Summary */}
+                    <div>
+                        <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Summary</div>
+                        <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none">
+                            <ReactMarkdown components={citationComponents}>
+                                {sentiment.summary}
+                            </ReactMarkdown>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Key Events */}
+                        <div>
+                            <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                <MessageSquare size={12} /> Key Events
+                            </div>
+                            {sentiment.key_events && sentiment.key_events.length > 0 ? (
+                                <div className="space-y-2">
+                                    {sentiment.key_events.map((event, idx) => (
+                                        <div key={idx} className="text-sm text-gray-300 flex items-start gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
+                                            <span className="text-blue-400 mt-0.5">•</span>
+                                            <div className="prose prose-invert prose-sm max-w-none">
+                                                <ReactMarkdown components={citationComponents}>
+                                                    {event}
+                                                </ReactMarkdown>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-sm text-gray-500 italic">No key events found.</div>
+                            )}
+                        </div>
+
+                        {/* Risks from News */}
+                        <div>
+                            <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                <AlertTriangle size={12} /> News-Based Risks
+                            </div>
+                            {sentiment.risks_from_news && sentiment.risks_from_news.length > 0 ? (
+                                <div className="space-y-2">
+                                    {sentiment.risks_from_news.map((risk, idx) => (
+                                        <div key={idx} className="text-sm text-gray-300 flex items-start gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
+                                            <span className="text-red-400 mt-0.5">•</span>
+                                            <div className="prose prose-invert prose-sm max-w-none">
+                                                <ReactMarkdown components={citationComponents}>
+                                                    {risk}
+                                                </ReactMarkdown>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-sm text-gray-500 italic">No significant risks found in news.</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </GlassCard>
+        </div>
+    );
+};
+
+// =============================================================================
 // MAIN ANALYSIS RESULTS VIEW
 // =============================================================================
 
 export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report: AnalysisReport, onReanalyze: () => void, onDelete?: () => void }) => {
     const [showDetails, setShowDetails] = useState(false);
-    const [viewMode, setViewMode] = useState<'esg' | 'financial' | 'debate' | 'role'>('role');
+    const [viewMode, setViewMode] = useState<'esg' | 'financial' | 'debate' | 'role' | 'sentiment'>('role');
 
     const registry = getCitationRegistry(report);
 
@@ -1264,6 +1404,15 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                             >
                                 Debate
                             </button>
+                            <button
+                                onClick={() => setViewMode('sentiment')}
+                                className={cn(
+                                    "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                                    viewMode === 'sentiment' ? "bg-blue-500 text-white shadow-lg" : "text-gray-400 hover:text-white"
+                                )}
+                            >
+                                Sentiment
+                            </button>
                         </div>
 
                         {onDelete && (
@@ -1290,6 +1439,7 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                 {viewMode === 'esg' && <ESGAnalysisView report={report} />}
                 {viewMode === 'financial' && <FinancialAnalysisView report={report} />}
                 {viewMode === 'debate' && <DebateReportSection report={report} registry={registry} />}
+                {viewMode === 'sentiment' && <MarketSentimentCard report={report} registry={registry} />}
 
                 {/* Citation Registry Info */}
                 <div className="text-center text-xs text-gray-600 mt-8 flex items-center justify-center gap-2">

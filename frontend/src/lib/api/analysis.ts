@@ -62,6 +62,17 @@ export interface DebateReport {
 	government_stand: DebateStance;
 	opposition_stand: DebateStance;
 	judge_verdict: string;
+	// Optional enhanced verdict fields
+	verdict_reasoning?: string;
+	verdict_key_factors?: string[];
+}
+
+// Market Sentiment structure (from News)
+export interface MarketSentiment {
+	sentiment: string;     // POSITIVE, NEUTRAL, NEGATIVE
+	summary: string;       // 2-3 sentences with [N#] citations
+	key_events: string[];  // Recent events with [N#] citations
+	risks_from_news: string[]; // Risks with [N#] citations
 }
 
 // Agent log entry
@@ -90,6 +101,7 @@ export interface AnalysisReport {
 	// New Citation-First structure
 	esg_analysis: ESGReport;
 	financial_analysis: FinancialReport;
+	market_sentiment?: MarketSentiment;
 
 	// Role-specific fields
 	analysis_persona?: string;
