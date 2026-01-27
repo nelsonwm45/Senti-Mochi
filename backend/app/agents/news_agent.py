@@ -62,12 +62,21 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
         company = session.get(Company, company_id)
         company_sector = company.sector if company else None
 
-        # Filter for relevance (removes "Malayan tiger" type irrelevant articles)
-        articles = news_relevance_filter.filter_news_articles_db(
-            session, articles, company
-        ) if company else articles
+        # Filter for relevance (can be disabled for testing/debugging)
+        # Only filter if we have many articles - let's be more lenient
+        # Set DISABLE_NEWS_FILTER=true to skip filtering entirely
+        import os
+        disable_filter = os.getenv('DISABLE_NEWS_FILTER', 'false').lower() == 'true'
+        
+        if not disable_filter and company and len(articles) > 20:
+            # Only filter if we have excess articles
+            articles = news_relevance_filter.filter_news_articles_db(
+                session, articles, company
+            )
+        elif disable_filter:
+            print(f"[NEWS_AGENT] Relevance filtering DISABLED (DISABLE_NEWS_FILTER=true)")
 
-        # Limit to top 15 most relevant
+        # Limit to top 15 most relevant/recent
         articles = articles[:15]
 
         if not articles:
