@@ -4,6 +4,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 import apiClient from '@/lib/apiClient';
+import usePersona from '@/hooks/usePersona';
+import {
+  InvestorLayout,
+  RelationshipManagerLayout,
+  CreditRiskLayout,
+  MarketAnalystLayout
+} from '@/components/dashboard';
 
 import {
   FileText,
@@ -49,6 +56,7 @@ const WhatsAppIcon = ({ size = 24, className = "" }: { size?: number, className?
 
 function DashboardContent() {
   const router = useRouter();
+  const { persona, isLoading: personaLoading } = usePersona();
 
   // ... (keep interfaces if needed, or remove if imported)
 
@@ -428,352 +436,342 @@ function DashboardContent() {
     { name: 'The Edge', value: stats.edge, color: '#f59e0b' }  // amber-500
   ];
 
-  return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">Dashboard</h1>
-        <p className="text-foreground-muted">Real-time intelligence from Bursa filings and financial news</p>
+  // Intelligence Feed Component
+  const feedComponent = (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-foreground">Market Intelligence Feed</h2>
+        <span className="text-sm text-foreground-muted">
+          {loading ? 'Loading...' : watchlistEmpty ? 'No companies in watchlist' : `${unifiedFeed.length} announcements • Real-time Bursa filings`}
+        </span>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {statsData.map((stat, index) => (
-          <GlassCard key={index} className={`p-6 flex items-center gap-4 ${stat.borderColor} border`}>
-            <div className={`p-3 rounded-xl ${stat.iconBg}`}>
-              <stat.icon size={24} className={stat.iconColor} />
-            </div>
-            <div>
-              <p className="text-sm text-foreground-muted">{stat.label}</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-foreground">{stat.value}</span>
-                {stat.change && (
-                  <span className={`text-xs ${stat.changeColor} font-medium`}>{stat.change}</span>
-                )}
-              </div>
-            </div>
-          </GlassCard>
-        ))}
-      </div>
+      {/* Company Filter Dropdown */}
+      {!watchlistEmpty && watchlistCompanies.length > 0 && (
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-foreground-muted">Filter by company:</label>
+          <select
+            value={selectedCompanyId}
+            onChange={(e) => setSelectedCompanyId(e.target.value)}
+            className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-foreground text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/50 hover:bg-white/10 transition-colors cursor-pointer"
+          >
+            <option value="all" className="bg-gray-900 text-foreground">All Companies</option>
+            {watchlistCompanies.map((company) => (
+              <option key={company.id} value={company.id} className="bg-gray-900 text-foreground">
+                {company.name} ({company.ticker})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Intelligence Feed - Now showing unified news from all sources */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">Market Intelligence Feed</h2>
-            <span className="text-sm text-foreground-muted">
-              {loading ? 'Loading...' : watchlistEmpty ? 'No companies in watchlist' : `${unifiedFeed.length} announcements • Real-time Bursa filings`}
+      {/* Sentiment Filter Tabs */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'all'
+            ? 'bg-emerald-500 text-white'
+            : 'bg-white/5 text-foreground-muted hover:bg-white/10'
+            }`}
+        >
+          All
+        </button>
+        <button
+          onClick={() => setActiveTab('alerts')}
+          className={`px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${activeTab === 'alerts'
+            ? 'bg-red-500 text-white'
+            : 'bg-white/5 text-foreground-muted hover:bg-white/10'
+            }`}
+        >
+          <AlertTriangle size={16} />
+          Alerts
+          {sentimentCounts.negative > 0 && (
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${activeTab === 'alerts' ? 'bg-white/20' : 'bg-red-500/20 text-red-400'
+              }`}>
+              {sentimentCounts.negative}
             </span>
-          </div>
-
-          {/* Company Filter Dropdown */}
-          {!watchlistEmpty && watchlistCompanies.length > 0 && (
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-foreground-muted">Filter by company:</label>
-              <select
-                value={selectedCompanyId}
-                onChange={(e) => setSelectedCompanyId(e.target.value)}
-                className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-foreground text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/50 hover:bg-white/10 transition-colors cursor-pointer"
-              >
-                <option value="all" className="bg-gray-900 text-foreground">All Companies</option>
-                {watchlistCompanies.map((company) => (
-                  <option key={company.id} value={company.id} className="bg-gray-900 text-foreground">
-                    {company.name} ({company.ticker})
-                  </option>
-                ))}
-              </select>
-            </div>
           )}
+        </button>
+        <button
+          onClick={() => setActiveTab('positive')}
+          className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'positive'
+            ? 'bg-emerald-500 text-white'
+            : 'bg-white/5 text-foreground-muted hover:bg-white/10'
+            }`}
+        >
+          Positive
+        </button>
+        <button
+          onClick={() => setActiveTab('negative')}
+          className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'negative'
+            ? 'bg-red-500 text-white'
+            : 'bg-white/5 text-foreground-muted hover:bg-white/10'
+            }`}
+        >
+          Negative
+        </button>
+        <button
+          onClick={() => setActiveTab('neutral')}
+          className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'neutral'
+            ? 'bg-amber-500 text-white'
+            : 'bg-white/5 text-foreground-muted hover:bg-white/10'
+            }`}
+        >
+          Neutral
+        </button>
+      </div>
 
-          {/* Sentiment Filter Tabs */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <button
-              onClick={() => setActiveTab('all')}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'all'
-                ? 'bg-emerald-500 text-white'
-                : 'bg-white/5 text-foreground-muted hover:bg-white/10'
-                }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setActiveTab('alerts')}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${activeTab === 'alerts'
-                ? 'bg-red-500 text-white'
-                : 'bg-white/5 text-foreground-muted hover:bg-white/10'
-                }`}
-            >
-              <AlertTriangle size={16} />
-              Alerts
-              {sentimentCounts.negative > 0 && (
-                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${activeTab === 'alerts' ? 'bg-white/20' : 'bg-red-500/20 text-red-400'
-                  }`}>
-                  {sentimentCounts.negative}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('positive')}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'positive'
-                ? 'bg-emerald-500 text-white'
-                : 'bg-white/5 text-foreground-muted hover:bg-white/10'
-                }`}
-            >
-              Positive
-            </button>
-            <button
-              onClick={() => setActiveTab('negative')}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'negative'
-                ? 'bg-red-500 text-white'
-                : 'bg-white/5 text-foreground-muted hover:bg-white/10'
-                }`}
-            >
-              Negative
-            </button>
-            <button
-              onClick={() => setActiveTab('neutral')}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'neutral'
-                ? 'bg-amber-500 text-white'
-                : 'bg-white/5 text-foreground-muted hover:bg-white/10'
-                }`}
-            >
-              Neutral
-            </button>
+      {error && (
+        <GlassCard className="p-6 border-red-500/50">
+          <div className="flex items-center gap-2 text-red-500">
+            <AlertTriangle size={20} />
+            <span>Error loading news: {error}</span>
           </div>
+        </GlassCard>
+      )}
 
-          {error && (
-            <GlassCard className="p-6 border-red-500/50">
-              <div className="flex items-center gap-2 text-red-500">
-                <AlertTriangle size={20} />
-                <span>Error loading news: {error}</span>
-              </div>
-            </GlassCard>
-          )}
-
-          {watchlistEmpty && !loading ? (
-            <GlassCard className="p-12 border-amber-500/50 flex flex-col items-center justify-center text-center">
-              <AlertTriangle size={40} className="text-amber-500 mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">Your Watchlist is Empty</h3>
-              <p className="text-foreground-muted mb-6 max-w-md">
-                Start adding companies to your watchlist to see their Bursa filings and financial news updates here.
-              </p>
-              <button
-                onClick={() => router.push('/watchlist')}
-                className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-medium transition-colors"
-              >
-                Go to Watchlist
-              </button>
-            </GlassCard>
-          ) : loading ? (
+      {watchlistEmpty && !loading ? (
+        <GlassCard className="p-12 border-amber-500/50 flex flex-col items-center justify-center text-center">
+          <AlertTriangle size={40} className="text-amber-500 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">Your Watchlist is Empty</h3>
+          <p className="text-foreground-muted mb-6 max-w-md">
+            Start adding companies to your watchlist to see their Bursa filings and financial news updates here.
+          </p>
+          <button
+            onClick={() => router.push('/watchlist')}
+            className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-medium transition-colors"
+          >
+            Go to Watchlist
+          </button>
+        </GlassCard>
+      ) : loading ? (
+        <GlassCard className="p-6">
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+          </div>
+        </GlassCard>
+      ) : (
+        <div className="space-y-4">
+          {filteredFeed.length === 0 ? (
             <GlassCard className="p-6">
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-              </div>
+              <p className="text-center text-foreground-muted">
+                {unifiedFeed.length === 0
+                  ? 'No news items found for your watched companies'
+                  : `No ${activeTab === 'alerts' ? 'negative' : activeTab} sentiment items found`
+                }
+              </p>
             </GlassCard>
           ) : (
-            <div className="space-y-4">
-              {filteredFeed.length === 0 ? (
-                <GlassCard className="p-6">
-                  <p className="text-center text-foreground-muted">
-                    {unifiedFeed.length === 0
-                      ? 'No news items found for your watched companies'
-                      : `No ${activeTab === 'alerts' ? 'negative' : activeTab} sentiment items found`
-                    }
-                  </p>
-                </GlassCard>
-              ) : (
-                filteredFeed.map((item) => {
-                  const badge = getSourceBadge(item.type);
-                  const BadgeIcon = badge.icon;
+            filteredFeed.map((item) => {
+              const badge = getSourceBadge(item.type);
+              const BadgeIcon = badge.icon;
 
-                  // Get sentiment badge styles
-                  const getSentimentBadge = (sentiment: any) => {
-                    if (!sentiment) return null;
+              // Get sentiment badge styles
+              const getSentimentBadge = (sentiment: any) => {
+                if (!sentiment) return null;
 
-                    const label = sentiment.label.toLowerCase();
-                    const score = sentiment.score || 0;
+                const label = sentiment.label.toLowerCase();
+                const score = sentiment.score || 0;
 
-                    let bgColor = 'bg-gray-500/20';
-                    let textColor = 'text-gray-300';
-                    let icon = '◆';
-                    let ariaLabel = 'Neutral sentiment';
+                let bgColor = 'bg-gray-500/20';
+                let textColor = 'text-gray-300';
+                let icon = '◆';
+                let ariaLabel = 'Neutral sentiment';
 
-                    if (label === 'positive') {
-                      bgColor = 'bg-emerald-500/20';
-                      textColor = 'text-emerald-400';
-                      icon = '↑';
-                      ariaLabel = 'Positive sentiment';
-                    } else if (label === 'negative') {
-                      bgColor = 'bg-red-500/20';
-                      textColor = 'text-red-400';
-                      icon = '↓';
-                      ariaLabel = 'Negative sentiment';
-                    }
+                if (label === 'positive') {
+                  bgColor = 'bg-emerald-500/20';
+                  textColor = 'text-emerald-400';
+                  icon = '↑';
+                  ariaLabel = 'Positive sentiment';
+                } else if (label === 'negative') {
+                  bgColor = 'bg-red-500/20';
+                  textColor = 'text-red-400';
+                  icon = '↓';
+                  ariaLabel = 'Negative sentiment';
+                }
 
-                    return {
-                      label,
-                      score,
-                      bgColor,
-                      textColor,
-                      icon,
-                      ariaLabel,
-                      confidence: sentiment.confidence || 0
-                    };
-                  };
+                return {
+                  label,
+                  score,
+                  bgColor,
+                  textColor,
+                  icon,
+                  ariaLabel,
+                  confidence: sentiment.confidence || 0
+                };
+              };
 
-                  const sentimentBadge = getSentimentBadge(item.sentiment);
+              const sentimentBadge = getSentimentBadge(item.sentiment);
 
-                  // Get hover border color based on sentiment
-                  const getHoverBorderColor = () => {
-                    if (!sentimentBadge) return 'hover:border-blue-500/50';
+              // Get hover border color based on sentiment
+              const getHoverBorderColor = () => {
+                if (!sentimentBadge) return 'hover:border-blue-500/50';
 
-                    switch (sentimentBadge.label) {
-                      case 'positive':
-                        return 'hover:border-emerald-500/70';
-                      case 'negative':
-                        return 'hover:border-red-500/70';
-                      case 'neutral':
-                        return 'hover:border-amber-500/70';
-                      default:
-                        return 'hover:border-blue-500/50';
-                    }
-                  };
+                switch (sentimentBadge.label) {
+                  case 'positive':
+                    return 'hover:border-emerald-500/70';
+                  case 'negative':
+                    return 'hover:border-red-500/70';
+                  case 'neutral':
+                    return 'hover:border-amber-500/70';
+                  default:
+                    return 'hover:border-blue-500/50';
+                }
+              };
 
-                  return (
-                    <GlassCard
-                      key={item.id}
-                      className={`p-6 relative overflow-hidden group transition-all ${getHoverBorderColor()}`}
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex-1">
-                          <div className="flex items-baseline gap-2 mb-2">
-                            <h3 className="text-lg font-bold text-foreground">{item.title}</h3>
-                          </div>
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded ${badge.bg} ${badge.color} uppercase tracking-wider`}>
-                              <BadgeIcon size={12} />
-                              {badge.label}
-                            </div>
-                            {item.company && (
-                              <span className="text-xs font-medium px-2 py-1 rounded bg-white/5 text-foreground-muted">
-                                {item.company} {item.companyCode && `(${item.companyCode})`}
-                              </span>
-                            )}
-                            {/* Show sentiment badge if available, or "analyzing" if not (but skip Bursa) */}
-                            {item.type !== 'bursa' && (
-                              sentimentBadge ? (
-                                <div
-                                  className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded ${sentimentBadge.bgColor} ${sentimentBadge.textColor} uppercase tracking-wider group/sentiment relative`}
-                                  title={`${sentimentBadge.label.charAt(0).toUpperCase() + sentimentBadge.label.slice(1)} (${sentimentBadge.score.toFixed(2)}) - Confidence: ${(sentimentBadge.confidence * 100).toFixed(0)}%`}
-                                >
-                                  <span>{sentimentBadge.icon}</span>
-                                  <span>{sentimentBadge.label}</span>
-                                  <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black/80 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/sentiment:opacity-100 transition-opacity pointer-events-none">
-                                    Score: {sentimentBadge.score.toFixed(2)} | Confidence: {(sentimentBadge.confidence * 100).toFixed(0)}%
-                                  </span>
-                                </div>
-                              ) : (
-                                <div
-                                  className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wider"
-                                  title="Sentiment analysis in progress"
-                                >
-                                  <span className="animate-pulse">⟳</span>
-                                  <span>Analyzing</span>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-sm text-foreground-muted flex items-center gap-1 ml-4 whitespace-nowrap">
-                          <Clock size={14} /> {item.date}
-                        </span>
+              return (
+                <GlassCard
+                  key={item.id}
+                  className={`p-6 relative overflow-hidden group transition-all ${getHoverBorderColor()}`}
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-baseline gap-2 mb-2">
+                        <h3 className="text-lg font-bold text-foreground">{item.title}</h3>
                       </div>
-
-                      {item.description && (
-                        <p className="text-foreground-secondary text-sm leading-relaxed mb-4">
-                          {item.description.length > 200
-                            ? `${item.description.substring(0, 200)}...`
-                            : item.description}
-                        </p>
-                      )}
-
-                      <div className="flex justify-end items-center gap-4">
-                        <button
-                          onClick={() => handleWhatsAppShare(item)}
-                          className="text-emerald-500 hover:text-emerald-400 text-sm font-medium flex items-center gap-1.5 transition-colors opacity-90 hover:opacity-100"
-                          title="Share via WhatsApp"
-                        >
-                          <WhatsAppIcon size={16} />
-                          Share
-                        </button>
-                        {item.link && (
-                          <a
-                            href={item.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-emerald-500 hover:text-emerald-400 text-sm font-medium flex items-center gap-1 transition-colors"
-                          >
-                            View Source <ExternalLink size={14} />
-                          </a>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded ${badge.bg} ${badge.color} uppercase tracking-wider`}>
+                          <BadgeIcon size={12} />
+                          {badge.label}
+                        </div>
+                        {item.company && (
+                          <span className="text-xs font-medium px-2 py-1 rounded bg-white/5 text-foreground-muted">
+                            {item.company} {item.companyCode && `(${item.companyCode})`}
+                          </span>
+                        )}
+                        {/* Show sentiment badge if available, or "analyzing" if not (but skip Bursa) */}
+                        {item.type !== 'bursa' && (
+                          sentimentBadge ? (
+                            <div
+                              className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded ${sentimentBadge.bgColor} ${sentimentBadge.textColor} uppercase tracking-wider group/sentiment relative`}
+                              title={`${sentimentBadge.label.charAt(0).toUpperCase() + sentimentBadge.label.slice(1)} (${sentimentBadge.score.toFixed(2)}) - Confidence: ${(sentimentBadge.confidence * 100).toFixed(0)}%`}
+                            >
+                              <span>{sentimentBadge.icon}</span>
+                              <span>{sentimentBadge.label}</span>
+                              <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black/80 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/sentiment:opacity-100 transition-opacity pointer-events-none">
+                                Score: {sentimentBadge.score.toFixed(2)} | Confidence: {(sentimentBadge.confidence * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                          ) : (
+                            <div
+                              className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded bg-blue-500/20 text-blue-400 uppercase tracking-wider"
+                              title="Sentiment analysis in progress"
+                            >
+                              <span className="animate-pulse">⟳</span>
+                              <span>Analyzing</span>
+                            </div>
+                          )
                         )}
                       </div>
-                    </GlassCard>
-                  );
-                })
-              )}
-            </div>
+                    </div>
+                    <span className="text-sm text-foreground-muted flex items-center gap-1 ml-4 whitespace-nowrap">
+                      <Clock size={14} /> {item.date}
+                    </span>
+                  </div>
+
+                  {item.description && (
+                    <p className="text-foreground-secondary text-sm leading-relaxed mb-4">
+                      {item.description.length > 200
+                        ? `${item.description.substring(0, 200)}...`
+                        : item.description}
+                    </p>
+                  )}
+
+                  <div className="flex justify-end items-center gap-4">
+                    <button
+                      onClick={() => handleWhatsAppShare(item)}
+                      className="text-emerald-500 hover:text-emerald-400 text-sm font-medium flex items-center gap-1.5 transition-colors opacity-90 hover:opacity-100"
+                      title="Share via WhatsApp"
+                    >
+                      <WhatsAppIcon size={16} />
+                      Share
+                    </button>
+                    {item.link && (
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-500 hover:text-emerald-400 text-sm font-medium flex items-center gap-1 transition-colors"
+                      >
+                        View Source <ExternalLink size={14} />
+                      </a>
+                    )}
+                  </div>
+                </GlassCard>
+              );
+            })
           )}
         </div>
-
-        {/* Sidebar: Source Distribution */}
-        <div>
-          <GlassCard className="p-6 h-fit sticky top-6">
-            <h3 className="text-lg font-semibold text-foreground mb-6">Source Distribution</h3>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={sentimentData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {sentimentData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                      borderColor: 'rgba(255, 255, 255, 0.1)',
-                      backdropFilter: 'blur(12px)',
-                      borderRadius: '12px',
-                      color: '#fff'
-                    }}
-                    itemStyle={{ color: '#e2e8f0' }}
-                  />
-                  <Legend
-                    verticalAlign="bottom"
-                    height={36}
-                    iconType="circle"
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-6 space-y-3">
-              <p className="text-sm text-foreground-muted text-center">
-                News items from {stats.star} The Star, {stats.nst} NST, and {stats.edge} The Edge
-              </p>
-            </div>
-          </GlassCard>
-        </div>
-      </div>
+      )}
     </div>
   );
+
+  // Source Distribution Chart Component
+  const chartComponent = (
+    <GlassCard className="p-6 h-fit sticky top-6">
+      <h3 className="text-lg font-semibold text-foreground mb-6">Source Distribution</h3>
+      <div className="h-[300px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={sentimentData}
+              cx="50%"
+              cy="50%"
+              innerRadius={60}
+              outerRadius={80}
+              paddingAngle={5}
+              dataKey="value"
+              stroke="none"
+            >
+              {sentimentData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                borderColor: 'rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(12px)',
+                borderRadius: '12px',
+                color: '#fff'
+              }}
+              itemStyle={{ color: '#e2e8f0' }}
+            />
+            <Legend
+              verticalAlign="bottom"
+              height={36}
+              iconType="circle"
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="mt-6 space-y-3">
+        <p className="text-sm text-foreground-muted text-center">
+          News items from {stats.star} The Star, {stats.nst} NST, and {stats.edge} The Edge
+        </p>
+      </div>
+    </GlassCard>
+  );
+
+  // Render dashboard based on persona
+  const renderDashboard = () => {
+    const layoutProps = { stats, feedComponent, chartComponent };
+
+    switch (persona) {
+      case 'INVESTOR':
+        return <InvestorLayout {...layoutProps} />;
+      case 'RELATIONSHIP_MANAGER':
+        return <RelationshipManagerLayout {...layoutProps} />;
+      case 'CREDIT_RISK':
+        return <CreditRiskLayout {...layoutProps} />;
+      case 'MARKET_ANALYST':
+        return <MarketAnalystLayout {...layoutProps} />;
+      default:
+        return <InvestorLayout {...layoutProps} />;
+    }
+  };
+
+  return renderDashboard();
 }
 
 export default function DashboardPage() {
