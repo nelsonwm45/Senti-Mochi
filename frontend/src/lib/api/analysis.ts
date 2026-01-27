@@ -203,8 +203,13 @@ export interface AnalysisJobStatusResponse {
 // =============================================================================
 
 export const analysisApi = {
-	triggerAnalysis: async (companyId: string) => {
-		return apiClient.post(`/api/v1/analysis/${companyId}`);
+	triggerAnalysis: async (companyId: string, topic?: string, companyName?: string) => {
+		const params = new URLSearchParams();
+		if (topic) params.append('topic', topic);
+		if (companyName) params.append('company_name', companyName);
+		const queryString = params.toString();
+		const url = queryString ? `/api/v1/analysis/${companyId}?${queryString}` : `/api/v1/analysis/${companyId}`;
+		return apiClient.post(url);
 	},
 
 	getStatus: async (companyId: string): Promise<AnalysisJobStatusResponse> => {

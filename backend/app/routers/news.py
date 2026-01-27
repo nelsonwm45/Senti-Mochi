@@ -23,6 +23,121 @@ class ClientNewsArticle(BaseModel):
     published_at: str  # ISO string from frontend
     content: Optional[str] = None
 
+# Internal helper function for storing articles (used by both API and workflow)
+def store_articles_internal(articles_data: List[dict], session: Session, company_id: Optional[str] = None) -> dict:
+    """
+    Internal helper to store news articles from various sources.
+    Handles duplicate detection, content fetching, and queuing vectorization/sentiment tasks.
+    Can be called from API endpoints or background workflows.
+    
+    Args:
+        articles_data: List of article dicts with keys: source, native_id, title, url, published_at, content, company_id (optional)
+        session: Database session
+        company_id: Optional company UUID to tag articles with (overrides articles_data.company_id)
+    
+    Returns:
+        Dict with keys: saved (int), skipped (int), total (int)
+    """
+    from app.services.article_fetcher import article_fetcher_service
+    from app.services.company_service import company_service
+    
+    saved_count = 0
+    skipped_count = 0
+    
+    for article_data in articles_data:
+        try:
+            # Determine company to tag with
+            final_company_id = company_id or article_data.get('company_id')
+            
+            # Check if article already exists (by native_id OR exact title match)
+            existing = session.exec(select(NewsArticle).where(
+                (NewsArticle.native_id == article_data['native_id']) | 
+                (NewsArticle.title == article_data['title'])
+            )).first()
+            
+            if existing:
+                skipped_count += 1
+                continue
+            
+            # Parse datetime
+            try:
+                published_at = datetime.fromisoformat(article_data['published_at'].replace('Z', '+00:00'))
+            except:
+                published_at = datetime.utcnow()
+            
+            # Smart company re-tagging: Check if article title mentions other companies
+            if final_company_id:
+                try:
+                    found_companies = company_service.find_companies_by_text(article_data['title'], session)
+                    if found_companies:
+                        current_assigned_match = next((c for c in found_companies if str(c.id) == str(final_company_id)), None)
+                        
+                        if current_assigned_match and len(found_companies) > 1:
+                            # Assigned company found, but others too - pick the others
+                            others = [c for c in found_companies if str(c.id) != str(final_company_id)]
+                            if others:
+                                final_company_id = others[0].id
+                                print(f"[STORE] Smart re-tagging '{article_data['title'][:50]}' to {others[0].name}")
+                        elif not current_assigned_match and found_companies:
+                            # Assigned company NOT found, use found one
+                            final_company_id = found_companies[0].id
+                            print(f"[STORE] Smart tagging '{article_data['title'][:50]}' to {found_companies[0].name}")
+                except Exception as e:
+                    print(f"[STORE] Smart tagging error: {e}")
+            
+            # Fetch full article content (skip Bursa)
+            full_content = article_data.get('content') or article_data['title']
+            if article_data['source'].lower() != 'bursa' and article_data.get('url'):
+                print(f"[STORE] Fetching full content for {article_data['title'][:50]}...")
+                fetched_content = article_fetcher_service.fetch_article_content(article_data['url'])
+                if fetched_content:
+                    full_content = fetched_content
+                    print(f"[STORE] Fetched {len(full_content)} chars")
+            
+            # Create and save article
+            article = NewsArticle(
+                company_id=final_company_id,
+                source=article_data['source'],
+                native_id=article_data['native_id'],
+                title=article_data['title'],
+                url=article_data.get('url', ''),
+                published_at=published_at,
+                content=full_content
+            )
+            session.add(article)
+            saved_count += 1
+            
+        except Exception as e:
+            if "unique constraint" in str(e).lower() or "duplicate" in str(e).lower():
+                print(f"[STORE] Skipping duplicate: {article_data.get('native_id')}")
+                skipped_count += 1
+            else:
+                print(f"[STORE] Error storing article: {e}")
+            continue
+    
+    if saved_count > 0:
+        session.commit()
+        
+        # Queue sentiment analysis and vectorization for new articles
+        native_ids = [a['native_id'] for a in articles_data]
+        newly_saved = session.exec(
+            select(NewsArticle).where(NewsArticle.native_id.in_(native_ids))
+        ).all()
+        
+        for article in newly_saved:
+            if article.source.lower() != "bursa" and not article.analyzed_at:
+                analyze_article_sentiment_task.delay(str(article.id))
+                print(f"[STORE] Queued sentiment analysis for {article.id}")
+            
+            vectorize_article_task.delay(str(article.id))
+            print(f"[STORE] Queued vectorization for {article.id}")
+    
+    return {
+        "saved": saved_count,
+        "skipped": skipped_count,
+        "total": len(articles_data)
+    }
+
 @router.post("/store-articles")
 def store_articles(
     articles: List[ClientNewsArticle],
@@ -34,136 +149,21 @@ def store_articles(
     Used for Bursa Malaysia and other APIs that can only be called from the browser.
     Fetches full article content immediately before storing.
     """
-    from app.services.article_fetcher import article_fetcher_service
+    # Convert Pydantic models to dicts and use internal helper
+    articles_data = [
+        {
+            'company_id': str(article.company_id),
+            'source': article.source,
+            'native_id': article.native_id,
+            'title': article.title,
+            'url': article.url,
+            'published_at': article.published_at,
+            'content': article.content
+        }
+        for article in articles
+    ]
     
-    saved_count = 0
-    skipped_count = 0
-    
-    for article_data in articles:
-        try:
-            # Check if article already exists (by native_id OR exact title match)
-            # This handles cases where ID changes but content is identical
-            existing = session.exec(select(NewsArticle).where(
-                (NewsArticle.native_id == article_data.native_id) | 
-                (NewsArticle.title == article_data.title)
-            )).first()
-            
-            if existing:
-                skipped_count += 1
-                continue
-            
-            # Parse ISO datetime string
-            try:
-                published_at = datetime.fromisoformat(article_data.published_at.replace('Z', '+00:00'))
-            except:
-                published_at = datetime.utcnow()
-            
-            # SMART INGESTION: Check if the article title mentions other companies
-            # This fixes the issue where searching for "Maybank" returns "Bermaz Auto" news but tags it as Maybank
-            final_company_id = article_data.company_id
-            
-            try:
-                # Need to import locally to avoid circular imports if any (though routers usually fine)
-                from app.services.company_service import company_service
-                
-                # Check for companies in title
-                found_companies = company_service.find_companies_by_text(article_data.title, session)
-                
-                if found_companies:
-                    # Logic: If we found companies, and the current assigned company is NOT the "Subject"
-                    # We prioritize the subject. 
-                    
-                    # Heuristic: If multiple found, pick the first one that IS NOT the source/provider
-                    chosen_company = found_companies[0] # Default to first found
-                    
-                    # If we have multiple, try to be smarter? 
-                    # For "Bermaz Auto gains Buy call from from Maybank", both Bermaz and Maybank might be found.
-                    # We want Bermaz.
-                    
-                    # If the current assigned ID (e.g. Maybank) is in the found list, but there are OTHERS,
-                    # likely the others are the subject.
-                    
-                    current_assigned_match = next((c for c in found_companies if str(c.id) == article_data.company_id), None)
-                    
-                    if current_assigned_match and len(found_companies) > 1:
-                        # The assigned one is mentioned, but so are others. 
-                        # Pick the one that IS NOT the assigned one (assuming assigned one is the 'source' of the search)
-                        others = [c for c in found_companies if str(c.id) != article_data.company_id]
-                        if others:
-                            chosen_company = others[0]
-                            print(f"Smart Ingestion: Re-tagging '{article_data.title}' from {current_assigned_match.name} -> {chosen_company.name}")
-                            final_company_id = chosen_company.id
-                            
-                    elif not current_assigned_match and found_companies:
-                        # The assigned one is NOT found in title (loop context was loose), but we found a specific one.
-                        # Always take specific one.
-                        print(f"Smart Ingestion: Re-tagging '{article_data.title}' from ID {article_data.company_id} -> {chosen_company.name}")
-                        final_company_id = chosen_company.id
-                        
-            except Exception as e:
-                print(f"Smart Ingestion Error: {e}")
-            
-            # Fetch full article content immediately (skip Bursa)
-            full_content = article_data.content or article_data.title
-            if article_data.source.lower() != 'bursa' and article_data.url:
-                print(f"[STORE] Fetching full content for {article_data.title[:50]}...")
-                fetched_content = article_fetcher_service.fetch_article_content(article_data.url)
-                if fetched_content:
-                    full_content = fetched_content
-                    print(f"[STORE] Fetched {len(full_content)} chars of content")
-                else:
-                    print(f"[STORE] Failed to fetch content, using fallback")
-
-            # Create and save article with full content and smart company tagging
-            article = NewsArticle(
-                company_id=final_company_id,
-                source=article_data.source,
-                native_id=article_data.native_id,
-                title=article_data.title,
-                url=article_data.url,
-                published_at=published_at,
-                content=full_content
-            )
-            session.add(article)
-            saved_count += 1
-        except Exception as e:
-            # Catch duplicate key errors and other exceptions
-            if "unique constraint" in str(e).lower() or "duplicate" in str(e).lower():
-                print(f"Skipping duplicate article: {article_data.native_id}")
-                skipped_count += 1
-            else:
-                print(f"Error storing article: {e}")
-            continue
-    
-    if saved_count > 0:
-        session.commit()
-        
-        # Get the newly saved articles for sentiment analysis and vectorization
-        newly_saved = session.exec(
-            select(NewsArticle).where(
-                NewsArticle.native_id.in_([a.native_id for a in articles])
-            )
-        ).all()
-        
-        # Queue sentiment and vectorization tasks
-        for article in newly_saved:
-            if article.source.lower() == "bursa":
-                continue
-            
-            # Queue sentiment analysis directly since we already have full content
-            if not article.analyzed_at:
-                analyze_article_sentiment_task.delay(str(article.id))
-                print(f"[STORE] Queued sentiment analysis for article {article.id}")
-            
-            # [NEW] Queue Vectorization
-            vectorize_article_task.delay(str(article.id))
-            print(f"[STORE] Queued vectorization for article {article.id}")
-    
-    return {
-        "saved": saved_count, 
-        "skipped": skipped_count,
-        "total": len(articles)
-    }
+    return store_articles_internal(articles_data, session)
 
 @router.post("/search")
 def search_news(

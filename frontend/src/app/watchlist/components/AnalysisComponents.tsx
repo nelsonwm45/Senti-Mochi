@@ -164,7 +164,7 @@ const TopicSelectionStep = ({
 };
 
 // 2. File Upload
-const FileUploadStep = ({ onNext, onBack, onCancel, companyId, companyName }: { onNext: () => void, onBack: () => void, onCancel: () => void, companyId: string, companyName?: string }) => {
+const FileUploadStep = ({ onNext, onBack, onCancel, companyId, companyName, topic }: { onNext: () => void, onBack: () => void, onCancel: () => void, companyId: string, companyName?: string, topic?: AnalysisTopic }) => {
     const [uploadCount, setUploadCount] = useState(0);
 
     return (
@@ -178,7 +178,7 @@ const FileUploadStep = ({ onNext, onBack, onCancel, companyId, companyName }: { 
             </div>
 
             <GlassModalFooter className="justify-between">
-                <GlassButton variant="ghost" onClick={onBack} leftIcon={<ArrowLeft size={16}/>}>Back</GlassButton>
+                <GlassButton variant="ghost" onClick={onBack} leftIcon={<ArrowLeft size={16} />}>Back</GlassButton>
                 <div className="flex gap-2">
                     <GlassButton variant="ghost" onClick={onCancel}>Cancel</GlassButton>
                     <GlassButton onClick={onNext}>
@@ -191,7 +191,7 @@ const FileUploadStep = ({ onNext, onBack, onCancel, companyId, companyName }: { 
 };
 
 // 3. Progress
-const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, companyId: string }) => {
+const ProgressStep = ({ onComplete, companyId, topic, companyName }: { onComplete: () => void, companyId: string, topic?: AnalysisTopic, companyName?: string }) => {
     const [stepIndex, setStepIndex] = useState(0);
     const [currentStep, setCurrentStep] = useState<string>("Starting analysis engine");
     const [progress, setProgress] = useState(0);
@@ -224,8 +224,8 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
             hasTriggered.current = true;
 
             try {
-                console.log("Triggering analysis for:", companyId);
-                await analysisApi.triggerAnalysis(companyId);
+                console.log("Triggering analysis for:", companyId, "Topic:", topic);
+                await analysisApi.triggerAnalysis(companyId, topic, companyName);
             } catch (e) {
                 console.error("Trigger error:", e);
                 setError("Failed to start analysis.");
@@ -322,8 +322,8 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
             </div>
 
             <div className="max-w-md mx-auto relative px-8">
-                 <div className="absolute left-[47px] top-4 bottom-4 w-0.5 bg-white/10" />
-                 <div className="space-y-6 relative z-10">
+                <div className="absolute left-[47px] top-4 bottom-4 w-0.5 bg-white/10" />
+                <div className="space-y-6 relative z-10">
                     {steps.map((step, idx) => {
                         const isCompleted = stepIndex > idx;
                         const isCurrent = stepIndex === idx;
@@ -354,7 +354,7 @@ const ProgressStep = ({ onComplete, companyId }: { onComplete: () => void, compa
                             </motion.div>
                         );
                     })}
-                 </div>
+                </div>
             </div>
 
             <div className="h-1 bg-white/10 rounded-full overflow-hidden w-full max-w-sm mx-auto">
@@ -456,23 +456,23 @@ const createCitationComponents = (registry: Record<string, SourceMetadata>) => (
                     if (part.startsWith('[') && part.endsWith(']')) {
                         // Remove brackets
                         const content = part.slice(1, -1);
-                        
+
                         // Check if it's a list of IDs or ID+text
                         // We primarily look for the FIRST token as the ID
                         const tokens = content.split(',').map(t => t.trim());
-                        
+
                         // Render logic
                         return (
-                             <span key={idx} className="whitespace-nowrap">
+                            <span key={idx} className="whitespace-nowrap">
                                 <span className="text-gray-500 font-bold">[</span>
                                 {tokens.map((token, i) => {
                                     // Check if token looks like an ID (N1, F1, D1)
                                     const idMatch = token.match(/^([NFD]\d+)(.*)$/);
-                                    
+
                                     if (idMatch) {
                                         const id = idMatch[1];
                                         const suffix = idMatch[2]; // e.g. " Page 18" if passed as one token, or separate if comma
-                                        
+
                                         return (
                                             <span key={i}>
                                                 {i > 0 && <span className="text-gray-500 font-bold">, </span>}
@@ -510,16 +510,16 @@ const createCitationComponents = (registry: Record<string, SourceMetadata>) => (
     ol: ({ children, ...props }: any) => <ol className="list-decimal pl-5 my-2 space-y-1 text-gray-300" {...props}>{children}</ol>,
     li: ({ children, ...props }: any) => {
         const processChildren = (child: any): any => {
-           if (typeof child === 'string') {
+            if (typeof child === 'string') {
                 // Same logic as p tag
                 const parts = child.split(/(\[[NFD]\d+(?:[^\]]*)\])/g);
                 return parts.map((part: string, idx: number) => {
                     if (part.startsWith('[') && part.endsWith(']')) {
                         const content = part.slice(1, -1);
                         const tokens = content.split(',').map(t => t.trim());
-                        
+
                         return (
-                             <span key={idx} className="whitespace-nowrap">
+                            <span key={idx} className="whitespace-nowrap">
                                 <span className="text-gray-500 font-bold">[</span>
                                 {tokens.map((token, i) => {
                                     const idMatch = token.match(/^([NFD]\d+)(.*)$/);
@@ -685,7 +685,7 @@ const SectionCard = ({
                         <ul className="list-disc list-outside ml-4 space-y-2">
                             {data.detailed_findings.map((finding, idx) => (
                                 <li key={idx} className="text-gray-300 pl-1">
-                                    <ReactMarkdown 
+                                    <ReactMarkdown
                                         components={{
                                             ...citationComponents,
                                             p: 'span' // Prevent block-level paragraphs inside li
@@ -717,7 +717,7 @@ const SectionCard = ({
                 {/* Sources */}
                 <div className="mt-auto border-t border-white/10 pt-4">
                     <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                        <FileText size={12}/> Sources
+                        <FileText size={12} /> Sources
                     </div>
                     {sources.length > 0 ? (
                         sources.map((source, i) => (
@@ -731,7 +731,7 @@ const SectionCard = ({
                 </div>
 
                 <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-500 flex items-center gap-1">
-                    <RefreshCw size={12}/> {isFlipped ? "Close details" : "View analysis"}
+                    <RefreshCw size={12} /> {isFlipped ? "Close details" : "View analysis"}
                 </div>
             </GlassCard>
         </div>
@@ -1190,7 +1190,7 @@ const RoleAnalysisView = ({ report }: { report: AnalysisReport }) => {
                 </div>
 
                 <div className="space-y-6">
-                     {/* Justification */}
+                    {/* Justification */}
                     <div>
                         <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Detailed Justification</div>
                         <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none">
@@ -1219,7 +1219,7 @@ const RoleAnalysisView = ({ report }: { report: AnalysisReport }) => {
                                 ))}
                             </div>
                         ) : (
-                             <div className="text-sm text-gray-400 italic bg-white/5 p-3 rounded-lg border border-white/5">
+                            <div className="text-sm text-gray-400 italic bg-white/5 p-3 rounded-lg border border-white/5">
                                 No major concerns identified based on available data.
                             </div>
                         )}
@@ -1430,9 +1430,9 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
 
                 {/* Legend */}
                 <div className="flex items-center justify-center gap-6 text-xs text-gray-500 pt-2 pb-4">
-                    <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"/> High Confidence (80%+)</div>
-                    <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500"/> Medium Confidence (60-79%)</div>
-                    <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500"/> Low Confidence (&lt;60%)</div>
+                    <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500" /> High Confidence (80%+)</div>
+                    <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500" /> Medium Confidence (60-79%)</div>
+                    <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500" /> Low Confidence (&lt;60%)</div>
                 </div>
 
                 {/* Content based on view mode */}
@@ -1472,7 +1472,7 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
     }, [isOpen]);
 
     const getTitle = () => {
-        switch(step) {
+        switch (step) {
             case 'topic': return "Select Analysis Type";
             case 'upload': return "Upload Documents";
             case 'progress': return "";
@@ -1482,7 +1482,7 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
     };
 
     const getDescription = () => {
-        switch(step) {
+        switch (step) {
             case 'topic': return "Choose the type of analysis you want to perform";
             case 'upload': return `Upload PDF files for ${topic ? topic.toUpperCase() : ''} analysis`;
             default: return undefined;
@@ -1532,6 +1532,7 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
                         <FileUploadStep
                             companyId={companyId}
                             companyName={companyName}
+                            topic={topic}
                             onNext={() => setStep('progress')}
                             onBack={() => setStep('topic')}
                             onCancel={onClose}
@@ -1548,6 +1549,8 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
                     >
                         <ProgressStep
                             companyId={companyId}
+                            topic={topic}
+                            companyName={companyName}
                             onComplete={() => {
                                 onClose();
                                 onComplete();

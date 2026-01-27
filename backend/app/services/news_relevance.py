@@ -103,7 +103,7 @@ class NewsRelevanceFilter:
         company_variations: List[str]
     ) -> Tuple[bool, float, str]:
         """
-        Stage 1: Fast keyword-based relevance check.
+        Stage 1: Fast keyword-based relevance check (LESS STRICT MODE).
 
         Returns:
             (is_relevant, confidence_score, reason)
@@ -118,9 +118,9 @@ class NewsRelevanceFilter:
         if not company_mentioned:
             return False, 0.0, "Company not mentioned"
 
-        # Check for non-business keywords (negative signal)
+        # Check for non-business keywords (negative signal) - MORE LENIENT
         non_business_count = sum(1 for kw in NON_BUSINESS_KEYWORDS if kw in text)
-        if non_business_count >= 2:
+        if non_business_count >= 4:  # Increased from 2 to 4 - need more non-business keywords to reject
             # High non-business signal - likely irrelevant
             return False, 0.2, f"Non-business content detected ({non_business_count} keywords)"
 
@@ -132,8 +132,9 @@ class NewsRelevanceFilter:
         elif business_count >= 1:
             return True, 0.7, f"Moderate business relevance ({business_count} keywords)"
         else:
-            # Company mentioned but no business keywords - uncertain
-            return True, 0.5, "Company mentioned, context unclear"
+            # Company mentioned but no business keywords - ACCEPT IT (was uncertain before)
+            # This prevents filtering out articles just because they don't have "revenue" etc.
+            return True, 0.6, "Company mentioned, accepting for analysis"
 
     def _semantic_filter(
         self,

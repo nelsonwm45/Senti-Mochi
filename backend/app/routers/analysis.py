@@ -8,6 +8,7 @@ from app.agents.workflow import app_workflow
 from uuid import UUID
 from typing import List, Optional
 from datetime import datetime, timezone
+from app.routers.news import store_articles_internal
 
 router = APIRouter()
 
@@ -40,13 +41,16 @@ def update_job_status(
 @router.post("/{company_id}", status_code=202)
 def trigger_analysis(
     company_id: UUID,
-    background_tasks: BackgroundTasks,
+    topic: Optional[str] = None,
+    company_name: Optional[str] = None,
+    background_tasks: BackgroundTasks = None,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
     """
     Triggers the Multi-Agent Investment Analysis for a company.
     Uses the user's analysis_persona to determine analysis focus.
+    Can fetch fresh news based on topic (esg, financials, general).
     Returns a job_id for status tracking.
     """
     company = session.get(Company, company_id)
@@ -86,16 +90,55 @@ def trigger_analysis(
     session.commit()
     session.refresh(job)
 
-    # Capture persona for background task
+    # Capture persona and topic for background task
     job_persona = analysis_persona
+    job_topic = topic
+    job_company_name = company_name or company.name
 
     def run_workflow():
         from app.database import engine
         from sqlmodel import Session as SyncSession
+        from app.services.news_fetcher import news_fetcher_service
+        from app.services.article_fetcher import article_fetcher_service
 
         print(f"Starting background work for {company.name} (Job: {job.id}) [Persona: {job_persona}]")
         try:
-            # Update status: Starting
+            # Fetch news based on topic if provided
+            if job_topic:
+                print(f"[WORKFLOW] Fetching news for topic: {job_topic}")
+                
+                # Build keyword based on topic
+                if job_topic.lower() == 'esg':
+                    search_keyword = f"{job_company_name} ESG"
+                elif job_topic.lower() == 'financials':
+                    search_keyword = f"{job_company_name} Financial"
+                else:  # general
+                    search_keyword = job_company_name
+                
+                print(f"[WORKFLOW] News search keyword: {search_keyword}")
+                
+                # Fetch news from all sources
+                news_results = news_fetcher_service.fetch_news_by_keyword(
+                    search_keyword, 
+                    sources=['star', 'nst', 'edge']
+                )
+                
+                print(f"[WORKFLOW] Fetched {news_results.get('total', 0)} articles from news sources")
+                
+                # Store articles if found
+                if news_results.get('total', 0) > 0:
+                    articles_to_store = []
+                    
+                    # Collect articles from all sources
+                    for source in ['star', 'nst', 'edge']:
+                        if source in news_results:
+                            articles_to_store.extend(news_results[source])
+                    
+                    # Store articles and queue vectorization/sentiment tasks
+                    with SyncSession(engine) as db:
+                        store_articles_internal(articles_to_store, db, company_id)
+            
+            # Update status: Starting workflow
             with SyncSession(engine) as db:
                 update_job_status(db, job.id, AnalysisStatus.GATHERING_INTEL, "Gathering intelligence", 10)
 
