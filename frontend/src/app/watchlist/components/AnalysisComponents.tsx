@@ -7,7 +7,7 @@ import {
     Building2, Loader2, ChevronRight, X, ArrowLeft,
     RefreshCw, Info, ExternalLink, Trash2, Scale,
     TrendingUp, TrendingDown, AlertTriangle, Shield,
-    Users, Eye, Award, Gavel, MessageSquare
+    Users, Eye, Award, Gavel, MessageSquare, FileDown
 } from 'lucide-react';
 import { GlassModal, GlassModalFooter } from '@/components/ui/GlassModal';
 import { GlassButton } from '@/components/ui/GlassButton';
@@ -33,13 +33,44 @@ type AnalysisStep = 'topic' | 'upload' | 'progress' | 'results';
 type AnalysisTopic = 'esg' | 'financials' | 'general';
 type AnalysisStatus = 'waiting' | 'loading' | 'completed';
 
+interface AnnualReport {
+    id: string;
+    title: string;
+    date: string;
+    link: string;
+}
+
 interface AnalysisWizardModalProps {
     isOpen: boolean;
     onClose: () => void;
     onComplete: () => void;
     companyName: string;
     companyId: string;
+    companyTicker?: string;
 }
+
+// --- Helper Functions ---
+
+// Helper: Decode HTML entities
+const decodeHtml = (html: string): string => {
+    const txt = document.createElement('textarea');
+    txt.innerHTML = html;
+    return txt.value;
+};
+
+// Helper: Parse HTML link
+const parseHtmlLink = (htmlString: string): { text: string; link?: string } => {
+    const decoded = decodeHtml(htmlString);
+    const linkMatch = decoded.match(/<a[^>]+href=['"]([^'"]+)['"][^>]*>(.*?)<\/a>/i);
+    if (linkMatch) {
+        return {
+            text: linkMatch[2].replace(/<[^>]*>/g, '').trim(),
+            link: linkMatch[1]
+        };
+    }
+    const text = decoded.replace(/<[^>]*>/g, '').trim();
+    return { text };
+};
 
 // --- Sub-Components ---
 
@@ -164,17 +195,118 @@ const TopicSelectionStep = ({
 };
 
 // 2. File Upload
-const FileUploadStep = ({ onNext, onBack, onCancel, companyId, companyName, topic }: { onNext: () => void, onBack: () => void, onCancel: () => void, companyId: string, companyName?: string, topic?: AnalysisTopic }) => {
+const FileUploadStep = ({ onNext, onBack, onCancel, companyId, companyName, companyTicker, topic }: { onNext: () => void, onBack: () => void, onCancel: () => void, companyId: string, companyName?: string, companyTicker?: string, topic?: AnalysisTopic }) => {
     const [uploadCount, setUploadCount] = useState(0);
+    const [annualReports, setAnnualReports] = useState<AnnualReport[]>([]);
+    const [loadingReports, setLoadingReports] = useState(false);
+
+    useEffect(() => {
+        const fetchAnnualReports = async () => {
+            if (!companyTicker) return;
+
+            setLoadingReports(true);
+            const reports: AnnualReport[] = [];
+            const bursaCode = companyTicker.split('.')[0];
+
+            console.log(`[ANNUAL REPORTS] Fetching for ${companyName} - Bursa Code: ${bursaCode}`);
+
+            const url = `https://www.bursamalaysia.com/api/v1/announcements/search?ann_type=company&company=${bursaCode}&cat=AR,ARCO&per_page=20&page=0`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' },
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log(`[ANNUAL REPORTS] API returned ${data.data?.length || 0} items for ${bursaCode}`);
+
+                    if (data.data) {
+                        for (const item of data.data) {
+                            const dateMatch = parseHtmlLink(item[1]);
+                            const titleMatch = parseHtmlLink(item[3]);
+                            const link = titleMatch.link ? `https://www.bursamalaysia.com${titleMatch.link}` : '';
+                            const idMatch = link.match(/ann_id=(\d+)/);
+                            const reportId = idMatch ? `ar-${bursaCode}-${idMatch[1]}` : `ar-${bursaCode}-${item[0]}`;
+
+                            reports.push({
+                                id: reportId,
+                                title: titleMatch.text,
+                                date: dateMatch.text,
+                                link: link
+                            });
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn(`Error fetching annual reports for ${companyTicker}:`, err);
+            }
+
+            console.log(`[ANNUAL REPORTS] Processed ${reports.length} reports for ${companyTicker}`);
+            setAnnualReports(reports);
+            setLoadingReports(false);
+        };
+
+        fetchAnnualReports();
+    }, [companyTicker]);
 
     return (
         <div className="space-y-6">
-            <div className="h-96 overflow-y-auto pr-2 custom-scrollbar">
-                <CompanyDocumentUpload
-                    companyId={companyId}
-                    companyTicker={companyName}
-                    onUploadSuccess={() => setUploadCount(prev => prev + 1)}
-                />
+            {/* Document Upload Section */}
+            <div>
+                <div className="max-h-85 overflow-y-auto pr-2 custom-scrollbar">
+                    <CompanyDocumentUpload
+                        companyId={companyId}
+                        companyTicker={companyName}
+                        onUploadSuccess={() => setUploadCount(prev => prev + 1)}
+                    />
+                </div>
+            </div>
+
+            {/* Annual Reports Section */}
+            <div className="border-t border-white/10 pt-6">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                    <FileDown size={20} />
+                    Annual Reports from Bursa
+                </h3>
+                <div className="max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                    {loadingReports ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="animate-spin text-indigo-500" size={24} />
+                        </div>
+                    ) : annualReports.length === 0 ? (
+                        <div className="text-center py-8 bg-white/5 rounded-xl border border-white/10">
+                            <FileDown size={32} className="mx-auto text-gray-500 mb-2" />
+                            <p className="text-gray-400 text-sm">No annual reports found</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {annualReports.map((report) => (
+                                <a
+                                    key={report.id}
+                                    href={report.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 hover:border-indigo-500/30 transition-all group"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <FileDown size={16} className="text-indigo-400 flex-shrink-0" />
+                                                <h4 className="text-sm font-medium text-white truncate group-hover:text-indigo-400 transition-colors">
+                                                    {report.title}
+                                                </h4>
+                                            </div>
+                                            <p className="text-xs text-gray-400">{report.date}</p>
+                                        </div>
+                                        <ExternalLink size={16} className="text-gray-400 group-hover:text-indigo-400 transition-colors flex-shrink-0" />
+                                    </div>
+                                </a>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
             <GlassModalFooter className="justify-between">
@@ -1458,7 +1590,7 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
 // MAIN WIZARD COMPONENT
 // =============================================================================
 
-export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, companyId }: AnalysisWizardModalProps) {
+export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, companyId, companyTicker }: AnalysisWizardModalProps) {
     const [step, setStep] = useState<AnalysisStep>('topic');
     const [topic, setTopic] = useState<AnalysisTopic | null>(null);
 
@@ -1491,7 +1623,7 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
 
     const getSize = () => {
         if (step === 'results') return 'full';
-        if (step === 'progress') return 'lg';
+        if (step === 'progress' || step === 'upload') return 'lg';
         return 'md';
     }
 
@@ -1532,6 +1664,7 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
                         <FileUploadStep
                             companyId={companyId}
                             companyName={companyName}
+                            companyTicker={companyTicker}
                             topic={topic}
                             onNext={() => setStep('progress')}
                             onBack={() => setStep('topic')}
