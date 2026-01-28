@@ -2,13 +2,14 @@ import axios, { AxiosInstance } from 'axios';
 
 const API_BASE_URL = typeof window === 'undefined'
 	? (process.env.INTERNAL_API_URL || 'http://finance_backend:8000') // Server-side
-	: ''; // Client-side (relative path to use proxy)
+	: (process.env.NEXT_PUBLIC_API_URL || ''); // Client-side (direct to backend, fallback to proxy)
 
 import { getToken, removeToken } from './auth';
 
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
 	baseURL: API_BASE_URL,
+	timeout: 120000, // 2 minutes for long-running RAG queries
 	headers: {
 		'Content-Type': 'application/json',
 	},

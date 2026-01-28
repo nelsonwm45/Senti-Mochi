@@ -11,7 +11,8 @@ services:
     environment:
       - NODE_ENV=development
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
     develop:
       watch:
@@ -36,13 +37,25 @@ services:
       - DATABASE_URL=postgresql://user:password@db:5432/finance_db
       - S3_ENDPOINT=http://minio:9000
       - S3_PUBLIC_ENDPOINT=http://localhost:9000
+      - SENTENCE_TRANSFORMERS_HOME=/app/.hf_cache
+      - HF_HOME=/app/.hf_cache
       - TZ=Asia/Kuala_Lumpur
     depends_on:
-      - db
-      - redis
-      - minio
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/docs\")'" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     volumes:
       - ./backend:/app
+      - hf_cache:/app/.hf_cache
     develop:
       watch:
         - action: sync
@@ -139,3 +152,4 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  hf_cache:

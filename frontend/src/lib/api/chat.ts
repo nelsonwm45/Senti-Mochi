@@ -46,11 +46,25 @@ export const chatApi = {
 	 * Send a query and get a response (non-streaming)
 	 */
 	async query(request: QueryRequest): Promise<QueryResponse> {
-		const { data } = await apiClient.post<QueryResponse>('/api/v1/chat/query', {
-			...request,
-			stream: false,
-		});
-		return data;
+		const maxRetries = 2;
+		for (let attempt = 0; attempt <= maxRetries; attempt++) {
+			try {
+				const { data } = await apiClient.post<QueryResponse>('/api/v1/chat/query', {
+					...request,
+					stream: false,
+				});
+				return data;
+			} catch (error: any) {
+				const status = error?.response?.status;
+				// Retry on 500 (server error) or network errors (no response), but not on 4xx
+				if (attempt < maxRetries && (!status || status >= 500)) {
+					await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+					continue;
+				}
+				throw error;
+			}
+		}
+		throw new Error('Query failed after retries');
 	},
 
 	/**

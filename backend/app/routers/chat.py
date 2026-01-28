@@ -49,66 +49,60 @@ async def query(
     session: Session = Depends(get_session)
 ):
     """
-    RAG-powered chat query endpoint
-    
-    - Embeds user query
-    - Performs vector similarity search (security: only user's documents)
-    - Generates LLM response with citations
-    - Optionally streams response
+    Agentic RAG chat query endpoint.
+
+    Uses a LangGraph multi-agent workflow:
+      Router (Gemini Flash) -> [Domain Agents] -> Token Pruner -> Generation (Groq Llama-3)
+
+    Falls back to the legacy naive RAG path if the agentic pipeline errors.
     """
-    # Instead, we will buffer the stream, re-index, and then yield the result.
-    
     rag_service = RAGService()
-    
-    # Generate/Resolve session ID early for context lookback
-    if request.sessionId and request.sessionId != "null" and request.sessionId != "undefined":
+
+    # ── Session ID ──────────────────────────────────────────────────────
+    if request.sessionId and request.sessionId not in ("null", "undefined"):
         try:
             session_id = UUID(request.sessionId)
         except ValueError:
             session_id = uuid4()
     else:
         session_id = uuid4()
-    
-    # Check session message limit to prevent overload
+
+    # ── Session message limit ───────────────────────────────────────────
     MAX_MESSAGES_PER_SESSION = 50
     message_count = session.exec(
         select(func.count()).select_from(ChatMessage).where(
             ChatMessage.session_id == session_id
         )
     ).one()
-    
+
     if message_count >= MAX_MESSAGES_PER_SESSION:
         raise HTTPException(
             status_code=429,
             detail=f"Session has reached maximum message limit ({MAX_MESSAGES_PER_SESSION}). Please start a new chat."
         )
-    
-    # Log audit event
+
+    # ── Audit log ───────────────────────────────────────────────────────
     audit_log = AuditLog(
         user_id=current_user.id,
         action="QUERY",
         resource_type="CHAT",
-        resource_id=session_id, # Link audit to session
+        resource_id=session_id,
         metadata_={"query": request.query[:100]}
     )
     session.add(audit_log)
-    session.commit()
-    
-    # Embed query
+        try:
+            session.commit()
+        except Exception as audit_err:
+            print(f"[QUERY] Audit log commit failed: {audit_err}")
+            session.rollback()
+
+    # ── Embed query ─────────────────────────────────────────────────────
     query_embedding = rag_service.embed_query(request.query)
-    
-    # Convert document IDs if provided
-    document_ids = None
-    if request.documentIds:
-        document_ids = [UUID(doc_id) for doc_id in request.documentIds]
-    
-    # Detect Companies for context filtering
+
+    # ── Detect companies (with context lookback) ────────────────────────
     from app.services.company_service import company_service
     companies = company_service.find_companies_by_text(request.query, session)
-    
-    # Context Lookback: Check previous user message for additional context
-    # This handles comparison questions like "How does it compare to Y?" (where X was previous)
-    
+
     last_msg = session.exec(
         select(ChatMessage)
         .where(ChatMessage.session_id == session_id)
@@ -116,87 +110,35 @@ async def query(
         .order_by(ChatMessage.created_at.desc())
         .limit(1)
     ).first()
-    
-    if last_msg:
-         # We found a previous message. Let's see if it had companies.
-         print(f"Context Lookback: Checking previous message '{last_msg.content[:50]}...'")
-         prev_companies = company_service.find_companies_by_text(last_msg.content, session)
-         
-         if prev_companies:
-             print(f"Context Lookback: Found previous companies: {[c.name for c in prev_companies]}")
-             
-             # Initialize companies list if None
-             if companies is None:
-                 companies = []
-                 
-             # Merge lists, avoiding duplicates
-             existing_ids = {c.id for c in companies}
-             for prev_comp in prev_companies:
-                 if prev_comp.id not in existing_ids:
-                     companies.append(prev_comp)
-                     existing_ids.add(prev_comp.id)
-    
-    company_ids = [c.id for c in companies] if companies else None
-    
-    # Vector search with SECURITY CHECK - only user's documents
-    # And optional company filtering
-    chunks = rag_service.vector_search(
-        query_embedding=query_embedding,
-        user_id=current_user.id,  # Critical security parameter
-        document_ids=document_ids,
-        company_ids=company_ids,
-        limit=request.maxResults
-    )
-    
-    # Proceed even if chunks is empty to allow for general chat
-    # if not chunks: ... (removed strict check)
-    
-    # Build structured chunks from DB (Financials, News)
-    # These effectively act as "Source 1", "Source 2" etc.
-    try:
-        if companies:
-            # Pass query_embedding to enable Semantic News Search
-            structured_chunks = rag_service.get_structured_chunks_for_companies(
-                companies, 
-                session, 
-                query_embedding=query_embedding
-            )
-        else:
-             structured_chunks = []
-    except Exception as e:
-        print(f"Error fetching structured chunks: {e}")
-        structured_chunks = []
-    
-    # Combine chunks: Structured first (priority), then Vector Results
-    all_chunks = structured_chunks + chunks
-    
-    # Build context from ALL chunks
-    context = rag_service.build_context(all_chunks)
-    
-    # Session ID logic removed from here (moved to top)
-    
-    # Fetch recent chat history for context
-    # Limit to last 10 messages to avoid overflowing context window
 
-    
-    # Sort by time asc for conversation flow
-    # If we fetch all, just sort. If we limit, use subquery or Python slice.
-    # Simple approach: fetch all (sessions usually short) or fetch last 20
-    # Let's fetch last 10 by time descending, then reverse in Python
+    if last_msg:
+        prev_companies = company_service.find_companies_by_text(last_msg.content, session)
+        if prev_companies:
+            if companies is None:
+                companies = []
+            existing_ids = {c.id for c in companies}
+            for prev_comp in prev_companies:
+                if prev_comp.id not in existing_ids:
+                    companies.append(prev_comp)
+                    existing_ids.add(prev_comp.id)
+
+    company_ids = [c.id for c in companies] if companies else None
+
+    # ── Chat history ────────────────────────────────────────────────────
     history_msgs = session.exec(
         select(ChatMessage)
         .where(ChatMessage.session_id == session_id)
         .order_by(ChatMessage.created_at.desc())
         .limit(10)
     ).all()
-    history_msgs.reverse() # Now in chronological order
-    
+    history_msgs.reverse()
+
     chat_history = [
         {"role": msg.role, "content": msg.content}
         for msg in history_msgs
     ]
-    
-    # Save user message
+
+    # ── Save user message ───────────────────────────────────────────────
     user_message = ChatMessage(
         user_id=current_user.id,
         session_id=session_id,
@@ -204,123 +146,114 @@ async def query(
         content=request.query
     )
     session.add(user_message)
-    session.commit()
-    
-    # Handle streaming vs non-streaming
-    if request.stream:
-        # Streaming response
-        async def stream_generator():
-            full_response = ""
-            # Pass chat_history to stream
-            async for chunk in rag_service.generate_response_stream(
-                request.query, 
-                context, 
-                chat_history=chat_history
-            ):
-                full_response += chunk
-                # We buffer everything, do not yield partial chunks yet if we want to reindex
-                # If we yielded here, we couldn't change "Source 15" to "Source 1" later in the stream easily
-            
-            # Reindex citations (modifies full_response and reorders all_chunks)
-            # This logic was previously only in the non-streaming block
-            new_text, reordered_chunks = rag_service.reindex_citations(full_response, all_chunks)
-            
-            # Yield the full re-indexed text
-            yield new_text
-            
-            # Save assistant message AFTER streaming completes
-            # Note: We must save the *reordered* chunks in the citations
-            
-            # Format citations for storage
-            citations = []
-            for i, chunk in enumerate(reordered_chunks):
-                citations.append(CitationInfo(
-                    sourceNumber=i + 1,
-                    filename=chunk["filename"],
-                    pageNumber=chunk["page_number"],
-                    chunkId=str(chunk["id"]),
-                    similarity=chunk["similarity"],
-                    text=chunk["content"],
-                    startLine=chunk.get("start_line"),
-                    endLine=chunk.get("end_line"),
-                    url=chunk.get("url")
-                ))
-
-            assistant_message = ChatMessage(
-                user_id=current_user.id,
-                session_id=session_id,
-                role="assistant",
-                content=new_text,
-                citations={"sources": [c.dict() for c in citations]}
-            )
-            session.add(assistant_message)
-            session.commit()
-        
-        return StreamingResponse(stream_generator(), media_type="text/plain")
-    
-    else:
-        # Non-streaming response
-        # Pass chat_history
         try:
-            result = rag_service.generate_response(
-                request.query, 
-                context, 
-                chat_history=chat_history
-            )
-        except Exception as e:
-            # Handle rate limits specifically if possible, otherwise generic error
-            error_msg = str(e)
-            if "429" in error_msg or "Rate limit" in error_msg:
-                raise HTTPException(
-                    status_code=429,
-                    detail="AI model rate limit exceeded. Please try again in 1 hour."
-                )
-            print(f"Error generating response: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error processing request: {str(e)}"
-            )
-        
-        # Reindex citations to be sequential (1, 2, 3...)
-        # This reorders all_chunks so that the first cited source becomes Source 1 (chunks[0])
-        result["response"], all_chunks = rag_service.reindex_citations(result["response"], all_chunks)
-        
-        # Format citations
-        citations = []
-        for i, chunk in enumerate(all_chunks):
-            citations.append(CitationInfo(
-                sourceNumber=i + 1,
-                filename=chunk["filename"],
-                pageNumber=chunk["page_number"],
-                chunkId=str(chunk["id"]),
-                similarity=chunk["similarity"],
-                text=chunk["content"],
-                startLine=chunk.get("start_line"),
-                endLine=chunk.get("end_line"),
-                url=chunk.get("url")
-            ))
+            session.commit()
+        except Exception as msg_err:
+            print(f"[QUERY] User message commit failed: {msg_err}")
+            session.rollback()
 
-        # Save assistant message
-        assistant_message = ChatMessage(
+    # ── Document IDs ────────────────────────────────────────────────────
+    document_ids = None
+    if request.documentIds:
+        document_ids = [UUID(doc_id) for doc_id in request.documentIds]
+
+    # ====================================================================
+    # AGENTIC RAG PIPELINE
+    # ====================================================================
+    try:
+        from app.services.chat_workflow import run_chat_agentic
+
+        agentic_result = run_chat_agentic(
+            query=request.query,
+            user_id=str(current_user.id),
+            user_role=current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
+            analysis_persona=current_user.analysis_persona.value if hasattr(current_user.analysis_persona, "value") else str(current_user.analysis_persona),
+            query_embedding=query_embedding,
+            chat_history=chat_history,
+            company_ids=[str(c) for c in company_ids] if company_ids else None,
+            document_ids=[str(d) for d in document_ids] if document_ids else None,
+            max_results=request.maxResults,
+        )
+
+        response_text = agentic_result.get("response", "")
+        all_chunks = agentic_result.get("retrieved_docs", [])
+        tokens_used = agentic_result.get("token_count")
+
+    except Exception as e:
+        # ── Fallback to legacy naive RAG ────────────────────────────────
+        print(f"[Agentic RAG] Pipeline failed, falling back to legacy: {e}")
+
+        chunks = rag_service.vector_search(
+            query_embedding=query_embedding,
             user_id=current_user.id,
-            session_id=session_id,
-            role="assistant",
-            content=result["response"],
-            # Save full citation details for history reconstruction
-            citations={"sources": [c.dict() for c in citations]}, 
-            token_count=result.get("tokens_used")
+            document_ids=document_ids,
+            company_ids=company_ids,
+            limit=request.maxResults
         )
-        session.add(assistant_message)
-        session.commit()
-        
-        # Format citations (already done above)
-        
-        return QueryResponse(
-            response=result["response"],
-            citations=citations,
-            sessionId=str(session_id),
-            tokensUsed=result.get("tokens_used")
+
+        try:
+            structured_chunks = (
+                rag_service.get_structured_chunks_for_companies(companies, session, query_embedding=query_embedding)
+                if companies else []
+            )
+        except Exception:
+            structured_chunks = []
+
+        all_chunks = structured_chunks + chunks
+        context = rag_service.build_context(all_chunks)
+
+        result = rag_service.generate_response(
+            request.query, context, chat_history=chat_history
         )
+        response_text = result["response"]
+        tokens_used = result.get("tokens_used")
+
+    # ── Reindex citations ───────────────────────────────────────────────
+    response_text, all_chunks = rag_service.reindex_citations(response_text, all_chunks)
+
+    # ── Build citation objects ──────────────────────────────────────────
+    citations = []
+    for i, chunk in enumerate(all_chunks):
+        citations.append(CitationInfo(
+            sourceNumber=i + 1,
+            filename=chunk.get("filename", "Unknown"),
+            pageNumber=chunk.get("page_number"),
+            chunkId=str(chunk.get("id", "")),
+            similarity=chunk.get("similarity", 0.0),
+            text=chunk.get("content", ""),
+            startLine=chunk.get("start_line"),
+            endLine=chunk.get("end_line"),
+            url=chunk.get("url")
+        ))
+
+    # ── Save assistant message ──────────────────────────────────────────
+    assistant_message = ChatMessage(
+        user_id=current_user.id,
+        session_id=session_id,
+        role="assistant",
+        content=response_text,
+        citations={"sources": [c.dict() for c in citations]},
+        token_count=tokens_used
+    )
+    session.add(assistant_message)
+        try:
+            session.commit()
+        except Exception as save_err:
+            print(f"[QUERY] Assistant message commit failed: {save_err}")
+            session.rollback()
+
+    # ── Handle streaming (buffered re-index) vs non-streaming ───────────
+    if request.stream:
+        async def stream_generator():
+            yield response_text
+        return StreamingResponse(stream_generator(), media_type="text/plain")
+
+    return QueryResponse(
+        response=response_text,
+        citations=citations,
+        sessionId=str(session_id),
+        tokensUsed=tokens_used
+    )
 
 @router.get("/history", response_model=ChatHistoryResponse)
 async def get_chat_history(
