@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, Upload, PieChart, BarChart3, TrendingUp, TrendingDown, Minus, Loader2, FileDown, Clock, ExternalLink, ChevronRight, Trash2, BrainCircuit, Info, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, FileText, Upload, PieChart, BarChart3, TrendingUp, TrendingDown, Minus, Loader2, FileDown, Clock, ExternalLink, ChevronRight, ChevronDown, Trash2, BrainCircuit, Info, AlertTriangle } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { formatDistanceToNow, format } from 'date-fns';
 import { getKeyMetrics, formatValue, formatPercent } from '../utils';
@@ -9,7 +9,7 @@ import CompanyDocumentUpload from '@/components/documents/CompanyDocumentUpload'
 import { AnalysisWizardModal, AnalysisResultsView } from './AnalysisComponents';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { Sparkles } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AnalysisReport, analysisApi } from '@/lib/api/analysis';
 
 interface CompanyDetailsProps {
@@ -18,13 +18,10 @@ interface CompanyDetailsProps {
 }
 
 const tabs = [
-    { id: 'details', label: 'Details', icon: FileText },
     { id: 'analysis', label: 'Company Analysis', icon: Sparkles },
     { id: 'uploads', label: 'Uploads', icon: Upload },
     { id: 'annual-reports', label: 'Annual Reports', icon: FileDown },
-    { id: 'is', label: 'Income Statement', icon: BarChart3 },
-    { id: 'bs', label: 'Balance Sheet', icon: PieChart },
-    { id: 'cf', label: 'Cash Flow', icon: TrendingUp },
+    { id: 'details', label: 'Financials', icon: FileText },
 ];
 
 interface AnnualReport {
@@ -135,11 +132,12 @@ const RatingBadge = ({ rating }: { rating: string }) => {
 export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
     const [company, setCompany] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('details');
+    const [activeTab, setActiveTab] = useState('analysis');
     const [annualReports, setAnnualReports] = useState<AnnualReport[]>([]);
     const [analysisReports, setAnalysisReports] = useState<AnalysisReport[]>([]); // New State
     const [loadingReports, setLoadingReports] = useState(false);
     const [isAnalyzeModalOpen, setIsAnalyzeModalOpen] = useState(false);
+    const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({});
     // showAnalysisResults is now derived from whether we have reports, or if we just finished one
 
     useEffect(() => {
@@ -355,13 +353,7 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
             {/* Content */}
             <div className="min-h-[400px]">
                 {activeTab === 'details' && (
-                    <GlassCard className="space-y-4">
-                        <h3 className="text-lg font-semibold text-white">About {company.name}</h3>
-                        <p className="text-gray-300 leading-relaxed">
-                            {company.name} is a company in the {company.sector} sector ({company.sub_sector}).
-                            {company.website_url && <a href={company.website_url} target="_blank" rel="noopener noreferrer" className="block mt-2 text-indigo-400 hover:text-indigo-300">Visit Website &rarr;</a>}
-                        </p>
-
+                    <GlassCard>
                         {/* Key Metrics Summary */}
                         {(() => {
                             const metrics = getKeyMetrics(company);
@@ -377,7 +369,7 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                             ];
 
                             return (
-                                <div className="mt-8 pt-8 border-t border-white/10">
+                                <div>
                                     <div className="flex justify-between items-end mb-6">
                                         <div>
                                             <h4 className="text-xl font-bold text-white flex items-center gap-2">
@@ -418,6 +410,105 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                 </div>
                             );
                         })()}
+
+                        {/* Income Statement */}
+                        <div className="mt-8 pt-8 border-t border-white/10">
+                            <button
+                                onClick={() => setOpenAccordions(prev => ({ ...prev, is: !prev.is }))}
+                                className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors group"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <BarChart3 className="text-indigo-400" size={20} />
+                                    <span className="text-lg font-semibold text-white">Income Statement</span>
+                                    <span className="text-sm text-gray-400 font-mono">{isDate !== 'N/A' ? `(${isDate})` : ''}</span>
+                                </div>
+                                <ChevronDown 
+                                    className={`text-gray-400 transition-transform duration-300 ${openAccordions.is ? 'rotate-180' : ''}`} 
+                                    size={20} 
+                                />
+                            </button>
+                            <AnimatePresence>
+                                {openAccordions.is && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.3 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="pt-4">
+                                            {renderFinancialSection('Income Statement', incomeStatement, IS_ORDER, isDate)}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
+                        {/* Balance Sheet */}
+                        <div className="mt-6">
+                            <button
+                                onClick={() => setOpenAccordions(prev => ({ ...prev, bs: !prev.bs }))}
+                                className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors group"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <PieChart className="text-emerald-400" size={20} />
+                                    <span className="text-lg font-semibold text-white">Balance Sheet</span>
+                                    <span className="text-sm text-gray-400 font-mono">{bsDate !== 'N/A' ? `(${bsDate})` : ''}</span>
+                                </div>
+                                <ChevronDown 
+                                    className={`text-gray-400 transition-transform duration-300 ${openAccordions.bs ? 'rotate-180' : ''}`} 
+                                    size={20} 
+                                />
+                            </button>
+                            <AnimatePresence>
+                                {openAccordions.bs && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.3 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="pt-4">
+                                            {renderFinancialSection('Balance Sheet', balanceSheet, BS_ORDER, bsDate)}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
+                        {/* Cash Flow */}
+                        <div className="mt-6">
+                            <button
+                                onClick={() => setOpenAccordions(prev => ({ ...prev, cf: !prev.cf }))}
+                                className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors group"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <TrendingUp className="text-amber-400" size={20} />
+                                    <span className="text-lg font-semibold text-white">Cash Flow</span>
+                                    <span className="text-sm text-gray-400 font-mono">{cfDate !== 'N/A' ? `(${cfDate})` : ''}</span>
+                                </div>
+                                <ChevronDown 
+                                    className={`text-gray-400 transition-transform duration-300 ${openAccordions.cf ? 'rotate-180' : ''}`} 
+                                    size={20} 
+                                />
+                            </button>
+                            <AnimatePresence>
+                                {openAccordions.cf && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.3 }}
+                                        className="overflow-hidden"
+                                    >
+                                        <div className="pt-4">
+                                            {renderFinancialSection('Cash Flow', cashFlow, CF_ORDER, cfDate)}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
                     </GlassCard>
                 )}
 
@@ -631,10 +722,7 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                     </div>
                 )}
 
-                {/* Financials */}
-                {activeTab === 'is' && renderFinancialSection('Income Statement', incomeStatement, IS_ORDER, isDate)}
-                {activeTab === 'bs' && renderFinancialSection('Balance Sheet', balanceSheet, BS_ORDER, bsDate)}
-                {activeTab === 'cf' && renderFinancialSection('Cash Flow', cashFlow, CF_ORDER, cfDate)}
+
             </div>
 
             <AnalysisWizardModal

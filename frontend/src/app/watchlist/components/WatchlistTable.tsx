@@ -1,29 +1,137 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, ArrowRightLeft, ChevronRight, Trash2, Plus, Loader2 } from 'lucide-react';
+import { Search, ArrowRightLeft, ChevronRight, Trash2, Plus, Loader2, Pin, Clock } from 'lucide-react';
 import { useWatchlistStore } from '@/store/watchlistStore';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput'; 
 import { SearchPopout } from './SearchPopout';
+import { cn } from '@/lib/utils';
+import { analysisApi, AnalysisReport } from '@/lib/api/analysis';
 
-// Temporary helper to parse JWT
+interface PinnedCompany {
+  id: string;
+  name: string;
+  ticker: string;
+}
 
+interface CompanyAnalysisData {
+  status: string | null;
+  lastUpdated: string | null;
+  loading: boolean;
+}
 
 interface WatchlistTableProps {
   onCompare: (selectedTickers: string[]) => void;
   onViewDetails: (ticker: string) => void;
+  // Optional pin functionality (used in Dashboard)
+  onPin?: (company: PinnedCompany) => void;
+  isPinned?: (companyId: string) => boolean;
+  maxPinned?: number;
+  pinnedCount?: number;
 }
 
-export function WatchlistTable({ onCompare, onViewDetails }: WatchlistTableProps) {
+// Helper to format date
+const formatDate = (dateString: string | null): string => {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) {
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    if (diffHours === 0) {
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      return diffMins <= 1 ? 'Just now' : `${diffMins}m ago`;
+    }
+    return `${diffHours}h ago`;
+  } else if (diffDays === 1) {
+    return 'Yesterday';
+  } else if (diffDays < 7) {
+    return `${diffDays}d ago`;
+  } else {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+};
+
+// Helper to get status badge styling
+const getStatusBadge = (status: string | null) => {
+  if (!status) return { bg: 'bg-gray-500/10', text: 'text-gray-400', border: 'border-gray-500/20', label: 'No Analysis' };
+  
+  const upperStatus = status.toUpperCase();
+  if (['ENGAGE', 'BUY', 'APPROVE', 'OVERWEIGHT'].includes(upperStatus)) {
+    return { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20', label: status };
+  }
+  if (['AVOID', 'SELL', 'REJECT', 'UNDERWEIGHT'].includes(upperStatus)) {
+    return { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/20', label: status };
+  }
+  // Monitor, Hold, etc.
+  return { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20', label: status };
+};
+
+export function WatchlistTable({ 
+  onCompare, 
+  onViewDetails,
+  onPin,
+  isPinned,
+  maxPinned = 3,
+  pinnedCount = 0
+}: WatchlistTableProps) {
   const { watchlist, removeFromWatchlist, fetchWatchlist } = useWatchlistStore();
   const [searchQuery, setSearchQuery] = useState(''); // Local filter for existing items
   const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-
+  const [analysisData, setAnalysisData] = useState<Record<string, CompanyAnalysisData>>({});
 
   useEffect(() => {
       fetchWatchlist();
   }, [fetchWatchlist]);
+
+  // Fetch analysis data for all companies
+  useEffect(() => {
+    const fetchAnalysisData = async () => {
+      for (const company of watchlist) {
+        // Skip if already loaded
+        if (analysisData[company.id] && !analysisData[company.id].loading) continue;
+        
+        // Mark as loading
+        setAnalysisData(prev => ({
+          ...prev,
+          [company.id]: { status: null, lastUpdated: null, loading: true }
+        }));
+
+        try {
+          const reports = await analysisApi.getReports(company.id);
+          if (reports && reports.length > 0) {
+            const latestReport = reports[0];
+            setAnalysisData(prev => ({
+              ...prev,
+              [company.id]: {
+                status: latestReport.rating,
+                lastUpdated: latestReport.created_at,
+                loading: false
+              }
+            }));
+          } else {
+            setAnalysisData(prev => ({
+              ...prev,
+              [company.id]: { status: null, lastUpdated: null, loading: false }
+            }));
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch analysis for ${company.name}:`, err);
+          setAnalysisData(prev => ({
+            ...prev,
+            [company.id]: { status: null, lastUpdated: null, loading: false }
+          }));
+        }
+      }
+    };
+
+    if (watchlist.length > 0) {
+      fetchAnalysisData();
+    }
+  }, [watchlist]);
 
   // Filter companies based on local search of the watchlist
   const filteredWatchlist = watchlist.filter(
@@ -78,20 +186,24 @@ export function WatchlistTable({ onCompare, onViewDetails }: WatchlistTableProps
               <tr className="border-b border-white/5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                 <th className="p-6">Company</th>
                 <th className="p-6">Sector</th>
-                <th className="p-6">Market Cap</th>
+                <th className="p-6">Status</th>
+                <th className="p-6">Last Updated</th>
                 <th className="p-6 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {filteredWatchlist.length === 0 ? (
                 <tr>
-                    <td colSpan={4} className="p-8 text-center text-gray-500">
+                    <td colSpan={5} className="p-8 text-center text-gray-500">
                         No companies in watchlist. Search to add.
                     </td>
                 </tr>
               ) : (
                 filteredWatchlist.map((company) => {
                   const isSelected = selectedForComparison.includes(company.ticker);
+                  const analysis = analysisData[company.id] || { status: null, lastUpdated: null, loading: true };
+                  const statusBadge = getStatusBadge(analysis.status);
+                  
                   return (
                     <tr key={company.ticker} className="group hover:bg-white/[0.02] transition-colors">
                       <td className="p-6">
@@ -103,9 +215,54 @@ export function WatchlistTable({ onCompare, onViewDetails }: WatchlistTableProps
                           {company.sector}
                         </div>
                       </td>
-                      <td className="p-6 text-gray-300 font-mono">{company.marketCap}</td>
+                      <td className="p-6">
+                        {analysis.loading ? (
+                          <Loader2 size={16} className="animate-spin text-gray-400" />
+                        ) : (
+                          <div className={cn(
+                            "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border",
+                            statusBadge.bg, statusBadge.text, statusBadge.border
+                          )}>
+                            {statusBadge.label}
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-6 text-gray-400 text-sm">
+                        {analysis.loading ? (
+                          <span className="text-gray-500">-</span>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <Clock size={14} className="text-gray-500" />
+                            {formatDate(analysis.lastUpdated)}
+                          </div>
+                        )}
+                      </td>
                       <td className="p-6">
                         <div className="flex justify-end gap-2">
+                          {/* Pin Button (only shown if onPin is provided) */}
+                          {onPin && (
+                            <button
+                              onClick={() => {
+                                if (!isPinned?.(company.id)) {
+                                  onPin({ id: company.id, name: company.name, ticker: company.ticker });
+                                }
+                              }}
+                              disabled={isPinned?.(company.id) || pinnedCount >= maxPinned}
+                              className={cn(
+                                "p-2 rounded-lg border transition-all duration-200",
+                                isPinned?.(company.id)
+                                  ? 'bg-indigo-500 border-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]'
+                                  : pinnedCount >= maxPinned
+                                    ? 'bg-transparent border-white/5 text-gray-600 cursor-not-allowed'
+                                    : 'bg-transparent border-white/10 text-gray-400 hover:text-indigo-400 hover:border-indigo-500/30'
+                              )}
+                              aria-label={isPinned?.(company.id) ? "Pinned" : "Pin to Dashboard"}
+                              title={isPinned?.(company.id) ? "Already pinned" : pinnedCount >= maxPinned ? `Max ${maxPinned} pinned` : "Pin to Dashboard"}
+                            >
+                              <Pin size={18} />
+                            </button>
+                          )}
+
                           <button
                             onClick={() => handleToggleComparison(company.ticker)}
                             className={`p-2 rounded-lg border transition-all duration-200 ${

@@ -27,6 +27,7 @@ interface SidebarItem {
 const menuItems: SidebarItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
   { icon: LineChart, label: 'Watchlist', href: '/watchlist' },
+  { icon: FileText, label: 'Placeholder', href: '/placeholder' },
   { icon: MessageSquare, label: 'Chat', href: '/chat' },
 
   { icon: User, label: 'Profile', href: '/profile' },
