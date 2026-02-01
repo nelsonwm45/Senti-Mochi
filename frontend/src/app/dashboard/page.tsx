@@ -58,6 +58,7 @@ function DashboardContent() {
   const [comparisonTickers, setComparisonTickers] = useState<string[]>([]);
   const [detailTicker, setDetailTicker] = useState<string | null>(null);
   const [pinnedCompanies, setPinnedCompanies] = useState<PinnedCompany[]>([]);
+  const [hasLoadedPinned, setHasLoadedPinned] = useState(false);
 
   // Load pinned companies from localStorage on mount
   useEffect(() => {
@@ -70,12 +71,15 @@ function DashboardContent() {
         console.error('Failed to parse pinned companies:', e);
       }
     }
+    setHasLoadedPinned(true);
   }, []);
 
-  // Save pinned companies to localStorage when changed
+  // Save pinned companies to localStorage when changed (only after initial load)
   useEffect(() => {
-    localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pinnedCompanies));
-  }, [pinnedCompanies]);
+    if (hasLoadedPinned) {
+      localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pinnedCompanies));
+    }
+  }, [pinnedCompanies, hasLoadedPinned]);
 
   const handlePinCompany = (company: PinnedCompany) => {
     if (pinnedCompanies.length >= MAX_PINNED) {

@@ -439,11 +439,17 @@ function PlaceholderContent() {
   // Intelligence Feed Component
   const feedComponent = (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-foreground">Market Intelligence Feed</h2>
-        <span className="text-sm text-foreground-muted">
-          {loading ? 'Loading...' : watchlistEmpty ? 'No companies in watchlist' : `${unifiedFeed.length} announcements • Real-time Bursa filings`}
-        </span>
+      {/* Header with icon and subtitle */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-emerald-500/10">
+            <Newspaper className="text-emerald-500" size={24} />
+          </div>
+          <h1 className="text-3xl font-bold text-foreground">Market Intelligence Feed</h1>
+        </div>
+        <p className="text-foreground-muted">
+          {loading ? 'Loading...' : watchlistEmpty ? 'No companies in watchlist' : `${unifiedFeed.length} articles • Real-time news from your watchlist`}
+        </p>
       </div>
 
       {/* Company Filter Dropdown */}

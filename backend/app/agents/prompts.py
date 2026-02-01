@@ -208,6 +208,11 @@ OUTPUT FORMAT (MANDATORY - use bullet points):
 • Frameworks adopted: [GRI/ISSB/TCFD] [D#]
 • Assurance level: [Limited/Reasonable] [D#]
 
+## Year-over-Year ESG Performance
+• [Metric]: [Previous Year Value] → [Current Year Value] ([+/-X%] change) [D#]
+• Example: "GHG Emissions: 50,000 tonnes (2023) → 45,000 tonnes (2024) (-10% reduction) [D1]"
+• Include ALL YoY comparisons found in documents for: emissions, energy, water, waste, diversity, safety incidents, board composition, or any ESG KPIs
+
 RULES:
 1. BULLET POINTS ONLY - one data point per line
 2. ONLY include data explicitly stated in documents
@@ -215,6 +220,7 @@ RULES:
 4. If specific metrics are not found, include ANY relevant qualitative or quantitative data for that section with citations.
 5. Do NOT write "No data available" unless the document truly contains ZERO relevant information for that category.
 6. Max 6 bullets per section - prioritize material items
+7. **YoY PRIORITY**: When documents contain historical comparisons or multi-year data, ALWAYS extract and highlight trends using format: "[Previous] → [Current] ([Change%])"
 
 Provide your analysis:"""
 
@@ -294,16 +300,17 @@ Review the following analyses for {company_name}:
 
 SYNTHESIS INSTRUCTIONS:
 
-1. ROLE-BASED DECISION:
+1. ROLE-BASED DECISION (ESG-FOCUSED):
    - Make a decision from: {decision_options}
-   - Justify with citations: "The company shows [reason] [N1] and [reason] [F2]"
-   - List 3-5 key concerns specific to {persona_label}
+   - Justify with ESG evidence: "Based on ESG analysis, the company shows [ESG strength/weakness] [D#] and [ESG factor] [N#]"
+   - Prioritize ESG factors: Governance quality, Environmental practices, Social responsibility, Disclosure transparency
+   - List 3-5 key ESG-related concerns specific to {persona_label} (e.g., greenwashing risk, governance gaps, environmental liabilities, social controversies)
 
-2. MARKET SENTIMENT (from News Analysis [N#]):
-   - sentiment: POSITIVE | NEUTRAL | NEGATIVE
-   - summary: 2-3 sentences describing market perception with [N#] citations
-   - key_events: 3-5 recent events affecting the company [N#]
-   - risks_from_news: 2-3 news-based risks or concerns [N#]
+2. ESG SENTIMENT (from News Analysis [N#] and Documents [D#]):
+   - sentiment: POSITIVE | NEUTRAL | NEGATIVE (based on ESG news coverage)
+   - summary: 2-3 sentences describing public/media perception of the company's ESG practices with [N#] and [D#] citations
+   - key_events: 3-5 recent ESG-related events (sustainability initiatives, controversies, awards, regulatory actions) [N#]
+   - risks_from_news: 2-3 ESG-specific risks or concerns (greenwashing allegations, environmental incidents, labor issues) [N#]
 
 3. ESG ANALYSIS (for each: Overview, Governance, Environmental, Social, Disclosure):
    - preview_summary: 3-5 comprehensive sentences describing key findings, their significance, and implications with citations [D#]
@@ -317,12 +324,12 @@ SYNTHESIS INSTRUCTIONS:
    - confidence_score: 0-100 based on data availability
    - highlights: 3-5 key metrics (plain text)
 
-5. DEBATE REPORT:
-   - Government (Pro): Use [F#] financial citations to argue bullish case
-   - Opposition (Skeptic): Use [N#] news citations to argue bearish case, highlight market risks and recent negative events
-   - verdict: Your decision (e.g., "{decision_options}")
-   - verdict_reasoning: 2-3 sentences explaining WHY you reached this verdict, referencing both news [N#] and financial [F#] evidence
-   - verdict_key_factors: 3-5 key factors with citations [N#], [F#], [D#]
+5. DEBATE REPORT (ESG-FOCUSED):
+   - Government (Pro-ESG): Use [D#] document citations to argue the company has STRONG ESG practices, good governance, environmental responsibility, and social impact
+   - Opposition (ESG-Skeptic): Use [D#] and [N#] citations to argue ESG WEAKNESSES, greenwashing risks, governance gaps, environmental liabilities, or social controversies
+   - verdict: Your ESG assessment verdict (e.g., "Strong ESG", "Moderate ESG", "Weak ESG", or "Insufficient ESG Data")
+   - verdict_reasoning: 2-3 sentences explaining your ESG verdict, referencing document [D#] and news [N#] evidence
+   - verdict_key_factors: 3-5 key ESG factors with citations [D#], [N#]
 
 CRITICAL: You MUST preserve ALL [N#], [F#], [D#] citations from the sub-agents.
 Do NOT write conclusions without citing the source evidence.

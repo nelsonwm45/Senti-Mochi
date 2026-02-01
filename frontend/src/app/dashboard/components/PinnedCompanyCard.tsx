@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Scale, AlertTriangle, X, Loader2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Scale, AlertTriangle, X, Loader2, Clock } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { cn } from '@/lib/utils';
 import {
@@ -63,6 +63,22 @@ const createSimpleCitationComponents = () => ({
   li: ({ children, ...props }: any) => <li {...props}>{children}</li>,
   strong: ({ children, ...props }: any) => <strong className="font-bold text-white" {...props}>{children}</strong>,
 });
+
+// Helper to format time ago
+const formatTimeAgo = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+};
 
 export function PinnedCompanyCard({ companyId, companyName, companyTicker, onUnpin, onClick }: PinnedCompanyCardProps) {
   const [report, setReport] = useState<AnalysisReport | null>(null);
@@ -175,8 +191,16 @@ export function PinnedCompanyCard({ companyId, companyName, companyTicker, onUnp
           <h2 className={cn("text-lg font-bold", decisionStyle.color)}>
             {insight.decision}
           </h2>
-          <div className={cn("px-2 py-0.5 rounded text-xs font-bold border ml-auto", getScoreColor(insight.confidence_score))}>
-            {insight.confidence_score}%
+          <div className="ml-auto flex items-center gap-2">
+            <div
+              className="p-1 rounded text-gray-500 hover:text-gray-300 transition-colors cursor-help"
+              title={`Last updated: ${new Date(report.created_at).toLocaleString()}`}
+            >
+              <Clock size={14} />
+            </div>
+            <div className={cn("px-2 py-0.5 rounded text-xs font-bold border", getScoreColor(insight.confidence_score))}>
+              {insight.confidence_score}%
+            </div>
           </div>
         </div>
 

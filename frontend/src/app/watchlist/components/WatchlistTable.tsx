@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, ArrowRightLeft, ChevronRight, Trash2, Plus, Loader2, Pin, Clock } from 'lucide-react';
+import { Search, ArrowRightLeft, ChevronRight, ChevronDown, Trash2, Plus, Loader2, Pin, Clock } from 'lucide-react';
 import { useWatchlistStore } from '@/store/watchlistStore';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GlassInput } from '@/components/ui/GlassInput'; 
@@ -82,6 +82,8 @@ export function WatchlistTable({
   const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [analysisData, setAnalysisData] = useState<Record<string, CompanyAnalysisData>>({});
+  const [sectorFilter, setSectorFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   useEffect(() => {
       fetchWatchlist();
@@ -133,12 +135,30 @@ export function WatchlistTable({
     }
   }, [watchlist]);
 
-  // Filter companies based on local search of the watchlist
-  const filteredWatchlist = watchlist.filter(
-    (c) =>
+  // Get unique sectors from watchlist
+  const sectors = Array.from(new Set(watchlist.map(c => c.sector).filter(Boolean)));
+
+  // Filter companies based on search, sector, and status
+  const filteredWatchlist = watchlist.filter((c) => {
+    // Search filter
+    const matchesSearch = !searchQuery || 
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.ticker.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      c.ticker.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // Sector filter
+    const matchesSector = sectorFilter === 'all' || c.sector === sectorFilter;
+    
+    // Status filter
+    const analysis = analysisData[c.id];
+    const companyStatus = analysis?.status?.toUpperCase() || null;
+    let matchesStatus = statusFilter === 'all';
+    if (statusFilter === 'engage') matchesStatus = companyStatus === 'ENGAGE';
+    if (statusFilter === 'monitor') matchesStatus = companyStatus === 'MONITOR';
+    if (statusFilter === 'avoid') matchesStatus = companyStatus === 'AVOID';
+    if (statusFilter === 'not-analyzed') matchesStatus = !companyStatus;
+    
+    return matchesSearch && matchesSector && matchesStatus;
+  });
 
   const handleToggleComparison = (ticker: string) => {
     if (selectedForComparison.includes(ticker)) {
@@ -173,6 +193,54 @@ export function WatchlistTable({
                 <Plus size={18} />
                 <span>Add</span>
             </button>
+        </div>
+      </div>
+
+      {/* Search and Filter Bar */}
+      <div className="flex flex-col md:flex-row gap-3">
+        {/* Search Input */}
+        <div className="relative flex-1">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by name or ticker..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all"
+          />
+        </div>
+
+        {/* Sector Filter */}
+        <div className="relative">
+          <select
+            value={sectorFilter}
+            onChange={(e) => setSectorFilter(e.target.value)}
+            className="appearance-none pl-4 pr-10 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-white/10 transition-colors cursor-pointer min-w-[140px]"
+          >
+            <option value="all" className="bg-gray-900">All Sectors</option>
+            {sectors.map((sector) => (
+              <option key={sector} value={sector} className="bg-gray-900">
+                {sector}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        </div>
+
+        {/* Status Filter */}
+        <div className="relative">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="appearance-none pl-4 pr-10 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 hover:bg-white/10 transition-colors cursor-pointer min-w-[140px]"
+          >
+            <option value="all" className="bg-gray-900">All Status</option>
+            <option value="engage" className="bg-gray-900">Engage</option>
+            <option value="monitor" className="bg-gray-900">Monitor</option>
+            <option value="avoid" className="bg-gray-900">Avoid</option>
+            <option value="not-analyzed" className="bg-gray-900">Not Analyzed</option>
+          </select>
+          <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
         </div>
       </div>
       
