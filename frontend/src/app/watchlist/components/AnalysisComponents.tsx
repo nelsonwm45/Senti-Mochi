@@ -121,68 +121,38 @@ const TopicSelectionStep = ({
                     )}
                 </button>
 
+                {/* Financials - Disabled */}
                 <button
-                    onClick={() => onSelect('financials')}
-                    className={cn(
-                        "flex items-center gap-4 p-4 rounded-xl border transition-all text-left group relative overflow-hidden",
-                        selected === 'financials'
-                            ? "bg-indigo-500/10 border-indigo-500/50"
-                            : "bg-white/5 border-white/10 hover:bg-white/[0.07] hover:border-white/20"
-                    )}
+                    disabled
+                    className="flex items-center gap-4 p-4 rounded-xl border transition-all text-left group relative overflow-hidden bg-white/5 border-white/10 opacity-50 cursor-not-allowed grayscale"
                 >
-                    <div className={cn(
-                        "w-12 h-12 rounded-lg flex items-center justify-center transition-colors",
-                        selected === 'financials' ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20" : "bg-white/5 text-gray-400 group-hover:text-indigo-400"
-                    )}>
+                    <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-white/5 text-gray-400">
                         <BarChart3 size={24} />
                     </div>
                     <div className="flex-1">
                         <div className="font-semibold text-white flex items-center justify-between">
                             Financials
-                            {selected === 'financials' && <Check size={18} className="text-indigo-500" />}
+                            <span className="text-xs text-gray-500 bg-white/10 px-2 py-0.5 rounded">Coming Soon</span>
                         </div>
                         <div className="text-sm text-gray-400 mt-1">Financial performance & metrics</div>
                     </div>
-                    {selected === 'financials' && (
-                        <motion.div
-                            layoutId="outline"
-                            className="absolute inset-0 border-2 border-indigo-500 rounded-xl"
-                            initial={false}
-                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        />
-                    )}
                 </button>
 
+                {/* General - Disabled */}
                 <button
-                    onClick={() => onSelect('general')}
-                    className={cn(
-                        "flex items-center gap-4 p-4 rounded-xl border transition-all text-left group relative overflow-hidden",
-                        selected === 'general'
-                            ? "bg-blue-500/10 border-blue-500/50"
-                            : "bg-white/5 border-white/10 hover:bg-white/[0.07] hover:border-white/20"
-                    )}
+                    disabled
+                    className="flex items-center gap-4 p-4 rounded-xl border transition-all text-left group relative overflow-hidden bg-white/5 border-white/10 opacity-50 cursor-not-allowed grayscale"
                 >
-                    <div className={cn(
-                        "w-12 h-12 rounded-lg flex items-center justify-center transition-colors",
-                        selected === 'general' ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-white/5 text-gray-400 group-hover:text-blue-400"
-                    )}>
+                    <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-white/5 text-gray-400">
                         <Building2 size={24} />
                     </div>
                     <div className="flex-1">
                         <div className="font-semibold text-white flex items-center justify-between">
                             General
-                            {selected === 'general' && <Check size={18} className="text-blue-500" />}
+                            <span className="text-xs text-gray-500 bg-white/10 px-2 py-0.5 rounded">Coming Soon</span>
                         </div>
                         <div className="text-sm text-gray-400 mt-1">Comprehensive company overview</div>
                     </div>
-                    {selected === 'general' && (
-                        <motion.div
-                            layoutId="outline"
-                            className="absolute inset-0 border-2 border-blue-500 rounded-xl"
-                            initial={false}
-                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        />
-                    )}
                 </button>
             </div>
 
