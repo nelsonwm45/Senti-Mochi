@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft, FileText, Upload, PieChart, BarChart3, TrendingUp, TrendingDown, Minus, Loader2, FileDown, Clock, ExternalLink, ChevronRight, ChevronDown, Trash2, BrainCircuit, Info, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, FileText, Upload, PieChart, BarChart3, TrendingUp, TrendingDown, Minus, Loader2, FileDown, Clock, ExternalLink, ChevronRight, ChevronDown, Trash2, BrainCircuit, Info, AlertTriangle, Notebook } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { formatDistanceToNow, format } from 'date-fns';
 import { getKeyMetrics, formatValue, formatPercent } from '../utils';
 import CompanyDocumentUpload from '@/components/documents/CompanyDocumentUpload';
 import { AnalysisWizardModal, AnalysisResultsView } from './AnalysisComponents';
+import { TalkingPoints } from './TalkingPoints';
 import { GlassButton } from '@/components/ui/GlassButton';
 import { Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,6 +20,7 @@ interface CompanyDetailsProps {
 
 const tabs = [
     { id: 'analysis', label: 'Company Analysis', icon: Sparkles },
+    { id: 'notes', label: 'Notes', icon: Notebook },
     { id: 'uploads', label: 'Uploads', icon: Upload },
     { id: 'annual-reports', label: 'Annual Reports', icon: FileDown },
     { id: 'details', label: 'Financials', icon: FileText },
@@ -661,6 +663,27 @@ export function CompanyDetails({ ticker, onBack }: CompanyDetailsProps) {
                                 )}
                             </div>
                         </GlassCard>
+                    </div>
+                )}
+
+
+                {activeTab === 'notes' && (
+                    <div className="space-y-6">
+                        {latestAnalysisReport ? (
+                            <TalkingPoints 
+                                report={latestAnalysisReport} 
+                                onUpdate={fetchAnalysisReports}
+                            />
+                        ) : (
+                            <GlassCard className="text-center py-16">
+                                <Notebook size={48} className="mx-auto text-gray-500 mb-4" />
+                                <h3 className="text-xl font-semibold text-white mb-2">Analysis Required</h3>
+                                <p className="text-gray-400 mb-6">Please run a company analysis first to generate talking points.</p>
+                                <GlassButton onClick={() => setActiveTab('analysis')} leftIcon={<Sparkles size={16} />}>
+                                    Go to Analysis
+                                </GlassButton>
+                            </GlassCard>
+                        )}
                     </div>
                 )}
 

@@ -529,3 +529,92 @@ def get_critique_prompt(
         )
     else:
         raise ValueError(f"Unknown agent type: {agent_type}")
+
+
+# =============================================================================
+# TALKING POINTS AGENT PROMPTS
+# =============================================================================
+
+TALKING_POINTS_SYSTEM = """You are a Relationship Manager Coach.
+Your goal is to help a Relationship Manager (RM) prepare for a client meeting.
+You will be given a comprehensive analysis of a company (Financials, News, ESG/Claims).
+You need to distill this into structured, conversational talking points.
+
+STRUCTURE:
+1. Headline Summary: Instantly orient the RM. (Tone, Direction)
+2. Key Developments: Facts. (2-3 recent, neutral, time-bound)
+3. Business Implications: Impact. (Operational, Financial, Strategic)
+4. Conversation Starters: Thoughtful questions. (Open-ended, non-accusatory)
+5. Opportunity Angles: Value creation. (Financing, Risk, Advisory)
+6. Others: Miscellaneous.
+
+If insufficient info is available for a section, leave it empty (return null or empty string).
+"""
+
+TALKING_POINTS_TEMPLATE = """You are preparing talking points for a Relationship Manager meeting with the client {company_name}.
+
+ANALYSIS CONTEXT:
+Rating: {rating}
+Summary: {summary}
+
+FINANCIAL INSIGHTS:
+{financial_analysis}
+
+ESG/CLAIMS INSIGHTS:
+{claims_analysis}
+
+NEWS INSIGHTS:
+{news_analysis}
+
+Generate the talking points in the following JSON format ONLY:
+{{
+    "headline_summary": {{
+        "overall_tone": "...",
+        "direction_of_change": "..."
+    }},
+    "key_developments": [
+        "...",
+        "..."
+    ],
+    "business_implications": {{
+        "operational_impact": "...",
+        "financial_pressure_or_upside": "...",
+        "strategic_implications": "..."
+    }},
+    "conversation_starters": [
+        "...",
+        "..."
+    ],
+    "opportunity_angles": {{
+        "financing": "...",
+        "risk_management": "...",
+        "advisory": "..."
+    }},
+    "others": "..."
+}}
+
+RULES:
+1. Be concise and professional.
+2. "Key Developments" should be factual and time-bound.
+3. "Conversation Starters" should be open-ended questions.
+4. "Opportunity Angles" should suggest bank products/services where applicable.
+5. If a section cannot be filled based on the analysis, return null or an empty list for that field.
+6. DO NOT include citation tags (e.g., [D#], [F1]) in the talking points. Remove them.
+"""
+
+def get_talking_points_prompt(
+    company_name: str,
+    rating: str,
+    summary: str,
+    financial_analysis: str,
+    claims_analysis: str,
+    news_analysis: str
+) -> str:
+    return TALKING_POINTS_TEMPLATE.format(
+        company_name=company_name,
+        rating=rating,
+        summary=summary,
+        financial_analysis=financial_analysis,
+        claims_analysis=claims_analysis,
+        news_analysis=news_analysis
+    )

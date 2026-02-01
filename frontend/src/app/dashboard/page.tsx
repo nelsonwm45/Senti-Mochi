@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProtectedLayout from '@/components/layouts/ProtectedLayout';
 import usePersona from '@/hooks/usePersona';
+import { useUser } from '@/hooks/useUser';
 import { TrendingUp, Shield, Users, BarChart3, Pin } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { WatchlistTable } from '@/app/watchlist/components/WatchlistTable';
@@ -54,15 +55,23 @@ interface PinnedCompany {
 function DashboardContent() {
   const { persona, isLoading: personaLoading } = usePersona();
   const { watchlist } = useWatchlistStore();
+  const { user } = useUser();
   const [view, setView] = useState<ViewState>('list');
   const [comparisonTickers, setComparisonTickers] = useState<string[]>([]);
   const [detailTicker, setDetailTicker] = useState<string | null>(null);
   const [pinnedCompanies, setPinnedCompanies] = useState<PinnedCompany[]>([]);
   const [hasLoadedPinned, setHasLoadedPinned] = useState(false);
 
-  // Load pinned companies from localStorage on mount
+  // Load pinned companies from localStorage on mount (when user is available)
   useEffect(() => {
-    const stored = localStorage.getItem(PINNED_STORAGE_KEY);
+    if (!user?.id) return;
+    
+    // Reset state when user changes (though usually component remounts)
+    setPinnedCompanies([]);
+    setHasLoadedPinned(false);
+
+    const storageKey = `${PINNED_STORAGE_KEY}_${user.id}`;
+    const stored = localStorage.getItem(storageKey);
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
@@ -72,14 +81,17 @@ function DashboardContent() {
       }
     }
     setHasLoadedPinned(true);
-  }, []);
+  }, [user?.id]);
 
-  // Save pinned companies to localStorage when changed (only after initial load)
+  // Save pinned companies to localStorage when changed (only after initial load and when user exists)
   useEffect(() => {
-    if (hasLoadedPinned) {
-      localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pinnedCompanies));
+    if (hasLoadedPinned && user?.id) {
+      const storageKey = `${PINNED_STORAGE_KEY}_${user.id}`;
+      // Clean up old non-user-specific key if it exists to avoid confusion
+      localStorage.removeItem(PINNED_STORAGE_KEY);
+      localStorage.setItem(storageKey, JSON.stringify(pinnedCompanies));
     }
-  }, [pinnedCompanies, hasLoadedPinned]);
+  }, [pinnedCompanies, hasLoadedPinned, user?.id]);
 
   const handlePinCompany = (company: PinnedCompany) => {
     if (pinnedCompanies.length >= MAX_PINNED) {
@@ -116,8 +128,8 @@ function DashboardContent() {
   };
 
   // Get persona-specific header
-  const currentPersona = persona || 'INVESTOR';
-  const header = personaHeaders[currentPersona] || personaHeaders.INVESTOR;
+  const currentPersona = persona || 'RELATIONSHIP_MANAGER';
+  const header = personaHeaders[currentPersona] || personaHeaders.RELATIONSHIP_MANAGER;
   const HeaderIcon = header.icon;
   const colorClasses = {
     emerald: 'bg-emerald-500/10 text-emerald-500',

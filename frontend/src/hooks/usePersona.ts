@@ -67,7 +67,7 @@ export function usePersona() {
 
     return {
         user: userPersona,
-        persona: userPersona?.analysis_persona || userPersona?.persona || 'INVESTOR',
+        persona: userPersona?.analysis_persona || userPersona?.persona || 'RELATIONSHIP_MANAGER',
         isLoading,
         error,
         refetch,
