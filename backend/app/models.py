@@ -53,7 +53,7 @@ class User(SQLModel, table=True):
     full_name: Optional[str] = None
     avatar_url: Optional[str] = None
     role: UserRole = Field(default=UserRole.USER)
-    analysis_persona: AnalysisPersona = Field(default=AnalysisPersona.INVESTOR)
+    analysis_persona: AnalysisPersona = Field(default=AnalysisPersona.RELATIONSHIP_MANAGER)
     tenant_id: Optional[UUID] = Field(default=None, index=True)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -240,6 +240,9 @@ class AnalysisReport(SQLModel, table=True):
     # Polymorphic Analysis Fields
     analysis_persona: Optional[str] = None  # Which persona was used for this analysis
     analysis_focus_area: dict = Field(default={}, sa_column=Column(JSON))  # Role-specific metrics
+    
+    # Relationship Manager Talking Points
+    talking_points: dict = Field(default={}, sa_column=Column(JSON))
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

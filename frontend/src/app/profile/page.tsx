@@ -28,17 +28,10 @@ interface PersonaOption {
   icon: React.ElementType;
   focusAreas: string[];
   decisionType: string;
+  disabled?: boolean;
 }
 
 const PERSONAS: PersonaOption[] = [
-  {
-    id: 'INVESTOR',
-    label: 'Investor',
-    description: 'Growth & Return Focus',
-    icon: TrendingUp,
-    focusAreas: ['Revenue Growth', 'EPS', 'ROE', 'ROIC'],
-    decisionType: 'BUY | SELL | HOLD'
-  },
   {
     id: 'RELATIONSHIP_MANAGER',
     label: 'Relationship Manager',
@@ -48,12 +41,22 @@ const PERSONAS: PersonaOption[] = [
     decisionType: 'ENGAGE | MONITOR | AVOID'
   },
   {
+    id: 'INVESTOR',
+    label: 'Investor',
+    description: 'Growth & Return Focus',
+    icon: TrendingUp,
+    focusAreas: ['Revenue Growth', 'EPS', 'ROE', 'ROIC'],
+    decisionType: 'BUY | SELL | HOLD',
+    disabled: true
+  },
+  {
     id: 'CREDIT_RISK',
     label: 'Credit Risk',
     description: 'Safety & Downside Focus',
     icon: ShieldCheck,
     focusAreas: ['Debt/Equity', 'Interest Coverage', 'Z-Score'],
-    decisionType: 'APPROVE | REJECT | COLLATERAL'
+    decisionType: 'APPROVE | REJECT | COLLATERAL',
+    disabled: true
   },
   {
     id: 'MARKET_ANALYST',
@@ -61,7 +64,8 @@ const PERSONAS: PersonaOption[] = [
     description: 'Big Picture Focus',
     icon: BarChart3,
     focusAreas: ['DCF', 'P/E Relative', 'Market Share'],
-    decisionType: 'OVER | EQUAL | UNDERWEIGHT'
+    decisionType: 'OVER | EQUAL | UNDERWEIGHT',
+    disabled: true
   }
 ];
 
@@ -410,19 +414,20 @@ export default function Profile() {
                   {PERSONAS.map((persona) => {
                     const Icon = persona.icon;
                     const isSelected = user?.analysis_persona === persona.id;
+                    const isDisabled = savingPersona || persona.disabled;
 
                     return (
                       <motion.button
                         key={persona.id}
-                        onClick={() => handleUpdatePersona(persona.id)}
-                        disabled={savingPersona}
+                        onClick={() => !isDisabled && handleUpdatePersona(persona.id)}
+                        disabled={isDisabled}
                         className={`p-4 rounded-xl border text-left transition-all ${
                           isSelected
                             ? 'border-accent bg-accent/10 ring-2 ring-accent/50'
-                            : 'border-glass-border bg-glass-bg hover:border-accent/50'
-                        } ${savingPersona ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        whileHover={{ scale: savingPersona ? 1 : 1.02 }}
-                        whileTap={{ scale: savingPersona ? 1 : 0.98 }}
+                            : 'border-glass-border bg-glass-bg ' + (isDisabled ? '' : 'hover:border-accent/50')
+                        } ${isDisabled ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+                        whileHover={{ scale: isDisabled ? 1 : 1.02 }}
+                        whileTap={{ scale: isDisabled ? 1 : 0.98 }}
                       >
                         <div className="flex items-start gap-3">
                           <div className={`p-2 rounded-lg ${

@@ -121,68 +121,38 @@ const TopicSelectionStep = ({
                     )}
                 </button>
 
+                {/* Financials - Disabled */}
                 <button
-                    onClick={() => onSelect('financials')}
-                    className={cn(
-                        "flex items-center gap-4 p-4 rounded-xl border transition-all text-left group relative overflow-hidden",
-                        selected === 'financials'
-                            ? "bg-indigo-500/10 border-indigo-500/50"
-                            : "bg-white/5 border-white/10 hover:bg-white/[0.07] hover:border-white/20"
-                    )}
+                    disabled
+                    className="flex items-center gap-4 p-4 rounded-xl border transition-all text-left group relative overflow-hidden bg-white/5 border-white/10 opacity-50 cursor-not-allowed grayscale"
                 >
-                    <div className={cn(
-                        "w-12 h-12 rounded-lg flex items-center justify-center transition-colors",
-                        selected === 'financials' ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20" : "bg-white/5 text-gray-400 group-hover:text-indigo-400"
-                    )}>
+                    <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-white/5 text-gray-400">
                         <BarChart3 size={24} />
                     </div>
                     <div className="flex-1">
                         <div className="font-semibold text-white flex items-center justify-between">
                             Financials
-                            {selected === 'financials' && <Check size={18} className="text-indigo-500" />}
+                            <span className="text-xs text-gray-500 bg-white/10 px-2 py-0.5 rounded">Coming Soon</span>
                         </div>
                         <div className="text-sm text-gray-400 mt-1">Financial performance & metrics</div>
                     </div>
-                    {selected === 'financials' && (
-                        <motion.div
-                            layoutId="outline"
-                            className="absolute inset-0 border-2 border-indigo-500 rounded-xl"
-                            initial={false}
-                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        />
-                    )}
                 </button>
 
+                {/* General - Disabled */}
                 <button
-                    onClick={() => onSelect('general')}
-                    className={cn(
-                        "flex items-center gap-4 p-4 rounded-xl border transition-all text-left group relative overflow-hidden",
-                        selected === 'general'
-                            ? "bg-blue-500/10 border-blue-500/50"
-                            : "bg-white/5 border-white/10 hover:bg-white/[0.07] hover:border-white/20"
-                    )}
+                    disabled
+                    className="flex items-center gap-4 p-4 rounded-xl border transition-all text-left group relative overflow-hidden bg-white/5 border-white/10 opacity-50 cursor-not-allowed grayscale"
                 >
-                    <div className={cn(
-                        "w-12 h-12 rounded-lg flex items-center justify-center transition-colors",
-                        selected === 'general' ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "bg-white/5 text-gray-400 group-hover:text-blue-400"
-                    )}>
+                    <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-white/5 text-gray-400">
                         <Building2 size={24} />
                     </div>
                     <div className="flex-1">
                         <div className="font-semibold text-white flex items-center justify-between">
                             General
-                            {selected === 'general' && <Check size={18} className="text-blue-500" />}
+                            <span className="text-xs text-gray-500 bg-white/10 px-2 py-0.5 rounded">Coming Soon</span>
                         </div>
                         <div className="text-sm text-gray-400 mt-1">Comprehensive company overview</div>
                     </div>
-                    {selected === 'general' && (
-                        <motion.div
-                            layoutId="outline"
-                            className="absolute inset-0 border-2 border-blue-500 rounded-xl"
-                            initial={false}
-                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        />
-                    )}
                 </button>
             </div>
 
@@ -871,7 +841,7 @@ const SectionCard = ({
 };
 
 // =============================================================================
-// ROLE-BASED DECISION CARD
+// ROLE-BASED DECISION CARD (Merged with Role Analysis View)
 // =============================================================================
 
 const RoleBasedDecisionCard = ({ report, registry }: { report: AnalysisReport; registry: Record<string, SourceMetadata> }) => {
@@ -881,7 +851,8 @@ const RoleBasedDecisionCard = ({ report, registry }: { report: AnalysisReport; r
 
     return (
         <GlassCard className={cn("border-l-4", decisionStyle.border)}>
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+            {/* Header with Decision */}
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
                 <div className="flex items-start gap-4">
                     <div className={cn("w-14 h-14 rounded-xl flex items-center justify-center", decisionStyle.bg)}>
                         <decisionStyle.Icon size={28} className={decisionStyle.color} />
@@ -902,35 +873,41 @@ const RoleBasedDecisionCard = ({ report, registry }: { report: AnalysisReport; r
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {/* Key Concerns */}
-                {insight.key_concerns && insight.key_concerns.length > 0 && (
-                    <div className="flex-1 md:max-w-sm">
-                        <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                            <AlertTriangle size={12} /> Key Concerns
-                        </div>
-                        <div className="space-y-1">
-                            {insight.key_concerns.slice(0, 3).map((concern, idx) => (
-                                <div key={idx} className="text-sm text-gray-300 flex items-start gap-2">
-                                    <span className="text-red-400">•</span>
+            {/* Full Justification */}
+            <div className="mb-6">
+                <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Detailed Justification</div>
+                <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none">
+                    <ReactMarkdown components={citationComponents}>
+                        {insight.justification || "No specific justification provided."}
+                    </ReactMarkdown>
+                </div>
+            </div>
+
+            {/* All Key Concerns */}
+            <div className="border-t border-white/10 pt-4">
+                <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1">
+                    <AlertTriangle size={12} /> Key Concerns
+                </div>
+                {insight.key_concerns && insight.key_concerns.length > 0 ? (
+                    <div className="space-y-3">
+                        {insight.key_concerns.map((concern, idx) => (
+                            <div key={idx} className="text-sm text-gray-300 flex items-start gap-2 bg-white/5 p-3 rounded-lg border border-white/5">
+                                <span className="text-red-400 mt-1">•</span>
+                                <div className="prose prose-invert prose-sm max-w-none">
                                     <ReactMarkdown components={citationComponents}>
                                         {concern}
                                     </ReactMarkdown>
                                 </div>
-                            ))}
-                        </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-sm text-gray-400 italic bg-white/5 p-3 rounded-lg border border-white/5">
+                        No major concerns identified based on available data.
                     </div>
                 )}
-            </div>
-
-            {/* Justification */}
-            <div className="mt-4 pt-4 border-t border-white/10">
-                <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Justification</div>
-                <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none line-clamp-3">
-                    <ReactMarkdown components={citationComponents}>
-                        {insight.justification}
-                    </ReactMarkdown>
-                </div>
             </div>
         </GlassCard>
     );
@@ -1302,65 +1279,7 @@ const ESGAnalysisView = ({ report }: { report: AnalysisReport }) => {
     );
 };
 
-// =============================================================================
-// ROLE ANALYSIS VIEW
-// =============================================================================
-
-const RoleAnalysisView = ({ report }: { report: AnalysisReport }) => {
-    const registry = getCitationRegistry(report);
-    const insight = getRoleBasedInsight(report);
-    const citationComponents = createCitationComponents(registry);
-
-    return (
-        <div className="space-y-6">
-            <GlassCard className="border-l-4 border-l-purple-500/50">
-                <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                        <Users size={16} className="text-purple-400" />
-                    </div>
-                    <h3 className="font-semibold text-white text-lg">Detailed Role Analysis: {getPersonaLabel(insight.user_role)}</h3>
-                </div>
-
-                <div className="space-y-6">
-                    {/* Justification */}
-                    <div>
-                        <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Detailed Justification</div>
-                        <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none">
-                            <ReactMarkdown components={citationComponents}>
-                                {insight.justification || "No specific justification provided."}
-                            </ReactMarkdown>
-                        </div>
-                    </div>
-
-                    {/* Key Concerns */}
-                    <div>
-                        <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                            <AlertTriangle size={12} /> Key Concerns
-                        </div>
-                        {insight.key_concerns && insight.key_concerns.length > 0 ? (
-                            <div className="space-y-3">
-                                {insight.key_concerns.map((concern, idx) => (
-                                    <div key={idx} className="text-sm text-gray-300 flex items-start gap-2 bg-white/5 p-3 rounded-lg border border-white/5">
-                                        <span className="text-red-400 mt-1">•</span>
-                                        <div className="prose prose-invert prose-sm max-w-none">
-                                            <ReactMarkdown components={citationComponents}>
-                                                {concern}
-                                            </ReactMarkdown>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-sm text-gray-400 italic bg-white/5 p-3 rounded-lg border border-white/5">
-                                No major concerns identified based on available data.
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </GlassCard>
-        </div>
-    );
-};
+// RoleAnalysisView removed - content merged into RoleBasedDecisionCard above
 
 // =============================================================================
 // MARKET SENTIMENT VIEW
@@ -1475,7 +1394,7 @@ const MarketSentimentCard = ({ report, registry }: { report: AnalysisReport; reg
 
 export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report: AnalysisReport, onReanalyze: () => void, onDelete?: () => void }) => {
     const [showDetails, setShowDetails] = useState(false);
-    const [viewMode, setViewMode] = useState<'esg' | 'financial' | 'debate' | 'role' | 'sentiment'>('role');
+    const [viewMode, setViewMode] = useState<'esg' | 'financial' | 'debate' | 'sentiment'>('esg');
 
     const registry = getCitationRegistry(report);
 
@@ -1502,15 +1421,6 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                         {/* View Switcher */}
                         <div className="flex bg-white/5 p-1 rounded-lg border border-white/10">
                             <button
-                                onClick={() => setViewMode('role')}
-                                className={cn(
-                                    "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-                                    viewMode === 'role' ? "bg-purple-500 text-white shadow-lg" : "text-gray-400 hover:text-white"
-                                )}
-                            >
-                                Role View
-                            </button>
-                            <button
                                 onClick={() => setViewMode('esg')}
                                 className={cn(
                                     "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
@@ -1519,6 +1429,7 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                             >
                                 ESG
                             </button>
+                            {/* Financials tab hidden - uncomment to restore
                             <button
                                 onClick={() => setViewMode('financial')}
                                 className={cn(
@@ -1528,6 +1439,7 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                             >
                                 Financials
                             </button>
+                            */}
                             <button
                                 onClick={() => setViewMode('debate')}
                                 className={cn(
@@ -1568,9 +1480,11 @@ export const AnalysisResultsView = ({ report, onReanalyze, onDelete }: { report:
                 </div>
 
                 {/* Content based on view mode */}
-                {viewMode === 'role' && <RoleAnalysisView report={report} />}
+                {/* Role View removed - content now in RoleBasedDecisionCard above */}
                 {viewMode === 'esg' && <ESGAnalysisView report={report} />}
+                {/* Financials view hidden - uncomment to restore
                 {viewMode === 'financial' && <FinancialAnalysisView report={report} />}
+                */}
                 {viewMode === 'debate' && <DebateReportSection report={report} registry={registry} />}
                 {viewMode === 'sentiment' && <MarketSentimentCard report={report} registry={registry} />}
 

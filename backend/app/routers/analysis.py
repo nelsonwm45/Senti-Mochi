@@ -268,3 +268,102 @@ def delete_report(report_id: UUID, session: Session = Depends(get_session)):
     session.delete(report)
     session.commit()
     return {"message": "Report deleted successfully", "report_id": str(report_id)}
+
+@router.post("/report/{report_id}/talking-points/generate")
+def generate_talking_points(
+    report_id: UUID,
+    session: Session = Depends(get_session)
+):
+    """
+    Generates talking points for a Relationship Manager based on an existing analysis.
+    """
+    report = session.get(AnalysisReport, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+        
+    company = session.get(Company, report.company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    # Import here to avoid circular dependencies if any
+    from app.agents.base import get_llm
+    from app.agents.prompts import TALKING_POINTS_SYSTEM, get_talking_points_prompt
+    from langchain_core.messages import SystemMessage, HumanMessage
+    import json
+
+    # Construct the prompt
+    # Construct the prompt with safe defaults
+    try:
+        financial_json = json.dumps(report.financial_analysis) if report.financial_analysis else "{}"
+        claims_json = json.dumps(report.esg_analysis) if report.esg_analysis else "{}"
+        news_json = json.dumps(report.key_concerns) if report.key_concerns else "[]"
+        
+        prompt = get_talking_points_prompt(
+            company_name=company.name or "Unknown Company",
+            rating=report.rating or "N/A",
+            summary=report.summary or "No summary available.",
+            financial_analysis=financial_json,
+            claims_analysis=claims_json, 
+            news_analysis=news_json
+        )
+
+        llm = get_llm("llama-3.1-8b-instant")
+        response = llm.invoke([
+            SystemMessage(content=TALKING_POINTS_SYSTEM),
+            HumanMessage(content=prompt)
+        ])
+        
+        # Parse JSON response
+        content = response.content
+        print(f"LLM Raw Response: {content}") # Log for debugging
+        
+        # Robust extraction: find the first outer { and last }
+        import re
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+            try:
+                talking_points = json.loads(json_str)
+            except json.JSONDecodeError as je:
+                print(f"JSON Parse Error on extracted string: {je}")
+                # Try to clean it up (sometimes there are trailing commas)
+                raise ValueError(f"Extracted JSON was invalid: {je}")
+        else:
+             # If no brackets found, it might be raw text or empty
+             if not content.strip():
+                 raise ValueError("LLM returned empty response")
+             raise ValueError("Could not find JSON structure in LLM response")
+        
+        # Save to report
+        report.talking_points = talking_points
+        session.add(report)
+        session.commit()
+        session.refresh(report)
+        
+        return report.talking_points
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"Error generating talking points: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate talking points: {str(e)}")
+
+@router.put("/report/{report_id}/talking-points")
+def update_talking_points(
+    report_id: UUID,
+    talking_points: dict, 
+    session: Session = Depends(get_session)
+):
+    """
+    Updates the talking points for a specific analysis report (manual save/edit).
+    """
+    report = session.get(AnalysisReport, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    report.talking_points = talking_points
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+
+    return report.talking_points
