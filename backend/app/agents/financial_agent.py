@@ -219,10 +219,24 @@ def financial_critique(state: AgentState) -> Dict[str, Any]:
         analysis_2_name="Claims Analysis"
     )
 
-    llm = get_llm("llama-3.1-8b-instant")
-    response = llm.invoke([
-        SystemMessage(content=f"You are a data-driven financial analyst serving a {persona_label}. PRESERVE all citation IDs."),
-        HumanMessage(content=prompt)
-    ])
+    system_msg = f"You are a sharp financial analyst serving a {persona_label}. PRESERVE all citation IDs."
 
-    return {"financial_critique": response.content}
+    # Attempt Primary: Cerebras
+    try:
+        print(f"[Financial Agent] Critique: Attempting Cerebras (llama-3.3-70b)...")
+        llm = get_llm("llama-3.3-70b")
+        response = llm.invoke([
+            SystemMessage(content=system_msg),
+            HumanMessage(content=prompt)
+        ])
+        print(f"[Financial Agent] Critique: SUCCESS (Cerebras)")
+        return {"financial_critique": response.content}
+    except Exception as e:
+        print(f"[Financial Agent] Critique: Cerebras failed: {e}. Fallback to Groq...")
+        llm = get_llm("llama-3.1-8b-instant")
+        response = llm.invoke([
+            SystemMessage(content=system_msg),
+            HumanMessage(content=prompt)
+        ])
+        print(f"[Financial Agent] Critique: SUCCESS (Groq)")
+        return {"financial_critique": response.content}

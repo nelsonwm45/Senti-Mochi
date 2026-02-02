@@ -253,10 +253,24 @@ def news_critique(state: AgentState) -> Dict[str, Any]:
         analysis_2_name="Claims Analysis"
     )
 
-    llm = get_llm("llama-3.1-8b-instant")
-    response = llm.invoke([
-        SystemMessage(content=f"You are a critical news analyst serving a {persona_label}. PRESERVE all citation IDs."),
-        HumanMessage(content=prompt)
-    ])
+    system_msg = f"You are a critical news analyst serving a {persona_label}. PRESERVE all citation IDs."
 
-    return {"news_critique": response.content}
+    # Attempt Primary: Cerebras
+    try:
+        print(f"[News Agent] Critique: Attempting Cerebras (llama-3.3-70b)...")
+        llm = get_llm("llama-3.3-70b")
+        response = llm.invoke([
+            SystemMessage(content=system_msg),
+            HumanMessage(content=prompt)
+        ])
+        print(f"[News Agent] Critique: SUCCESS (Cerebras)")
+        return {"news_critique": response.content}
+    except Exception as e:
+        print(f"[News Agent] Critique: Cerebras failed: {e}. Fallback to Groq...")
+        llm = get_llm("llama-3.1-8b-instant")
+        response = llm.invoke([
+            SystemMessage(content=system_msg),
+            HumanMessage(content=prompt)
+        ])
+        print(f"[News Agent] Critique: SUCCESS (Groq)")
+        return {"news_critique": response.content}

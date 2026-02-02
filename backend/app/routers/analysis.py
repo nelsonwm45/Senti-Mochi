@@ -307,11 +307,23 @@ def generate_talking_points(
             news_analysis=news_json
         )
 
-        llm = get_llm("llama-3.1-8b-instant")
-        response = llm.invoke([
-            SystemMessage(content=TALKING_POINTS_SYSTEM),
-            HumanMessage(content=prompt)
-        ])
+        # Attempt Primary: Cerebras
+        try:
+            print(f"[Talking Points] Attempting Cerebras (llama-3.3-70b)...")
+            llm = get_llm("llama-3.3-70b")
+            response = llm.invoke([
+                SystemMessage(content=TALKING_POINTS_SYSTEM),
+                HumanMessage(content=prompt)
+            ])
+            print(f"[Talking Points] SUCCESS (Cerebras)")
+        except Exception as e:
+            print(f"[Talking Points] Cerebras failed: {e}. Fallback to Groq...")
+            llm = get_llm("llama-3.1-8b-instant")
+            response = llm.invoke([
+                SystemMessage(content=TALKING_POINTS_SYSTEM),
+                HumanMessage(content=prompt)
+            ])
+            print(f"[Talking Points] SUCCESS (Groq)")
         
         # Parse JSON response
         content = response.content
