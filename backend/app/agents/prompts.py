@@ -189,37 +189,37 @@ DOCUMENTS:
 
 OUTPUT FORMAT (MANDATORY - use bullet points):
 ## Governance
-• Board independence: [%] [D#]
-• Key policies: [names] [D#]
-• Risk framework: [details] [D#]
+• Board independence: [%] - [Context/Details] [D#, Page X]
+• Key policies: [names] - [Explanation of scope/impact] [D#, Page X]
+• Risk framework: [details] - [How it is implemented] [D#, Page X]
 
 ## Environmental
-• Net Zero/Carbon Neutral target: [year] [D#]
-• GHG Emissions (Scope 1/2/3): [values] [D#]
-• Energy/Water/Waste metrics: [values] [D#]
-• Certifications/Green initiatives: [details] [D#]
+• Net Zero/Carbon Neutral target: [year] - [Strategy/Roadmap details] [D#, Page X]
+• GHG Emissions (Scope 1/2/3): [values] - [YoY trends/Analysis] [D#, Page X]
+• Energy/Water/Waste metrics: [values] - [reduction initiatives] [D#, Page X]
+• Certifications/Green initiatives: [details] - [Impact description] [D#, Page X]
 
 ## Social
-• DEI/Gender diversity: [statistics] [D#]
-• Employee training/turnover: [metrics] [D#]
-• Community/CSR initiatives: [details] [D#]
+• DEI/Gender diversity: [statistics] - [Context on trends] [D#, Page X]
+• Employee training/turnover: [metrics] - [Program details] [D#, Page X]
+• Community/CSR initiatives: [details] - [Beneficiary impact] [D#, Page X]
 
 ## Disclosure Quality
-• Frameworks adopted: [GRI/ISSB/TCFD] [D#]
-• Assurance level: [Limited/Reasonable] [D#]
+• Frameworks adopted: [GRI/ISSB/TCFD] - [Adherence level] [D#, Page X]
+• Assurance level: [Limited/Reasonable] - [Provider details] [D#, Page X]
 
 ## Year-over-Year ESG Performance
-• [Metric]: [Previous Year Value] → [Current Year Value] ([+/-X%] change) [D#]
-• Example: "GHG Emissions: 50,000 tonnes (2023) → 45,000 tonnes (2024) (-10% reduction) [D1]"
+• [Metric]: [Previous Year Value] → [Current Year Value] ([+/-X%] change) - [Explanation of driver] [D#, Page X]
+• Example: "GHG Emissions: 50,000 tonnes (2023) → 45,000 tonnes (2024) (-10% reduction) - Driven by switch to solar energy at Plant A [D1, Page 42]"
 • Include ALL YoY comparisons found in documents for: emissions, energy, water, waste, diversity, safety incidents, board composition, or any ESG KPIs
 
 RULES:
-1. BULLET POINTS ONLY - one data point per line
-2. ONLY include data explicitly stated in documents
-3. Format: "• [Item]: [Specific value/name] [D#]"
+1. BULLET POINTS ONLY - one distinct finding per line
+2. EXPLAIN THE FINDING: Do not just list data. Provide brief context or explanation for WHY it matters or HOW it is achieved.
+3. CITATION FORMAT: "• [Item]: [Specific value/name] - [Explanation] [D#, Page Number]". ALWAYS include page numbers inside the brackets if available.
 4. If specific metrics are not found, include ANY relevant qualitative or quantitative data for that section with citations.
 5. Do NOT write "No data available" unless the document truly contains ZERO relevant information for that category.
-6. Max 6 bullets per section - prioritize material items
+6. Max 10-12 bullets per section - capture as much detail as possible.
 7. **YoY PRIORITY**: When documents contain historical comparisons or multi-year data, ALWAYS extract and highlight trends using format: "[Previous] → [Current] ([Change%])"
 
 Provide your analysis:"""
@@ -251,7 +251,11 @@ YOUR CRITICAL RESPONSIBILITIES:
 1. PRESERVE all citation IDs from sub-agents: [N#], [F#], [D#]
 2. NEVER strip or remove citation markers
 3. VERIFY that your conclusions are backed by cited evidence
-4. Generate a structured decision based on the user's role
+4. EXPLAIN YOUR CONFIDENCE: Provide a bulleted breakdown explaining the score. Format:
+   - **Financials**: [Quality assessment]
+   - **ESG**: [Quality assessment]
+   - **News**: [Quality assessment]
+5. Generate a structured decision based on the user's role
 
 DECISION FRAMEWORK for {persona_label}:
 - Decision Type: {decision_label}
@@ -314,13 +318,13 @@ SYNTHESIS INSTRUCTIONS:
 
 3. ESG ANALYSIS (for each: Overview, Governance, Environmental, Social, Disclosure):
    - preview_summary: 3-5 comprehensive sentences describing key findings, their significance, and implications with citations [D#]
-   - detailed_findings: 5-8 bullet points with [D#] citations. Use **bold** for important metrics and key terms.
+   - detailed_findings: 10-12 bullet points with [D#] citations. Format: "**[Topic]**: [Detailed explanation/finding] [D#]". Use **bold** for the topic.
    - confidence_score: 0-100 based on data quality
    - highlights: 3-5 specific data points (plain text)
 
 4. FINANCIAL ANALYSIS (for each: Valuation, Profitability, Growth, Health):
    - preview_summary: 3-5 comprehensive sentences describing key metrics, their interpretation, and what they mean for investors with citations [F#]
-   - detailed_findings: 5-8 bullet points with [F#] citations. Use **bold** for important metrics and key terms.
+   - detailed_findings: 8-10 bullet points with [F#] citations. Format: "**[Metric]**: [Value and Context] [F#]". Use **bold** for important metrics.
    - confidence_score: 0-100 based on data availability
    - highlights: 3-5 key metrics (plain text)
 
@@ -331,8 +335,8 @@ SYNTHESIS INSTRUCTIONS:
    - verdict_reasoning: 2-3 sentences explaining your ESG verdict, referencing document [D#] and news [N#] evidence
    - verdict_key_factors: 3-5 key ESG factors with citations [D#], [N#]
 
-CRITICAL: You MUST preserve ALL [N#], [F#], [D#] citations from the sub-agents.
-Do NOT write conclusions without citing the source evidence.
+CRITICAL: You MUST preserve ALL [N#], [F#], [D#] citations from the sub-agents, including any associated page numbers (e.g., [D1], Page 123).
+Do NOT write conclusions without citing the source evidence with full citation details.
 
 {role_specific_instructions}
 
