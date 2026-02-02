@@ -1,5 +1,6 @@
 import requests
 from datetime import datetime
+from uuid import UUID
 from sqlmodel import Session, select
 from app.database import engine
 from app.models import Company, NewsArticle
@@ -58,7 +59,7 @@ class NewsService:
         return summary + "\n"
     
     @staticmethod
-    def sync_news(company_id: int = None, session: Session = None):
+    def sync_news(company_id: UUID = None, session: Session = None):
         """
         Main method to sync news for companies.
         If company_id is provided, sync only that company.
