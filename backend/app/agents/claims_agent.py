@@ -202,9 +202,10 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
                     source_list_parts.append(f"[{citation_id}] - \"{doc_name}\"")
 
                 # Add content to context with specific page reference
-                page_info = f"Page {chunk.page_number}" if chunk.page_number else "N/A"
+                page_suffix = f", Page {chunk.page_number}" if chunk.page_number else ""
                 chunk_texts.append(
-                    f"[{citation_id}] Source: {doc_name} ({page_info})\n"
+                    f"CITATION_ID: [{citation_id}{page_suffix}]\n"
+                    f"Source: {doc_name}\n"
                     f"Content: {chunk.content}"
                 )
 
@@ -220,7 +221,7 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
         # Use v5 to invalidate previous caches AGAIN to be sure
         content_for_hash = full_context + "|" + ",".join(chunk_ids)
         content_hash = hash_content(content_for_hash)
-        cache_key = generate_cache_key("claims_v5", company_id, content_hash)
+        cache_key = generate_cache_key("claims_v12", company_id, content_hash)
         
         # Check cache first
         cached_result = get_cached_result(cache_key)

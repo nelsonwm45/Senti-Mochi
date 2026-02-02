@@ -158,7 +158,7 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
 
     # Generate cache key based on content hash
     content_hash = hash_content(context)
-    cache_key = generate_cache_key("news_v3", company_id, content_hash)
+    cache_key = generate_cache_key("news_v4", company_id, content_hash)
 
     # Check cache first
     cached_result = get_cached_result(cache_key)

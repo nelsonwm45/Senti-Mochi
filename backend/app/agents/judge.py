@@ -141,6 +141,7 @@ class JudgeDecisionOutput(BaseModel):
     """Complete Judge output structure."""
     decision: str = Field(..., description="Role-specific decision (BUY/SELL/HOLD, etc.)")
     confidence_score: int = Field(default=50, ge=0, le=100)
+    confidence_reasoning: str = Field(..., description="Explanation for the confidence score (e.g., 'Data is comprehensive', 'Missing Scope 3 data')")
     justification: str = Field(..., description="Why this decision, with citations")
     key_concerns: List[str] = Field(default_factory=list, description="Top concerns with citations")
     summary: str = Field(..., description="Executive summary")
@@ -405,7 +406,7 @@ def save_report_to_db(
                 summary=judge_output.summary,
                 
                 # Role-Based Insights
-                justification=judge_output.justification,
+                justification=f"> **Confidence Score: {judge_output.confidence_score}%**\n> \n> {judge_output.confidence_reasoning.replace(chr(10), chr(10) + '> ')}\n\n---\n\n> **Investment Rationale:**\n> \n> {judge_output.justification.replace(chr(10), chr(10) + '> ')}",
                 key_concerns=judge_output.key_concerns,
                 
                 bull_case=judge_output.bull_case,
@@ -679,6 +680,7 @@ def create_fallback_response(
     fallback_decision = JudgeDecisionOutput(
         decision=config['decision_options'][2] if len(config['decision_options']) > 2 else config['decision_options'][0],  # Usually HOLD/MONITOR
         confidence_score=25,
+        confidence_reasoning=f"System error prevented full analysis: {error_message}",
         justification=f"Analysis could not be completed due to: {error_message}. Manual review recommended.",
         key_concerns=["System error - manual review required"],
         summary=f"**Fallback Report**: The Judge Agent encountered an error. The system fallback mechanism activated. Error: {error_message}",
