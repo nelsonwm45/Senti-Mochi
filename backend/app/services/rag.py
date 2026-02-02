@@ -12,10 +12,15 @@ class RAGService:
     """Service for Retrieval-Augmented Generation using Groq (OpenAI-compatible)"""
     
     def __init__(self):
-        # Configure for Groq (for chat completions)
-        self.client = openai.OpenAI(
+        # Configure for Groq
+        self.groq_client = openai.OpenAI(
             api_key=os.getenv("GROQ_API_KEY"),
             base_url="https://api.groq.com/openai/v1"
+        )
+        # Configure for Cerebras
+        self.cerebras_client = openai.OpenAI(
+            api_key=os.getenv("CEREBRAS_API_KEY"),
+            base_url="https://api.cerebras.ai/v1"
         )
         
         # Load embedding model (same as ingestion)
@@ -392,11 +397,11 @@ class RAGService:
         query: str,
         context: str,
         chat_history: List[Dict] = None, # List of {"role": "...", "content": "..."}
-        model: str = "llama-3.3-70b-versatile",  # Groq's fast model
+        fallback_model: str = "llama-3.3-70b-versatile",  # Groq's fast model
         temperature: float = 0.7
     ) -> Dict:
         """
-        Generate response using Groq with context
+        Generate response using Cerebras (primary) or Groq (fallback) with context
         
         Returns:
             Dict with 'response' and extracted 'citations'
@@ -404,7 +409,6 @@ class RAGService:
         from datetime import datetime
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # ... (Prompt construction remains same) ...
         prompt = f"""
 Role: You are a Senior Market Intelligence Analyst. Your purpose is to provide end-to-end market analysis, helping banking teams transform unstructured market signals into defensible, consistent investment or strategic decisions.
 
@@ -442,7 +446,6 @@ Answer (cite sources as [Source 1], [Source 2], etc.):"""
         
         # Inject History
         if chat_history:
-            # We only strictly need the 'role' and 'content' fields
             for msg in chat_history:
                 if msg.get('role') in ['user', 'assistant'] and msg.get('content'):
                     messages.append({"role": msg['role'], "content": msg['content']})
@@ -450,14 +453,31 @@ Answer (cite sources as [Source 1], [Source 2], etc.):"""
         # Add current turn
         messages.append({"role": "user", "content": prompt})
 
-        response = self.client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=1024
-        )
-        
-        answer = response.choices[0].message.content
+        # Attempt Primary: Cerebras
+        try:
+            print(f"[RAG Service] Attempting Cerebras (llama-3.3-70b)...")
+            response = self.cerebras_client.chat.completions.create(
+                model="llama-3.3-70b",
+                messages=messages,
+                temperature=temperature,
+                max_tokens=1024
+            )
+            answer = response.choices[0].message.content
+            tokens_used = response.usage.total_tokens if hasattr(response, 'usage') else None
+            used_model = "llama-3.3-70b (Cerebras)"
+            print(f"[RAG Service] SUCCESS (Cerebras)")
+        except Exception as e:
+            print(f"[RAG Service] Cerebras failed: {e}. Fallback to Groq...")
+            response = self.groq_client.chat.completions.create(
+                model=fallback_model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=1024
+            )
+            answer = response.choices[0].message.content
+            tokens_used = response.usage.total_tokens if hasattr(response, 'usage') else None
+            used_model = f"{fallback_model} (Groq)"
+            print(f"[RAG Service] SUCCESS (Groq)")
         
         # Extract citations (simple regex to find [Source N])
         import re
@@ -466,8 +486,8 @@ Answer (cite sources as [Source 1], [Source 2], etc.):"""
         return {
             "response": answer,
             "citations": list(set(citations)),  # Unique citations
-            "model": model,
-            "tokens_used": response.usage.total_tokens if hasattr(response, 'usage') else None
+            "model": used_model,
+            "tokens_used": tokens_used
         }
 
     def reindex_citations(self, text: str, chunks: list[dict]) -> tuple[str, list[dict]]:
@@ -533,10 +553,10 @@ Answer (cite sources as [Source 1], [Source 2], etc.):"""
         query: str,
         context: str,
         chat_history: List[Dict] = None,
-        model: str = "llama-3.3-70b-versatile"
+        fallback_model: str = "llama-3.3-70b-versatile"
     ):
         """
-        Generate streaming response (for real-time UI updates)
+        Generate streaming response using Cerebras (primary) or Groq (fallback)
         
         Yields:
             Response chunks as they're generated
@@ -544,7 +564,6 @@ Answer (cite sources as [Source 1], [Source 2], etc.):"""
         from datetime import datetime
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # ... (Prompt construction remains same) ...
         prompt = f"""
 Role: You are a Senior Market Intelligence Analyst. Your purpose is to provide end-to-end market analysis, helping banking teams transform unstructured market signals into defensible, consistent investment or strategic decisions.
 
@@ -586,13 +605,28 @@ Answer (cite sources as [Source 1], [Source 2], etc.):"""
         
         messages.append({"role": "user", "content": prompt})
 
-        stream = self.client.chat.completions.create(
-            model=model,
-            messages=messages,
-            stream=True,
-            max_tokens=1024
-        )
-        
-        for chunk in stream:
-            if chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
+        # Attempt Primary: Cerebras
+        try:
+            print(f"[RAG Service] Attempting Streaming with Cerebras (llama-3.3-70b)...")
+            stream = self.cerebras_client.chat.completions.create(
+                model="llama-3.3-70b",
+                messages=messages,
+                stream=True,
+                max_tokens=1024
+            )
+            for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+            print(f"[RAG Service] SUCCESS (Cerebras Stream)")
+        except Exception as e:
+            print(f"[RAG Service] Cerebras Streaming failed: {e}. Fallback to Groq...")
+            stream = self.groq_client.chat.completions.create(
+                model=fallback_model,
+                messages=messages,
+                stream=True,
+                max_tokens=1024
+            )
+            for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+            print(f"[RAG Service] SUCCESS (Groq Stream)")

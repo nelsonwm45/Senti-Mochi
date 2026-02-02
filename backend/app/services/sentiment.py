@@ -47,49 +47,56 @@ class SentimentAnalyzer:
             return None
         
         try:
-            sentiment_data = self._call_groq(article, company)
+            sentiment_data = self._call_llm(article, company)
             return sentiment_data
         except Exception as e:
             print(f"Error analyzing sentiment for article {article.id}: {e}")
             return None
     
-    def _call_groq(self, article: NewsArticle, company: Company) -> Dict:
+    def _call_llm(self, article: NewsArticle, company: Company) -> Dict:
         """
-        Call Groq LLM to analyze sentiment.
+        Call LLM (Cerebras with Groq fallback) to analyze sentiment.
+        """
+        from app.agents.base import get_llm
+        from langchain_core.messages import SystemMessage, HumanMessage
         
-        Returns:
-            Dictionary with sentiment_label, sentiment_score, sentiment_confidence
-        """
         prompt = self._build_prompt(article, company)
-        
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a financial sentiment analysis expert. Analyze news articles relative to their company and determine sentiment as Positive, Neutral, or Negative. Respond in JSON format only."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
+        system_msg = "You are a financial sentiment analysis expert. Analyze news articles relative to their company and determine sentiment as Positive, Neutral, or Negative. Respond in JSON format only."
+
+        # Attempt Primary: Cerebras
+        try:
+            print(f"[Sentiment Service] Attempting Cerebras (llama-3.3-70b)...")
+            llm = get_llm("llama-3.3-70b")
+            response = llm.invoke([
+                SystemMessage(content=system_msg),
+                HumanMessage(content=prompt)
+            ])
+            print(f"[Sentiment Service] SUCCESS: Processed by Cerebras")
+            return self._parse_response(response.content)
+        except Exception as e:
+            print(f"[Sentiment Service] Cerebras failed: {e}. Fallback to Groq...")
+            try:
+                llm = get_llm("llama-3.3-70b-versatile") # Groq's 70b
+                response = llm.invoke([
+                    SystemMessage(content=system_msg),
+                    HumanMessage(content=prompt)
+                ])
+                print(f"[Sentiment Service] SUCCESS: Processed by Groq")
+                return self._parse_response(response.content)
+            except Exception as e2:
+                print(f"[Sentiment Service] Groq failed too: {e2}")
+                # Return neutral if everything fails
+                return {
+                    "sentiment_label": "Neutral",
+                    "sentiment_score": 0.0,
+                    "sentiment_confidence": 0.5
                 }
-            ],
-            temperature=0.3,  # Lower temperature for consistent analysis
-            max_tokens=256
-        )
-        
-        # Parse the response
-        content = response.choices[0].message.content.strip()
-        
-        # Try to extract JSON from the response
-        sentiment_data = self._parse_response(content)
-        
-        return sentiment_data
     
     def _build_prompt(self, article: NewsArticle, company: Company) -> str:
-        """Build the prompt for Groq"""
-        # Limit content to 100 characters to reduce token usage
-        content_preview = article.content[:100] + "..." if len(article.content) > 100 else article.content
+        """Build the prompt for the LLM"""
+        # Limit content but allow more than before (Cerebras can handle it)
+        # 5000 chars is plenty for a single article sentiment
+        content_preview = article.content[:5000] + "..." if len(article.content) > 5000 else article.content
         
         return f"""
 Analyze the following news article about {company.name} ({company.ticker}) in the {company.sector or 'finance'} sector.

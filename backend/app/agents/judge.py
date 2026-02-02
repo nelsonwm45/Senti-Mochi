@@ -572,35 +572,43 @@ Output valid JSON matching the schema below:
 {format_instructions}
 """
 
-    # Use lighter model to respect Rate Limits
-    llm = get_llm("llama-3.3-70b-versatile") 
-    # llm = get_llm("llama-3.1-8b-instant")
-    # structured_llm = llm.with_structured_output(JudgeDecisionOutput) # REMOVED
-
+    # === LLM CALL WITH FALLBACK ===
     try:
-        print(f"Judge Agent: invoking LLM with {LLM_TIMEOUT}s timeout...")
-        start_time = time.time()
+        # Attempt Primary: Cerebras
+        try:
+            llm = get_llm("llama-3.3-70b")
+            print(f"Judge Agent: Attempting Cerebras (llama-3.3-70b)...")
+            start_time = time.time()
+            
+            response_msg = invoke_with_timeout(
+                llm,
+                [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=prompt)
+                ],
+                LLM_TIMEOUT
+            )
+            print(f"Judge Agent: SUCCESS (Cerebras) in {time.time() - start_time:.2f}s")
+        except Exception as e:
+            print(f"Judge Agent: Cerebras failed: {e}. Fallback to Groq...")
+            llm = get_llm("llama-3.1-8b-instant")
+            start_time = time.time()
+            response_msg = invoke_with_timeout(
+                llm,
+                [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=prompt)
+                ],
+                LLM_TIMEOUT
+            )
+            print(f"Judge Agent: SUCCESS (Groq) in {time.time() - start_time:.2f}s")
 
-        # Invoke plain LLM (returns AIMessage)
-        response_msg = invoke_with_timeout(
-            llm,
-            [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=prompt)
-            ],
-            LLM_TIMEOUT
-        )
-
-        print(f"Judge Agent: LLM completed in {time.time() - start_time:.2f}s")
-        
-        # Parse output
+        # === PARSE OUTPUT (Common for both Cerebras & Groq success) ===
         response_text = response_msg.content
         response_data = clean_and_parse_json(response_text, parser)
         
         # Convert dict to Pydantic object if parser returns dict
         if isinstance(response_data, dict):
-            # Ensure complex fields are correctly instantiated if needed, 
-            # but Pydantic **unpacking handles nested models automatically
             response = JudgeDecisionOutput(**response_data)
         else:
             response = response_data

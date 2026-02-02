@@ -21,6 +21,24 @@ def get_llm(model_name: str = "llama-3.3-70b-versatile") -> BaseChatModel:
             max_output_tokens=8192,
         )
             
+    # Cerebras Support via OpenAI SDK
+    # Checks for direct model names or "cerebras" keyword if we add one
+    if model_name in ["gpt-oss-120b", "llama-3.3-70b", "llama3.1-8b", "qwen-2.5-72b-instruct", "qwen-2.5-32b-instruct", "zai-glm-4.7"] or "cerebras" in model_name:
+        from langchain_openai import ChatOpenAI
+        
+        api_key = os.getenv("CEREBRAS_API_KEY")
+        if not api_key:
+            raise ValueError("CEREBRAS_API_KEY not found in environment variables")
+            
+        print(f"DEBUG: Using Cerebras provider for model {model_name}")
+        return ChatOpenAI(
+            model=model_name,
+            api_key=api_key,
+            base_url="https://api.cerebras.ai/v1",
+            temperature=0,
+            max_retries=3,
+        )
+
     elif "llama" in model_name or "groq" in model_name:
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
@@ -40,7 +58,8 @@ def get_llm(model_name: str = "llama-3.3-70b-versatile") -> BaseChatModel:
         # Add a custom wrapper or just rely on LangChain's retry if sufficient, 
         # but here we can rely on ChatGroq's internal retry or just configure it.
         # However, for 429 specifically, increasing max_retries is key.
+        print(f"DEBUG: Using Groq provider for model {model_name}")
         return llm
-    
+
     else:
         raise ValueError(f"Unsupported model: {model_name}")

@@ -138,32 +138,62 @@ def financial_agent(state: AgentState) -> Dict[str, Any]:
         }
 
     # Truncate if too long
-    # Truncate if too long (Groq Free Tier Limit: 6000 TPM total)
-    # 4500 chars is roughly 1100 tokens (JSON is token-heavy)
-    if len(context) > 4500:
-        context = context[:4500] + "... [TRUNCATED]"
+    # Truncation Logic with Fallback Strategy
+    full_context = context
 
-    # Build prompt with citation instructions
-    prompt = get_financial_agent_prompt(
-        company_name=company_name,
-        persona=persona,
-        financial_context=context,
-        source_list=source_list
-    )
+    # Attempt Primary: Cerebras (llama-3.3-70b)
+    try:
+        print(f"[Financial Agent] Attempting to use Cerebras (llama-3.3-70b)...")
+        prompt = get_financial_agent_prompt(
+            company_name=company_name,
+            persona=persona,
+            financial_context=full_context,
+            source_list=source_list
+        )
 
-    llm = get_llm("llama-3.1-8b-instant")
-    response = llm.invoke([
-        SystemMessage(content=FINANCIAL_AGENT_SYSTEM),
-        HumanMessage(content=prompt)
-    ])
+        llm = get_llm("llama-3.3-70b")
+        response = llm.invoke([
+            SystemMessage(content=FINANCIAL_AGENT_SYSTEM),
+            HumanMessage(content=prompt)
+        ])
+        print(f"[Financial Agent] SUCCESS: Processed by Cerebras (llama-3.3-70b)")
+        
+        set_cached_result(cache_key, response.content)
 
-    # Cache the result
-    set_cached_result(cache_key, response.content)
+        return {
+            "financial_analysis": response.content,
+            "citation_registry": citation_registry
+        }
 
-    return {
-        "financial_analysis": response.content,
-        "citation_registry": citation_registry
-    }
+    except Exception as e:
+        print(f"[Financial Agent] Cerebras failed: {e}. Fallback to Groq (llama-3.1-8b-instant)...")
+        
+        # Apply truncation for Groq (4500 chars)
+        if len(full_context) > 4500:
+            truncated_context = full_context[:4500] + "... [TRUNCATED]"
+        else:
+            truncated_context = full_context
+
+        prompt = get_financial_agent_prompt(
+            company_name=company_name,
+            persona=persona,
+            financial_context=truncated_context,
+            source_list=source_list
+        )
+
+        llm = get_llm("llama-3.1-8b-instant")
+        response = llm.invoke([
+            SystemMessage(content=FINANCIAL_AGENT_SYSTEM),
+            HumanMessage(content=prompt)
+        ])
+        print(f"[Financial Agent] SUCCESS: Processed by Groq (llama-3.1-8b-instant)")
+
+        set_cached_result(cache_key, response.content)
+
+        return {
+            "financial_analysis": response.content,
+            "citation_registry": citation_registry
+        }
 
 
 def financial_critique(state: AgentState) -> Dict[str, Any]:
@@ -189,10 +219,24 @@ def financial_critique(state: AgentState) -> Dict[str, Any]:
         analysis_2_name="Claims Analysis"
     )
 
-    llm = get_llm("llama-3.1-8b-instant")
-    response = llm.invoke([
-        SystemMessage(content=f"You are a data-driven financial analyst serving a {persona_label}. PRESERVE all citation IDs."),
-        HumanMessage(content=prompt)
-    ])
+    system_msg = f"You are a sharp financial analyst serving a {persona_label}. PRESERVE all citation IDs."
 
-    return {"financial_critique": response.content}
+    # Attempt Primary: Cerebras
+    try:
+        print(f"[Financial Agent] Critique: Attempting Cerebras (llama-3.3-70b)...")
+        llm = get_llm("llama-3.3-70b")
+        response = llm.invoke([
+            SystemMessage(content=system_msg),
+            HumanMessage(content=prompt)
+        ])
+        print(f"[Financial Agent] Critique: SUCCESS (Cerebras)")
+        return {"financial_critique": response.content}
+    except Exception as e:
+        print(f"[Financial Agent] Critique: Cerebras failed: {e}. Fallback to Groq...")
+        llm = get_llm("llama-3.1-8b-instant")
+        response = llm.invoke([
+            SystemMessage(content=system_msg),
+            HumanMessage(content=prompt)
+        ])
+        print(f"[Financial Agent] Critique: SUCCESS (Groq)")
+        return {"financial_critique": response.content}

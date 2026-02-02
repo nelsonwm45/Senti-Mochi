@@ -479,10 +479,12 @@ const ProgressStep = ({ onComplete, companyId, topic, companyName }: { onComplet
 // Citation rendering component with tooltip
 const CitationLink = ({
     citationId,
-    registry
+    registry,
+    pageOverride
 }: {
     citationId: string;
     registry: Record<string, SourceMetadata>;
+    pageOverride?: number | null;
 }) => {
     const source = registry[citationId];
 
@@ -502,7 +504,8 @@ const CitationLink = ({
     const getTooltip = () => {
         let tooltip = source.title;
         if (source.date) tooltip += ` (${source.date})`;
-        if (source.page_number) tooltip += ` - Page ${source.page_number}`;
+        const page = pageOverride || source.page_number;
+        if (page) tooltip += ` - Page ${page}`;
         return tooltip;
     };
 
@@ -519,6 +522,12 @@ const CitationLink = ({
                 const separator = href?.includes('?') ? '&' : '?';
                 href = `${href}${separator}token=${token}`;
             }
+        }
+
+        // Add PDF page fragment if applicable
+        const page = pageOverride || source.page_number;
+        if (page && (source.type === 'Document' || href?.toLowerCase().includes('.pdf'))) {
+            href = `${href}#page=${page}`;
         }
 
         return (
@@ -544,6 +553,23 @@ const CitationLink = ({
     );
 };
 
+// Helper to extract page number from a list of tokens
+const extractPageNumber = (tokens: string[]): number | null => {
+    for (const token of tokens) {
+        // Look for "Page X"
+        const pageMatch = token.match(/Page\s*(\d+)/i);
+        if (pageMatch) {
+            return parseInt(pageMatch[1]);
+        }
+        // Look for just "X" if it's a short numeric string (max 3 digits)
+        const numericMatch = token.match(/^(\d+)$/);
+        if (numericMatch && numericMatch[1].length < 4) {
+            return parseInt(numericMatch[1]);
+        }
+    }
+    return null;
+};
+
 // Markdown components with citation support
 const createCitationComponents = (registry: Record<string, SourceMetadata>) => ({
     p: ({ children, ...props }: any) => {
@@ -562,6 +588,7 @@ const createCitationComponents = (registry: Record<string, SourceMetadata>) => (
                         // Check if it's a list of IDs or ID+text
                         // We primarily look for the FIRST token as the ID
                         const tokens = content.split(',').map(t => t.trim());
+                        const pageNumber = extractPageNumber(tokens);
 
                         // Render logic
                         return (
@@ -574,11 +601,18 @@ const createCitationComponents = (registry: Record<string, SourceMetadata>) => (
                                     if (idMatch) {
                                         const id = idMatch[1];
                                         const suffix = idMatch[2]; // e.g. " Page 18" if passed as one token, or separate if comma
+                                        
+                                        // If suffix contains page info, try and extract it
+                                        const localPage = extractPageNumber([suffix]) || pageNumber;
 
                                         return (
                                             <span key={i}>
                                                 {i > 0 && <span className="text-gray-500 font-bold">, </span>}
-                                                <CitationLink citationId={id} registry={registry} />
+                                                <CitationLink 
+                                                    citationId={id} 
+                                                    registry={registry} 
+                                                    pageOverride={id.startsWith('D') ? localPage : null} 
+                                                />
                                                 {suffix && <span className="text-gray-500 text-xs">{suffix}</span>}
                                             </span>
                                         );
@@ -619,6 +653,7 @@ const createCitationComponents = (registry: Record<string, SourceMetadata>) => (
                     if (part.startsWith('[') && part.endsWith(']')) {
                         const content = part.slice(1, -1);
                         const tokens = content.split(',').map(t => t.trim());
+                        const pageNumber = extractPageNumber(tokens);
 
                         return (
                             <span key={idx} className="whitespace-nowrap">
@@ -628,10 +663,17 @@ const createCitationComponents = (registry: Record<string, SourceMetadata>) => (
                                     if (idMatch) {
                                         const id = idMatch[1];
                                         const suffix = idMatch[2];
+                                        
+                                        const localPage = extractPageNumber([suffix]) || pageNumber;
+
                                         return (
                                             <span key={i}>
                                                 {i > 0 && <span className="text-gray-500 font-bold">, </span>}
-                                                <CitationLink citationId={id} registry={registry} />
+                                                <CitationLink 
+                                                    citationId={id} 
+                                                    registry={registry} 
+                                                    pageOverride={id.startsWith('D') ? localPage : null} 
+                                                />
                                                 {suffix && <span className="text-gray-500 text-xs">{suffix}</span>}
                                             </span>
                                         );
@@ -740,8 +782,13 @@ const SectionCard = ({
     // Extract sources from detailed_findings citations
     const extractSources = (): string[] => {
         const allText = [data.preview_summary, ...(data.detailed_findings || [])].join(' ');
-        const matches = allText.match(/\[[NFD]\d+\]/g) || [];
-        const uniqueIds = [...new Set(matches.map(m => m.replace(/[\[\]]/g, '')))];
+        // Extract all matches like [D1], [D1, Page 30], etc.
+        const matches = allText.match(/\[[NFD]\d+[^\]]*\]/g) || [];
+        // Extract just the ID part (e.g., "D1") from each match
+        const uniqueIds = [...new Set(matches.map(m => {
+            const idMatch = m.match(/[NFD]\d+/);
+            return idMatch ? idMatch[0] : null;
+        }).filter(Boolean) as string[])];
         return uniqueIds.map(id => {
             const source = registry[id];
             return source ? `[${id}] ${source.title}` : `[${id}] Unknown`;

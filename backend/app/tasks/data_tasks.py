@@ -17,7 +17,7 @@ def update_all_news_task():
         # Maybe limit to active watchlist companies? For now update all seeded ones.
         # But wait, seed_companies.py adds them. 
         # Let's iterate all companies.
-        news_service.sync_news(session)
+        news_service.sync_news(session=session)
     print("Automated news update completed.")
 
 @celery_app.task(name="update_all_financials_task")

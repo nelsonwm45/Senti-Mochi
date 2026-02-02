@@ -312,6 +312,7 @@ def generate_talking_points(
             SystemMessage(content=TALKING_POINTS_SYSTEM),
             HumanMessage(content=prompt)
         ])
+        print(f"[Talking Points] SUCCESS (Groq)")
         
         # Parse JSON response
         content = response.content
