@@ -200,19 +200,73 @@ class NewsFetcherService:
                     nid = item.get('nid')
                     title = item.get('title', '')
                     author = item.get('author', '')
-                    created = item.get('created')
                     
                     if not nid:
                         continue
                     
-                    # Convert created timestamp to ISO format
-                    if created:
+                    print(f"[EDGE_NEWS] Processing article: {title[:50]}")
+                    print(f"[EDGE_NEWS] Available fields: {list(item.keys())}")
+                    
+                    # Try multiple date fields (created, timestamp, date, published, etc.)
+                    published_at = None
+                    for date_field in ['created', 'updated', 'timestamp', 'date', 'published', 'publish_date', 'pubdate', 'changed']:
+                        date_value = item.get(date_field)
+                        if date_value:
+                            try:
+                                # Handle both milliseconds and seconds timestamps
+                                timestamp = float(date_value)
+                                # If timestamp is larger than year 2200 in seconds, it's in milliseconds
+                                if timestamp > 7258118400:
+                                    timestamp = timestamp / 1000
+                                
+                                published_at = datetime.fromtimestamp(timestamp).isoformat()
+                                print(f"[EDGE_NEWS] Found date in '{date_field}': {published_at}")
+                                break
+                            except:
+                                # Try as ISO string
+                                try:
+                                    published_at = datetime.fromisoformat(str(date_value).replace('Z', '+00:00')).isoformat()
+                                    print(f"[EDGE_NEWS] Parsed ISO date from '{date_field}': {published_at}")
+                                    break
+                                except:
+                                    continue
+                    
+                    # If no date found in JSON, try fetching from article page
+                    if not published_at:
+                        article_url = f"https://theedgemalaysia.com/node/{nid}"
                         try:
-                            published_at = datetime.fromtimestamp(created).isoformat()
-                        except:
-                            published_at = datetime.now().isoformat()
-                    else:
+                            print(f"[EDGE_NEWS] No date in JSON, fetching article page: {article_url}")
+                            article_response = requests.get(article_url, timeout=5)
+                            if article_response.ok:
+                                # Look for date in meta tags or article HTML
+                                date_patterns = [
+                                    r'<meta property="article:published_time" content="([^"]+)"',
+                                    r'<meta property="datePublished" content="([^"]+)"',
+                                    r'<time datetime="([^"]+)"',
+                                    r'"datePublished":"([^"]+)"',
+                                    r'"publishedDate":"([^"]+)"',
+                                    r'<span class="date[^>]*>([^<]+)</span>',
+                                    r'<span[^>]*class="[^"]*published[^"]*"[^>]*>([^<]+)</span>'
+                                ]
+                                
+                                for pattern in date_patterns:
+                                    match = re.search(pattern, article_response.text)
+                                    if match:
+                                        try:
+                                            date_str = match.group(1)
+                                            published_at = datetime.fromisoformat(date_str.replace('Z', '+00:00')).isoformat()
+                                            print(f"[EDGE_NEWS] Extracted date from HTML: {published_at}")
+                                            break
+                                        except Exception as parse_err:
+                                            print(f"[EDGE_NEWS] Could not parse date string '{date_str}': {parse_err}")
+                                            continue
+                        except Exception as e:
+                            print(f"[EDGE_NEWS] Error fetching article page for date: {e}")
+                    
+                    # Fallback to current time if still no date
+                    if not published_at:
                         published_at = datetime.now().isoformat()
+                        print(f"[EDGE_NEWS] Using current time as fallback")
                     
                     # Construct article URL
                     article_url = f"https://theedgemalaysia.com/node/{nid}"

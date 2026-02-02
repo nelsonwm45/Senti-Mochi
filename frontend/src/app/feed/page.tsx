@@ -62,9 +62,9 @@ function PlaceholderContent() {
   // Date formatting helper
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    
+
     // Show formatted date with day, month, and year
-    return date.toLocaleDateString('en-MY', { 
+    return date.toLocaleDateString('en-MY', {
       day: 'numeric',
       month: 'short',
       year: 'numeric'
