@@ -572,8 +572,9 @@ Output valid JSON matching the schema below:
 {format_instructions}
 """
 
-    # Use lighter model to respect Rate Limits
-    llm = get_llm("llama-3.3-70b-versatile") 
+    # Use Cerebras model (via generic mapping or explicit name)
+    # Using llama-3.3-70b which allows generous limits (30 req/min)
+    llm = get_llm("llama-3.3-70b") 
     # llm = get_llm("llama-3.1-8b-instant")
     # structured_llm = llm.with_structured_output(JudgeDecisionOutput) # REMOVED
 
