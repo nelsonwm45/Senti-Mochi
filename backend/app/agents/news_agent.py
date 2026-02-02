@@ -168,32 +168,66 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
             "citation_registry": citation_registry
         }
 
-    # Smart truncation (Groq Free Tier Limit: 6000 TPM total)
-    # Uses content_optimizer to preserve key information instead of blind truncation
-    if len(context) > 3500:
-        context = content_optimizer._smart_truncate(context, 3500)
+    # Truncation Logic with Fallback Strategy
+    # Cerebras supports 60k+ context, so we try that first WITHOUT truncation.
+    # If it fails, we fallback to Groq and apply the strict truncation (3500 chars).
+    
+    # context is the full context
+    full_context = context
+    
+    # Attempt Primary: Cerebras (llama-3.3-70b)
+    try:
+        print(f"[News Agent] Attempting to use Cerebras (llama-3.3-70b)...")
+        # Reuse full context
+        prompt = get_news_agent_prompt(
+            company_name=company_name,
+            persona=persona,
+            news_context=full_context,
+            source_list=source_list
+        )
+        
+        llm = get_llm("llama-3.3-70b")
+        response = llm.invoke([
+            SystemMessage(content=NEWS_AGENT_SYSTEM),
+            HumanMessage(content=prompt)
+        ])
+        print(f"[News Agent] SUCCESS: Processed by Cerebras (llama-3.3-70b)")
+        
+        # Cache the result
+        set_cached_result(cache_key, response.content)
 
-    # Build prompt with citation instructions
-    prompt = get_news_agent_prompt(
-        company_name=company_name,
-        persona=persona,
-        news_context=context,
-        source_list=source_list
-    )
+        return {
+            "news_analysis": response.content,
+            "citation_registry": citation_registry
+        }
 
-    llm = get_llm("llama-3.1-8b-instant")
-    response = llm.invoke([
-        SystemMessage(content=NEWS_AGENT_SYSTEM),
-        HumanMessage(content=prompt)
-    ])
+    except Exception as e:
+        print(f"[News Agent] Cerebras failed: {e}. Fallback to Groq (llama-3.1-8b-instant)...")
+        
+        # Apply truncation for Groq
+        truncated_context = content_optimizer._smart_truncate(full_context, 3500)
+        
+        prompt = get_news_agent_prompt(
+            company_name=company_name,
+            persona=persona,
+            news_context=truncated_context,
+            source_list=source_list
+        )
+        
+        llm = get_llm("llama-3.1-8b-instant")
+        response = llm.invoke([
+            SystemMessage(content=NEWS_AGENT_SYSTEM),
+            HumanMessage(content=prompt)
+        ])
+        print(f"[News Agent] SUCCESS: Processed by Groq (llama-3.1-8b-instant)")
+        
+        # Cache the result
+        set_cached_result(cache_key, response.content)
 
-    # Cache the result
-    set_cached_result(cache_key, response.content)
-
-    return {
-        "news_analysis": response.content,
-        "citation_registry": citation_registry
-    }
+        return {
+            "news_analysis": response.content,
+            "citation_registry": citation_registry
+        }
 
 
 def news_critique(state: AgentState) -> Dict[str, Any]:

@@ -213,16 +213,15 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
         context = "\n---\n".join(chunk_texts)
         source_list = "\n".join(source_list_parts)
 
-        # Truncate if too long (increased buffer)
-        if len(context) > 8000:
-            context = context[:8000] + "..."
+        # Truncation Logic with Fallback Strategy
+        full_context = context
 
-        # Generate cache key based on content hash
+        # Generate cache key based on content hash (Move this UP before try/except)
         # Use v5 to invalidate previous caches AGAIN to be sure
-        content_for_hash = context + "|" + ",".join(chunk_ids)
+        content_for_hash = full_context + "|" + ",".join(chunk_ids)
         content_hash = hash_content(content_for_hash)
         cache_key = generate_cache_key("claims_v5", company_id, content_hash)
-
+        
         # Check cache first
         cached_result = get_cached_result(cache_key)
         if cached_result:
@@ -232,28 +231,59 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
                 "citation_registry": citation_registry
             }
 
-        print("Claims Agent: Cache MISS. Calling LLM...")
-        # Build prompt with citation instructions
-        prompt = get_claims_agent_prompt(
-            company_name=company_name,
-            persona=persona,
-            claims_context=context,
-            source_list=source_list
-        )
+        # Attempt Primary: Cerebras (llama-3.3-70b)
+        try:
+            print(f"[Claims Agent] Attempting to use Cerebras (llama-3.3-70b)...")
+            prompt = get_claims_agent_prompt(
+                company_name=company_name,
+                persona=persona,
+                claims_context=full_context,
+                source_list=source_list
+            )
 
-        llm = get_llm("llama-3.1-8b-instant")
-        response = llm.invoke([
-            SystemMessage(content=CLAIMS_AGENT_SYSTEM),
-            HumanMessage(content=prompt)
-        ])
+            llm = get_llm("llama-3.3-70b")
+            response = llm.invoke([
+                SystemMessage(content=CLAIMS_AGENT_SYSTEM),
+                HumanMessage(content=prompt)
+            ])
+            print(f"[Claims Agent] SUCCESS: Processed by Cerebras (llama-3.3-70b)")
+            
+            set_cached_result(cache_key, response.content)
 
-        # Cache the result
-        set_cached_result(cache_key, response.content)
+            return {
+                "claims_analysis": response.content,
+                "citation_registry": citation_registry
+            }
 
-        return {
-            "claims_analysis": response.content,
-            "citation_registry": citation_registry
-        }
+        except Exception as e:
+            print(f"[Claims Agent] Cerebras failed: {e}. Fallback to Groq (llama-3.1-8b-instant)...")
+            
+            # Apply truncation for Groq (8000 chars)
+            if len(full_context) > 8000:
+                truncated_context = full_context[:8000] + "..."
+            else:
+                truncated_context = full_context
+
+            prompt = get_claims_agent_prompt(
+                company_name=company_name,
+                persona=persona,
+                claims_context=truncated_context,
+                source_list=source_list
+            )
+
+            llm = get_llm("llama-3.1-8b-instant")
+            response = llm.invoke([
+                SystemMessage(content=CLAIMS_AGENT_SYSTEM),
+                HumanMessage(content=prompt)
+            ])
+            print(f"[Claims Agent] SUCCESS: Processed by Groq (llama-3.1-8b-instant)")
+            
+            set_cached_result(cache_key, response.content)
+
+            return {
+                "claims_analysis": response.content,
+                "citation_registry": citation_registry
+            }
 
     except Exception as e:
         print(f"Error in Claims Agent: {e}")
