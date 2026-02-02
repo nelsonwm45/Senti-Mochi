@@ -59,6 +59,18 @@ function PlaceholderContent() {
   const router = useRouter();
   const { persona, isLoading: personaLoading } = usePersona();
 
+  // Date formatting helper
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    
+    // Show formatted date with day, month, and year
+    return date.toLocaleDateString('en-MY', { 
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
   // ... (keep interfaces if needed, or remove if imported)
 
   const [unifiedFeed, setUnifiedFeed] = useState<UnifiedFeedItem[]>([]);
@@ -674,7 +686,7 @@ function PlaceholderContent() {
                       </div>
                     </div>
                     <span className="text-sm text-foreground-muted flex items-center gap-1 ml-4 whitespace-nowrap">
-                      <Clock size={14} /> {item.date}
+                      <Clock size={14} /> {formatDate(item.date)}
                     </span>
                   </div>
 
