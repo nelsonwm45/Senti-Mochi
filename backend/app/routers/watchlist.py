@@ -75,6 +75,7 @@ def get_my_watchlist(
             "id": str(company.id),
             "name": company.name,
             "ticker": company.ticker,
+            "common_name": company.common_name,  # Include for news search
             "sector": company.sector,
             "sub_sector": company.sub_sector,
             "website_url": company.website_url
@@ -98,6 +99,7 @@ def get_watchlist(
             "id": str(company.id),
             "name": company.name,
             "ticker": company.ticker,
+            "common_name": company.common_name,  # Include for news search
             "sector": company.sector,
             "sub_sector": company.sub_sector,
             "website_url": company.website_url

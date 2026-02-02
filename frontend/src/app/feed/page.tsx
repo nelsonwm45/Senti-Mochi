@@ -33,6 +33,7 @@ interface WatchlistCompany {
   id: string;
   name: string;
   ticker: string;
+  common_name?: string;  // Layman's name for news search (e.g., "Maybank")
   sector?: string;
   sub_sector?: string;
   website_url?: string;
@@ -57,6 +58,18 @@ const WhatsAppIcon = ({ size = 24, className = "" }: { size?: number, className?
 function PlaceholderContent() {
   const router = useRouter();
   const { persona, isLoading: personaLoading } = usePersona();
+
+  // Date formatting helper
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+
+    // Show formatted date with day, month, and year
+    return date.toLocaleDateString('en-MY', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
 
   // ... (keep interfaces if needed, or remove if imported)
 
@@ -186,8 +199,10 @@ function PlaceholderContent() {
     for (const company of companies) {
       try {
         // Call backend search endpoint with company ID
+        // Use common_name (e.g., "Maybank") for better news matching, fallback to full name
+        const searchKeyword = company.common_name || company.name;
         const response = await apiClient.post(
-          `/api/v1/news/search?keyword=${encodeURIComponent(company.name)}&company_id=${company.id}`
+          `/api/v1/news/search?keyword=${encodeURIComponent(searchKeyword)}&company_id=${company.id}`
         );
 
         if (response.data?.articles) {
@@ -671,7 +686,7 @@ function PlaceholderContent() {
                       </div>
                     </div>
                     <span className="text-sm text-foreground-muted flex items-center gap-1 ml-4 whitespace-nowrap">
-                      <Clock size={14} /> {item.date}
+                      <Clock size={14} /> {formatDate(item.date)}
                     </span>
                   </div>
 

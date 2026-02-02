@@ -107,21 +107,29 @@ def trigger_analysis(
             if job_topic:
                 print(f"[WORKFLOW] Fetching news for topic: {job_topic}")
                 
-                # Build keyword based on topic
+                # Build search keyword based on topic
+                # Note: fetch_news_by_company will use company.common_name (e.g., "Maybank")
+                # and append topic suffix for more targeted searches
                 if job_topic.lower() == 'esg':
-                    search_keyword = f"{job_company_name} ESG"
+                    # Fetch by company with ESG topic suffix
+                    news_results = news_fetcher_service.fetch_news_by_keyword(
+                        f"{company.common_name or company.name} ESG",
+                        sources=['star', 'nst', 'edge']
+                    )
                 elif job_topic.lower() == 'financials':
-                    search_keyword = f"{job_company_name} Financial"
+                    # Fetch by company with financials topic suffix
+                    news_results = news_fetcher_service.fetch_news_by_keyword(
+                        f"{company.common_name or company.name} Financial",
+                        sources=['star', 'nst', 'edge']
+                    )
                 else:  # general
-                    search_keyword = job_company_name
+                    # Fetch by company using common_name for better matching
+                    news_results = news_fetcher_service.fetch_news_by_company(
+                        company,
+                        sources=['star', 'nst', 'edge']
+                    )
                 
-                print(f"[WORKFLOW] News search keyword: {search_keyword}")
-                
-                # Fetch news from all sources
-                news_results = news_fetcher_service.fetch_news_by_keyword(
-                    search_keyword, 
-                    sources=['star', 'nst', 'edge']
-                )
+                print(f"[WORKFLOW] Fetched news using keyword: {company.common_name or company.name}")
                 
                 print(f"[WORKFLOW] Fetched {news_results.get('total', 0)} articles from news sources")
                 
