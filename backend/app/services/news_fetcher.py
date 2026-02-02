@@ -8,6 +8,7 @@ from datetime import datetime
 from urllib.parse import quote
 import json
 import re
+from app.models import Company
 
 class NewsFetcherService:
     """Service to fetch news articles from various sources by keyword."""
@@ -236,6 +237,23 @@ class NewsFetcherService:
         except Exception as e:
             print(f"[EDGE_NEWS] Error fetching news: {e}")
             return articles
+    
+    @staticmethod
+    def fetch_news_by_company(company: Company, sources: Optional[List[str]] = None) -> dict:
+        """
+        Fetch news for a specific company using its common_name (layman's name).
+        
+        Args:
+            company: Company object with common_name and ticker
+            sources: List of sources to fetch from (default: ['star', 'nst', 'edge'])
+            
+        Returns:
+            Dictionary with articles grouped by source
+        """
+        # Use common_name if available (e.g., "Maybank"), fallback to ticker
+        search_keyword = company.common_name or company.name or company.ticker
+        print(f"[NEWS_FETCHER] Fetching news for {company.name} ({company.ticker}) using keyword: {search_keyword}")
+        return NewsFetcherService.fetch_news_by_keyword(search_keyword, sources)
     
     @staticmethod
     def fetch_news_by_keyword(keyword: str, sources: Optional[List[str]] = None) -> dict:

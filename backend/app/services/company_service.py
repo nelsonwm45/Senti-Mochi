@@ -4,6 +4,51 @@ from sqlmodel import Session, select, func
 from app.models import Company
 from app.database import engine
 
+# Common names mapping - ticker to layman's name for better news searching
+COMMON_NAMES = {
+    '1155.KL': 'Maybank',           # Malayan Banking Berhad
+    '1295.KL': 'Public Bank',       # Public Bank Bhd
+    '1023.KL': 'CIMB',              # CIMB Group Holdings Berhad
+    '1015.KL': 'AmBank',            # AMMB Holdings
+    '5819.KL': 'Hong Leong Bank',   # Hong Leong Bank Bhd
+    '1066.KL': 'RHB Bank',          # RHB Bank Bhd
+    '2488.KL': 'Alliance Bank',     # Alliance Bank Malaysia
+    '5185.KL': 'Affin Bank',        # Affin Bank Berhad
+    '5258.KL': 'Bank Islam',        # Bank Islam Malaysia Berhad
+    '5347.KL': 'Tenaga',            # Tenaga Nasional Berhad
+    '5183.KL': 'PetChem',           # Petronas Chemicals Group
+    '5225.KL': 'IHH',               # IHH Healthcare Berhad
+    '6947.KL': 'Celcom',            # Celcom Axiata
+    '8869.KL': 'Press Metal',       # Press Metal Aluminium
+    '1961.KL': 'IOI',               # IOI Corporation Berhad
+    '4197.KL': 'Sime Darby',        # Sime Darby Bhd
+    '6012.KL': 'Maxis',             # Maxis Berhad
+    '3182.KL': 'Genting',           # Genting Bhd
+    '4715.KL': 'Genting Malaysia',  # Genting Malaysia Berhad
+    '7277.KL': 'Dialog',            # Dialog Group Berhad
+    '5398.KL': 'Gamuda',            # Gamuda Berhad
+    '4707.KL': 'Nestle',            # Nestle Malaysia Berhad
+    '2445.KL': 'KL Kepong',         # Kuala Lumpur Kepong Berhad
+    '4065.KL': 'PPB',               # Perlis Plantations Berhad
+    '6033.KL': 'Petronas Gas',      # Petronas Gas Berhad
+    '5014.KL': 'Petronas Dagangan', # Petronas Dagangan Berhad
+    '4863.KL': 'TM',                # Telekom Malaysia Berhad
+    '7084.KL': 'QL Resources',      # QL Resources Berhad
+    '5296.KL': 'Mr DIY',            # Mr DIY Group Berhad
+    '4677.KL': 'YTL',               # YTL Corporation Berhad
+    '6742.KL': 'YTL Power',         # YTL Power International Berhad
+    '0156.KL': 'Top Glove',         # Top Glove Corporation Bhd
+    '7113.KL': 'Hartalega',         # Hartalega Holdings Berhad
+    '5284.KL': 'Kossan',            # Kossan Rubber Industries Berhad
+    '0034.KL': 'Supermax',          # Supermax Corporation Berhad
+    '5168.KL': 'Axiata',            # Axiata Group Berhad
+    '5052.KL': 'BAT',               # British American Tobacco
+    '3034.KL': 'F&N',               # Fraser & Neave Holdings Berhad
+    '5602.KL': 'Padini',            # Padini Holdings Berhad
+    '5248.KL': 'Bermaz',            # Bermaz Auto Berhad
+    '1818.KL': 'Bursa',             # Bursa Malaysia
+}
+
 # Expanded list of major Bursa Malaysia companies (~70 companies)
 # Includes FBMKLCI constituents, FBM100, and other major stocks
 INITIAL_TICKERS = [
@@ -94,7 +139,7 @@ class CompanyService:
     def seed_companies(session: Session = None):
         """
         Seeds the database with initial companies if they don't exist.
-        Fetches details from yfinance.
+        Fetches details from yfinance and adds common names for news searching.
         """
         # If no session provided, create one
         local_session = False
@@ -111,7 +156,11 @@ class CompanyService:
                     existing = session.exec(stmt).first()
                     
                     if existing:
-                        # Optional: Update existing if needed? For now, skip to save time/requests
+                        # Update common_name if not already set
+                        if not existing.common_name and ticker in COMMON_NAMES:
+                            existing.common_name = COMMON_NAMES[ticker]
+                            session.add(existing)
+                            session.commit()
                         continue
                     
                     print(f"Fetching {ticker}...", end=" ", flush=True)
@@ -122,18 +171,19 @@ class CompanyService:
                     sector = info.get('sector', 'Unknown')
                     sub_sector = info.get('industry', 'Unknown')
                     website = info.get('website')
+                    common_name = COMMON_NAMES.get(ticker)
                     
                     company = Company(
                         name=name,
                         ticker=ticker,
+                        common_name=common_name,
                         sector=sector,
                         sub_sector=sub_sector,
                         website_url=website
                     )
                     
                     session.add(company)
-                    session.commit() # Commit each to avoid rollback on single failure? Or bulk?
-                    # Let's commit each for robustness in this script
+                    session.commit()
                     print(f"Done! ({name})")
                     
                 except Exception as e:
@@ -152,6 +202,7 @@ class CompanyService:
     def find_companies_by_text(query: str, session: Session) -> list[Company]:
         """
         Find all companies mentioned in the text query.
+        Searches by common_name (layman's name), ticker, and full name.
         Returns a list of unique companies found.
         """
         query_lower = query.lower()
@@ -167,35 +218,43 @@ class CompanyService:
             score = 0
             c_name = company.name.lower()
             c_ticker = company.ticker.lower()
+            c_common = company.common_name.lower() if company.common_name else ""
             
-            # 1. Exact Ticker
+            # 1. Exact Ticker (highest priority)
             if c_ticker in query_lower:
                 score = 100
             
-            # 2. Ticker part
+            # 2. Exact Common Name (e.g., "maybank", "cimb")
+            elif c_common and c_common in query_lower:
+                score = 95
+                
+            # 3. Ticker part (e.g., "1155" from "1155.KL")
             elif c_ticker.split('.')[0] in query_lower:
                 score = 90
             
-            # 3. Exact Name
+            # 4. Exact Full Name
             elif c_name in query_lower:
                 score = 100
                 
-            # 4. First word (e.g. "CIMB", "Maybank")
+            # 5. First word of common name
+            elif c_common and len(c_common.split()) > 0:
+                first_word = c_common.split()[0]
+                if len(first_word) > 2 and first_word in query_lower:
+                    score = 85
+                    
+            # 6. First word of full name (fallback)
             else:
                 first_word = c_name.split(' ')[0]
-                # Avoid matching generic words like "Bank", "Public" (unless "Public Bank" handled above), "Group"
                 ignored_words = {"bank", "group", "holdings", "berhad", "malaysia", "public"} 
                 
                 if len(first_word) > 2 and first_word not in ignored_words and first_word in query_lower:
-                     score = 80
+                    score = 80
             
-            # 5. Aliases
+            # 7. Specific aliases (legacy support)
             if "maybank" in query_lower and "malayan banking" in c_name:
-                score = 90
-            if "public bank" in query_lower and "public bank" in c_name:
-                score = 90
+                score = max(score, 90)
             if "ambank" in query_lower and ("ammb" in c_name or "1015" in c_ticker):
-                score = 90
+                score = max(score, 90)
                 
             if score >= 50:
                 found_companies.append(company)

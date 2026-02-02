@@ -76,6 +76,7 @@ class Company(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str
     ticker: str = Field(unique=True, index=True)
+    common_name: Optional[str] = None  # Layman's name for news search (e.g., "Maybank" for "Malayan Banking Berhad")
     sector: Optional[str] = None
     sub_sector: Optional[str] = None
     website_url: Optional[str] = None

@@ -33,6 +33,7 @@ interface WatchlistCompany {
   id: string;
   name: string;
   ticker: string;
+  common_name?: string;  // Layman's name for news search (e.g., "Maybank")
   sector?: string;
   sub_sector?: string;
   website_url?: string;
@@ -186,8 +187,10 @@ function PlaceholderContent() {
     for (const company of companies) {
       try {
         // Call backend search endpoint with company ID
+        // Use common_name (e.g., "Maybank") for better news matching, fallback to full name
+        const searchKeyword = company.common_name || company.name;
         const response = await apiClient.post(
-          `/api/v1/news/search?keyword=${encodeURIComponent(company.name)}&company_id=${company.id}`
+          `/api/v1/news/search?keyword=${encodeURIComponent(searchKeyword)}&company_id=${company.id}`
         );
 
         if (response.data?.articles) {
