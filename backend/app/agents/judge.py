@@ -135,6 +135,7 @@ class JudgeDebateOutput(BaseModel):
     # New optional fields for enhanced verdict display
     verdict_reasoning: str = Field(default="", description="2-3 sentence explanation of why this verdict was reached")
     verdict_key_factors: List[str] = Field(default_factory=list, description="3-5 key factors with citations that influenced the verdict")
+    transcript: str = Field(default="", description="Full markdown transcript of the debate")
 
 
 class JudgeDecisionOutput(BaseModel):
@@ -344,7 +345,8 @@ def build_final_output(
         ),
         judge_verdict=judge_output.debate.verdict,
         verdict_reasoning=judge_output.debate.verdict_reasoning,
-        verdict_key_factors=judge_output.debate.verdict_key_factors
+        verdict_key_factors=judge_output.debate.verdict_key_factors,
+        transcript=judge_output.debate.transcript
     )
 
     # Build Role-Based Insight
@@ -532,15 +534,31 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
         max_total_tokens=2800  # Increased to ~11k chars to capture more ESG detail
     )
 
+    # Extract debate arguments
+    gov_args = state.get('government_arguments', []) or []
+    opp_args = state.get('opposition_arguments', []) or []
+    
+    # Financial/Gov defense is usually the 2nd item if present
+    gov_defense = "No defense provided."
+    if len(gov_args) > 1:
+        gov_defense = gov_args[1]
+        
+    # News/Opp defense is usually the 2nd item if present
+    opp_defense = "No defense provided."
+    if len(opp_args) > 1:
+        opp_defense = opp_args[1]
+
     prompt = get_judge_prompt(
         company_name=company_name,
         persona=persona,
         news_analysis=news_an,
         financial_analysis=fin_an,
         claims_analysis=claims_an,
-        news_critique=state.get('news_critique', 'No critique')[:500],
-        financial_critique=state.get('financial_critique', 'No critique')[:500],
-        claims_critique=state.get('claims_critique', 'No critique')[:500]
+        news_critique=state.get('news_critique', 'No critique')[:800],
+        financial_critique=state.get('financial_critique', 'No critique')[:800],
+        claims_critique=state.get('claims_critique', 'No critique')[:800],
+        government_defense=gov_defense[:800],
+        opposition_defense=opp_defense[:800]
     )
 
     # Setup Parser

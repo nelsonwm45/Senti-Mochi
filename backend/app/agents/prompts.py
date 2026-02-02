@@ -158,6 +158,54 @@ OUTPUT (max 100 words, bullets only):
 Cite ALL sources."""
 
 
+FINANCIAL_DEFENSE_TEMPLATE = """GOVERNMENT REBUTTAL for {persona_label}
+
+Stance: {government_stance}
+
+OPPOSITION CRITIQUE:
+{opposition_critique}
+
+MY ORIGINAL DATA:
+{my_analysis}
+
+TASK:
+Defend your position against the Opposition's critique.
+You MUST use your financial data [F#] to prove why the critique is wrong or exaggerated.
+
+RULES:
+1. CITATION REQUIRED: Every defense point MUST have an [F#] citation.
+2. If you cannot defend a point with data, concede it.
+3. Be professional but firm.
+
+OUTPUT (max 100 words, bullets only):
+• [Rebuttal point with hard data] [F#]
+• [Correction of Opposition's misunderstanding] [F#]
+"""
+
+NEWS_DEFENSE_TEMPLATE = """OPPOSITION REBUTTAL for {persona_label}
+
+Stance: {opposition_stance}
+
+GOVERNMENT CRITIQUE:
+{government_critique}
+
+MY ORIGINAL DATA:
+{my_analysis}
+
+TASK:
+Defend your position against the Government's critique.
+You MUST use your news sources [N#] to prove why the financial optimism is misplaced.
+
+RULES:
+1. CITATION REQUIRED: Every defense point MUST have an [N#] citation.
+2. If the financials are truly undeniable, concede.
+3. Highlight risks that numbers [F#] cannot capture.
+
+OUTPUT (max 100 words, bullets only):
+• [Rebuttal point with news evidence] [N#]
+• [Why financials are lagging indicators] [N#]
+"""
+
 # =============================================================================
 # CLAIMS/RAG AGENT PROMPTS
 # =============================================================================
@@ -291,14 +339,20 @@ Review the following analyses for {company_name}:
 
 --- DEBATE / CROSS-EXAMINATION PHASE ---
 
-4. NEWS CRITIQUE:
+4. NEWS CRITIQUE (Opposition Argument):
 {news_critique}
 
-5. FINANCIAL CRITIQUE:
+5. FINANCIAL CRITIQUE (Government Argument):
 {financial_critique}
 
-6. CLAIMS CRITIQUE:
+6. CLAIMS CRITIQUE (Objective View):
 {claims_critique}
+
+7. GOVERNMENT DEFENSE (Pro-Company Rebuttal):
+{government_defense}
+
+8. OPPOSITION DEFENSE (Skeptic Rebuttal):
+{opposition_defense}
 
 -------------------------------------------
 
@@ -328,10 +382,25 @@ SYNTHESIS INSTRUCTIONS:
    - confidence_score: 0-100 based on data availability
    - highlights: 3-5 key metrics (plain text)
 
-5. DEBATE REPORT (ESG-FOCUSED):
-   - Government (Pro-ESG): Use [D#] document citations to argue the company has STRONG ESG practices, good governance, environmental responsibility, and social impact
-   - Opposition (ESG-Skeptic): Use [D#] and [N#] citations to argue ESG WEAKNESSES, greenwashing risks, governance gaps, environmental liabilities, or social controversies
-   - verdict: Your ESG assessment verdict (e.g., "Strong ESG", "Moderate ESG", "Weak ESG", or "Insufficient ESG Data")
+5. DEBATE REPORT (JSON Field: `debate`):
+   - You MUST populate the `debate` object in the JSON output.
+   - `transcript`: Generate a full Markdown transcript of the debate (Government Opening -> Opposition Critique -> Government Defense -> Opposition Rebuttal).
+   - `government_summary`: Summarize the PRO arguments in 1 sentence.
+   - `government_arguments`: List of 2-3 key bullish arguments from the debate.
+   - `opposition_summary`: Summarize the CON critiques in 1 sentence.
+   - `opposition_arguments`: List of 2-3 key bearish arguments from the debate.
+   - `verdict`: Your final verdict on the debate itself.
+   - `verdict_key_factors`: 3-5 key factors specific to the debate outcome.
+   - Format for Transcript:
+     **Government (Pro)**: [Opening Argument] [F#]
+     **Opposition (Con)**: [Critique] [N#]
+     **Claims (Objective)**: [Fact Check/Correction] [D#]
+     **Government (Defense)**: [Rebuttal] [F#]
+     **Opposition (Rebuttal)**: [Final Word] [N#]
+   - STRICTLY PRESERVE all citations.
+
+6. VERDICT (JSON Field: `verdict`, `verdict_reasoning`):
+   - verdict: Your ESG assessment verdict
    - verdict_reasoning: 2-3 sentences explaining your ESG verdict, referencing document [D#] and news [N#] evidence
    - verdict_key_factors: 3-5 key ESG factors with citations [D#], [N#]
 
@@ -341,6 +410,7 @@ Do NOT write conclusions without citing the source evidence with full citation d
 {role_specific_instructions}
 
 Generate your structured analysis:"""
+
 
 
 # =============================================================================
@@ -462,7 +532,9 @@ def get_judge_prompt(
     claims_analysis: str,
     news_critique: str,
     financial_critique: str,
-    claims_critique: str
+    claims_critique: str,
+    government_defense: str,
+    opposition_defense: str
 ) -> str:
     """Generate the Judge Agent prompt with role-specific instructions."""
     config = get_persona_config(persona)
@@ -484,6 +556,8 @@ def get_judge_prompt(
         news_critique=news_critique,
         financial_critique=financial_critique,
         claims_critique=claims_critique,
+        government_defense=government_defense,
+        opposition_defense=opposition_defense,
         role_specific_instructions=role_specific_instructions
     )
 
@@ -535,6 +609,39 @@ def get_critique_prompt(
         raise ValueError(f"Unknown agent type: {agent_type}")
 
 
+
+def get_defense_prompt(
+    agent_type: str,
+    persona: str,
+    my_analysis: str,
+    opponent_critique: str
+) -> str:
+    """Generate defense prompt for any agent type."""
+    config = get_persona_config(persona)
+    persona_label = persona.replace('_', ' ').title()
+
+    if agent_type == "news":
+        template = NEWS_DEFENSE_TEMPLATE
+        return template.format(
+            persona_label=persona_label,
+            government_stance=config['government_stance'],
+            opposition_stance=config['opposition_stance'],
+            my_analysis=my_analysis,
+            government_critique=opponent_critique
+        )
+    elif agent_type == "financial":
+        template = FINANCIAL_DEFENSE_TEMPLATE
+        return template.format(
+            persona_label=persona_label,
+            government_stance=config['government_stance'],
+            opposition_stance=config['opposition_stance'],
+            my_analysis=my_analysis,
+            opposition_critique=opponent_critique
+        )
+    else:
+        raise ValueError(f"Unknown agent type for defense: {agent_type}")
+
+
 # =============================================================================
 # TALKING POINTS AGENT PROMPTS
 # =============================================================================
@@ -556,6 +663,7 @@ If insufficient info is available for a section, leave it empty (return null or 
 """
 
 TALKING_POINTS_TEMPLATE = """You are preparing talking points for a Relationship Manager meeting with the client {company_name}.
+
 
 ANALYSIS CONTEXT:
 Rating: {rating}

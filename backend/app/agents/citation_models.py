@@ -256,6 +256,10 @@ class DebateReport(BaseModel):
         default_factory=list,
         description="3-5 key factors with citations [N#], [F#], [D#] that influenced the verdict"
     )
+    transcript: Optional[str] = Field(
+        None,
+        description="Full markdown transcript of the debate (Government vs Opposition)"
+    )
 
 
 # =============================================================================

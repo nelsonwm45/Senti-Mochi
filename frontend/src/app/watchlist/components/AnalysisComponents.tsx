@@ -964,6 +964,130 @@ const RoleBasedDecisionCard = ({ report, registry }: { report: AnalysisReport; r
 // DEBATE REPORT SECTION
 // =============================================================================
 
+// --- Debate Chat Components ---
+
+interface DebateMessage {
+    id: string;
+    speaker: string;
+    text: string;
+    variant: 'pro' | 'con' | 'objective' | 'neutral';
+}
+
+const parseDebateTranscript = (transcript: string): DebateMessage[] => {
+    const lines = transcript.split('\n');
+    const messages: DebateMessage[] = [];
+    let currentMessage: DebateMessage | null = null;
+    
+    // Helper to strip markdown bolding from speaker name if regex includes it
+    const cleanSpeaker = (name: string) => name.replace(/\*\*/g, '').trim();
+
+    const getVariant = (speaker: string): 'pro' | 'con' | 'neutral' => {
+        const lower = speaker.toLowerCase();
+        if (lower.includes('government') || lower.includes('pro') || lower.includes('defense') || lower.includes('proposition')) return 'pro';
+        if (lower.includes('opposition') || lower.includes('con') || lower.includes('rebuttal') || lower.includes('skeptic')) return 'con';
+        return 'neutral';
+    };
+
+    lines.forEach((line, index) => {
+        // Regex to match "**Speaker**: Message" or "**Speaker (Role)**: Message"
+        // Captures content inside first bold, then the rest
+        // Note: Some LLM outputs might be "**Speaker**: **Title** content", so we need to be careful.
+        // Simplified regex: Start with **, capture until **, then colon, then rest.
+        const match = line.match(/^\*\*(.*?)\*\*:\s*(.*)/);
+        
+        if (match) {
+            // If we find a new speaker line, push the previous message
+            if (currentMessage) {
+                messages.push(currentMessage);
+            }
+            
+            const rawSpeaker = match[1]; // e.g., "Government (Pro)"
+            const messageBody = match[2]; // e.g., "Argument details..."
+            
+            // Sometimes the message body itself starts with bold, that's fine, it's markdown.
+            currentMessage = {
+                id: `msg-${index}`,
+                speaker: cleanSpeaker(rawSpeaker),
+                text: messageBody,
+                variant: getVariant(rawSpeaker)
+            };
+        } else if (currentMessage) {
+            // Continue previous message
+            currentMessage.text += '\n' + line;
+        }
+    });
+
+    if (currentMessage) {
+        messages.push(currentMessage);
+    }
+
+    return messages;
+};
+
+const DebateTranscriptChat = ({ transcript, registry }: { transcript: string; registry: Record<string, SourceMetadata> }) => {
+    const messages = parseDebateTranscript(transcript);
+    const citationComponents = createCitationComponents(registry);
+
+    const getAgentIdentity = (variant: 'pro' | 'con' | 'objective' | 'neutral'): string => {
+        switch (variant) {
+            case 'pro': return "Financial Analyst";
+            case 'con': return "News Scout";
+            case 'objective': return "Claims Auditor";
+            case 'neutral': return "Chief Investment Officer";
+        }
+    };
+
+    return (
+        <div className="flex flex-col gap-4 max-h-[600px] overflow-y-auto custom-scrollbar bg-black/20 p-4 rounded-xl border border-white/5">
+            {messages.length === 0 ? (
+                <div className="text-gray-400 italic text-sm text-center py-4">
+                    Transcript format not recognized or empty. 
+                    <br/><span className="text-xs opacity-50">(Raw view unavailable)</span>
+                </div>
+            ) : (
+                messages.map((msg) => (
+                    <div key={msg.id} className={cn(
+                        "flex flex-col max-w-[90%]",
+                        msg.variant === 'pro' ? "self-start items-start mr-auto" : 
+                        msg.variant === 'con' ? "self-end items-end ml-auto" : 
+                        msg.variant === 'objective' ? "self-center items-center mx-auto" :
+                        "self-center items-center text-center mx-auto max-w-[100%]"
+                    )}>
+                        <div className={cn(
+                            "text-xs font-bold mb-1 px-2 flex items-center gap-1.5",
+                            msg.variant === 'pro' ? "text-emerald-400" :
+                            msg.variant === 'con' ? "text-red-400 justify-end" :
+                            msg.variant === 'objective' ? "text-blue-400 justify-center" :
+                            "text-purple-400 justify-center"
+                        )}>
+                            {msg.variant === 'pro' && <TrendingUp size={10} />}
+                            {msg.variant === 'con' && <TrendingDown size={10} />}
+                            {msg.variant === 'objective' && <FileText size={10} />}
+                            {msg.speaker}
+                            <span className="opacity-50 font-normal">| {getAgentIdentity(msg.variant)}</span>
+                        </div>
+                        
+                        <div className={cn(
+                            "rounded-2xl p-3 text-sm border shadow-sm backdrop-blur-sm",
+                            msg.variant === 'pro' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-100 rounded-tl-sm ring-1 ring-emerald-500/10" :
+                            msg.variant === 'con' ? "bg-red-500/10 border-red-500/20 text-red-100 rounded-tr-sm ring-1 ring-red-500/10" :
+                            msg.variant === 'objective' ? "bg-blue-500/10 border-blue-500/20 text-blue-100 ring-1 ring-blue-500/10" :
+                            "bg-purple-500/10 border-purple-500/20 text-purple-100 ring-1 ring-purple-500/10"
+                        )}>
+                            <div className="prose prose-invert prose-sm max-w-none leading-relaxed">
+                                <ReactMarkdown components={citationComponents}>
+                                    {msg.text}
+                                </ReactMarkdown>
+                            </div>
+                        </div>
+                    </div>
+                ))
+            )}
+        </div>
+    );
+};
+
+
 const DebateReportSection = ({ report, registry }: { report: AnalysisReport; registry: Record<string, SourceMetadata> }) => {
     const debateReport = getDebateReport(report);
     const citationComponents = createCitationComponents(registry);
@@ -1117,6 +1241,22 @@ const DebateReportSection = ({ report, registry }: { report: AnalysisReport; reg
                     </div>
                 )}
             </GlassCard>
+            
+            {/* Debate Transcript */}
+            {debateReport.transcript && (
+                <GlassCard className="border-l-2 border-l-gray-500/50">
+                    <div className="flex items-center gap-2 mb-4">
+                        <div className="w-8 h-8 rounded-lg bg-gray-500/20 flex items-center justify-center">
+                            <MessageSquare size={16} className="text-gray-400" />
+                        </div>
+                        <h3 className="font-semibold text-white">Full Debate Transcript</h3>
+                    </div>
+            {/* Debate Transcript */}
+            {debateReport.transcript && (
+                <DebateTranscriptChat transcript={debateReport.transcript} registry={registry} />
+            )}
+                </GlassCard>
+            )}
         </div>
     );
 };
@@ -1626,7 +1766,7 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
                             companyId={companyId}
                             companyName={companyName}
                             companyTicker={companyTicker}
-                            topic={topic}
+                            topic={topic || undefined}
                             onNext={() => setStep('progress')}
                             onBack={() => setStep('topic')}
                             onCancel={onClose}
@@ -1643,7 +1783,7 @@ export function AnalysisWizardModal({ isOpen, onClose, onComplete, companyName, 
                     >
                         <ProgressStep
                             companyId={companyId}
-                            topic={topic}
+                            topic={topic || undefined}
                             companyName={companyName}
                             onComplete={() => {
                                 onClose();
