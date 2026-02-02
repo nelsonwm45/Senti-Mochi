@@ -67,9 +67,9 @@ def clean_and_parse_json(text: str, parser: JsonOutputParser) -> "JudgeDecisionO
     text = re.sub(r'```json\s*', '', text)
     text = re.sub(r'```\s*$', '', text)
     
-    # 2. Fix Double Brackets [[D1]] -> [D1]
-    # This happens often with Llama 3 models
-    text = re.sub(r'\[\[([NFD]\d+)\]\]', r'[\1]', text)
+    # 2. Fix Double Brackets [[D1]] -> [D1] or [[D1], Page 123] -> [D1], Page 123
+    # This handles LLM quirks where it wraps citations in extra brackets
+    text = re.sub(r'\[{2,}([NFD]\d+.*?\]*)\s*\]{2,}', r'[\1]', text)
     
     # 3. Parse
     try:
@@ -550,9 +550,10 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
 
 CRITICAL RULES:
 1. PRESERVE all citation IDs from sub-agents: [N#], [F#], [D#]
-2. NEVER strip or remove citation markers from your output
-3. USE ONLY PROVIDED SPECIFIC IDs (e.g., [N1], [D5]). DO NOT use generic placeholders like [N#], [D#], [F#]. If no specific ID is available, do not fake one.
-4. CITATION FORMAT: Use SINGLE brackets like [D1], NOT double brackets like [[D1]].
+2. PRESERVE PAGE NUMBERS: If a citation includes a page number (e.g., [D1], Page 123), you MUST include it exactly.
+3. NEVER strip or remove citation markers or their associated page numbers from your output.
+4. USE ONLY PROVIDED SPECIFIC IDs (e.g., [N1], [D5]). DO NOT use generic placeholders like [N#], [D#], [F#]. If no specific ID is available, do not fake one.
+5. CITATION FORMAT: Use SINGLE brackets like [D1] or [D1], Page 123. DO NOT use double brackets like [[D1]].
 5. Every claim must reference original source citations
 6. Generate structured JSON output following the exact schema.
 7. KEEP IT CONCISE: Avoid excessively long prose. Summaries should be <200 words.

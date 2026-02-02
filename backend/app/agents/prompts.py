@@ -331,8 +331,8 @@ SYNTHESIS INSTRUCTIONS:
    - verdict_reasoning: 2-3 sentences explaining your ESG verdict, referencing document [D#] and news [N#] evidence
    - verdict_key_factors: 3-5 key ESG factors with citations [D#], [N#]
 
-CRITICAL: You MUST preserve ALL [N#], [F#], [D#] citations from the sub-agents.
-Do NOT write conclusions without citing the source evidence.
+CRITICAL: You MUST preserve ALL [N#], [F#], [D#] citations from the sub-agents, including any associated page numbers (e.g., [D1], Page 123).
+Do NOT write conclusions without citing the source evidence with full citation details.
 
 {role_specific_instructions}
 
