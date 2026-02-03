@@ -981,19 +981,18 @@ const parseDebateTranscript = (transcript: string): DebateMessage[] => {
     // Helper to strip markdown bolding from speaker name if regex includes it
     const cleanSpeaker = (name: string) => name.replace(/\*\*/g, '').trim();
 
-    const getVariant = (speaker: string): 'pro' | 'con' | 'neutral' => {
+    const getVariant = (speaker: string): 'pro' | 'con' | 'objective' | 'neutral' => {
         const lower = speaker.toLowerCase();
         if (lower.includes('government') || lower.includes('pro') || lower.includes('defense') || lower.includes('proposition')) return 'pro';
         if (lower.includes('opposition') || lower.includes('con') || lower.includes('rebuttal') || lower.includes('skeptic')) return 'con';
+        if (lower.includes('claims') || lower.includes('auditor') || lower.includes('objective') || lower.includes('fact')) return 'objective';
         return 'neutral';
     };
 
     lines.forEach((line, index) => {
-        // Regex to match "**Speaker**: Message" or "**Speaker (Role)**: Message"
-        // Captures content inside first bold, then the rest
-        // Note: Some LLM outputs might be "**Speaker**: **Title** content", so we need to be careful.
-        // Simplified regex: Start with **, capture until **, then colon, then rest.
-        const match = line.match(/^\*\*(.*?)\*\*:\s*(.*)/);
+        // Regex to match "**Speaker**: Message", "**Speaker (Role)**: Message", or just "Speaker: Message"
+        // Captures speaker (stripping potential surrounding **) and content
+        const match = line.match(/^\s*(?:\*\*)?([^\*:]+?)(?:\*\*)?:\s*(.+)$/);
         
         if (match) {
             // If we find a new speaker line, push the previous message
