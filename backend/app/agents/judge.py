@@ -334,6 +334,10 @@ def build_final_output(
     )
 
     # Build Debate Report
+    # Extract debate transcript from state (bypass LLM copying which often fails)
+    debate_transcript_list = state.get('debate_transcript', []) or []
+    actual_transcript = "\n\n".join(debate_transcript_list) if debate_transcript_list else ""
+    
     debate_report = DebateReport(
         government_stand=DebateStance(
             stance_summary=judge_output.debate.government_summary,
@@ -346,7 +350,7 @@ def build_final_output(
         judge_verdict=judge_output.debate.verdict,
         verdict_reasoning=judge_output.debate.verdict_reasoning,
         verdict_key_factors=judge_output.debate.verdict_key_factors,
-        transcript=judge_output.debate.transcript
+        transcript=actual_transcript  # Use actual transcript from state, not LLM output
     )
 
     # Build Role-Based Insight
@@ -408,7 +412,7 @@ def save_report_to_db(
                 summary=judge_output.summary,
                 
                 # Role-Based Insights
-                justification=f"> **Confidence Score: {judge_output.confidence_score}%**\n> \n> {judge_output.confidence_reasoning.replace(chr(10), chr(10) + '> ')}\n\n---\n\n> **Investment Rationale:**\n> \n> {judge_output.justification.replace(chr(10), chr(10) + '> ')}",
+                justification=f"**Confidence Reasoning:**\n{judge_output.confidence_reasoning}\n\n**{'Engagement Rationale' if state.get('analysis_persona') == 'RELATIONSHIP_MANAGER' else 'Investment Rationale'}:**\n{judge_output.justification}",
                 key_concerns=judge_output.key_concerns,
                 
                 bull_case=judge_output.bull_case,
@@ -422,6 +426,11 @@ def save_report_to_db(
                     {"agent": "news", "output": state.get('news_analysis')},
                     {"agent": "financial", "output": state.get('financial_analysis')},
                     {"agent": "claims", "output": state.get('claims_analysis')},
+                    {"agent": "critique", "output": {
+                        "news_critique": state.get('news_critique'),
+                        "financial_critique": state.get('financial_critique'),
+                        "claims_critique": state.get('claims_critique')
+                    }},
                     {"agent": "debate", "output": final_output.debate_report.model_dump()},
                     {"agent": "market_sentiment", "output": final_output.market_sentiment.model_dump()},
                     {"agent": "citation_registry", "output": {
@@ -534,9 +543,16 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
         max_total_tokens=2800  # Increased to ~11k chars to capture more ESG detail
     )
 
-    # Extract debate arguments
+    # Extract debate arguments and transcript
     gov_args = state.get('government_arguments', []) or []
     opp_args = state.get('opposition_arguments', []) or []
+    debate_transcript_list = state.get('debate_transcript', []) or []
+    debate_transcript_str = "\n\n".join(debate_transcript_list) if debate_transcript_list else "No debate conducted."
+    
+    # DEBUG: Log transcript info
+    print(f"DEBUG: Debate transcript has {len(debate_transcript_list)} entries, {len(debate_transcript_str)} chars")
+    if debate_transcript_list:
+        print(f"DEBUG: First entry: {debate_transcript_list[0][:100]}...")
     
     # Financial/Gov defense is usually the 2nd item if present
     gov_defense = "No defense provided."
@@ -581,7 +597,8 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
         claims_critique=state.get('claims_critique', 'No critique')[:800],
         government_defense=gov_defense[:800],
         opposition_defense=opp_defense[:800],
-        raw_evidence=raw_evidence_str[:4000] # Limit size to avoid overflow
+        raw_evidence=raw_evidence_str[:4000],  # Limit size to avoid overflow
+        debate_transcript=debate_transcript_str  # Pass actual debate transcript
     )
 
     # Setup Parser

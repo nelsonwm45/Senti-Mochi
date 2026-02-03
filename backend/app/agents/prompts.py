@@ -299,7 +299,8 @@ YOUR CRITICAL RESPONSIBILITIES:
 1. PRESERVE all citation IDs from sub-agents: [N#], [F#], [D#]
 2. NEVER strip or remove citation markers
 3. VERIFY that your conclusions are backed by cited evidence
-4. EXPLAIN YOUR CONFIDENCE: Provide a bulleted breakdown explaining the score. Format:
+4. DO NOT start your justification with labels like "Investment Rationale:" or "Reasoning:". Start directly with the text.
+5. EXPLAIN YOUR CONFIDENCE: Provide a bulleted breakdown explaining the score. Format:
    - **Financials**: [Quality assessment]
    - **ESG**: [Quality assessment]
    - **News**: [Quality assessment]
@@ -389,19 +390,18 @@ SYNTHESIS INSTRUCTIONS:
 
 5. DEBATE REPORT (JSON Field: `debate`):
    - You MUST populate the `debate` object in the JSON output.
-   - `transcript`: Generate a full Markdown transcript of the debate (Government Opening -> Opposition Critique -> Government Defense -> Opposition Rebuttal).
+   - `transcript`: USE THE PROVIDED TRANSCRIPT BELOW **VERBATIM**. Copy it exactly as shown. Do NOT summarize, shorten, or modify it.
    - `government_summary`: Summarize the PRO arguments in 1 sentence.
-   - `government_arguments`: List of 2-3 key bullish arguments from the debate.
+   - `government_arguments`: List of **AT LEAST 4** key bullish arguments from the transcript.
    - `opposition_summary`: Summarize the CON critiques in 1 sentence.
-   - `opposition_arguments`: List of 2-3 key bearish arguments from the debate.
-   - `verdict`: Your final verdict on the debate itself.
+   - `opposition_arguments`: List of **AT LEAST 4** key bearish arguments from the transcript.
+   - `verdict`: A short phrase declaring the winner (e.g., "Government Prevails", "Opposition Prevails", "Mixed Decision"). Max 5 words.
+   - `verdict_reasoning`: A descriptive 2-3 sentence explanation of WHY this side won.
    - `verdict_key_factors`: 3-5 key factors specific to the debate outcome.
-   - Format for Transcript:
-     **Government (Pro)**: [Opening Argument] [F#]
-     **Opposition (Con)**: [Critique] [N#]
-     **Government (Defense)**: [Rebuttal] [F#]
-     **Opposition (Rebuttal)**: [Final Word] [N#]
-   - STRICTLY PRESERVE all citations.
+   - STRICTLY PRESERVE all citations from the transcript.
+
+   ### DEBATE TRANSCRIPT (copy this verbatim to the 'transcript' field):
+   {debate_transcript}
 
 6. VERDICT (JSON Field: `verdict`, `verdict_reasoning`):
    - verdict: Your ESG assessment verdict
@@ -437,7 +437,8 @@ RELATIONSHIP MANAGER-SPECIFIC EVALUATION:
 - Key Concerns Focus: Client churn risks [N#], Bad PR [N#], Liquidity issues [F#]
 - Financial Priority: Liquidity events (sales opportunities)
 - Trigger Events (new CEO, expansion, awards) → lean ENGAGE
-- Values misalignment on ESG vs bank mandate → lean AVOID""",
+- Values misalignment on ESG vs bank mandate → lean AVOID
+- CRITICAL: DO NOT start your justification with 'Investment Rationale:'. Instead, use 'Engagement Rationale:' or start directly with the strategy.""",
 
     "CREDIT_RISK": """
 CREDIT RISK-SPECIFIC EVALUATION:
@@ -589,7 +590,8 @@ def get_judge_prompt(
     claims_critique: str,
     government_defense: str,
     opposition_defense: str,
-    raw_evidence: str
+    raw_evidence: str,
+    debate_transcript: str
 ) -> str:
     """Generate the Judge Agent prompt with role-specific instructions."""
     config = get_persona_config(persona)
@@ -614,7 +616,8 @@ def get_judge_prompt(
         government_defense=government_defense,
         opposition_defense=opposition_defense,
         role_specific_instructions=role_specific_instructions,
-        raw_evidence=raw_evidence
+        raw_evidence=raw_evidence,
+        debate_transcript=debate_transcript
     )
 
 
@@ -809,10 +812,12 @@ INSTRUCTIONS:
 2. Group them into "Government" (Positive/Pro-Company) and "Opposition" (Negative/Anti-Company).
 3. Deduplicate similar points. Merge them into a single strong point with multiple citations.
 4. If a point has no citation, DISCARD IT. Verifiability is paramount.
-5. Output valid JSON:
+5. **CRITICAL**: Select ONLY the 5 STRONGEST points for each side. No more than 5 per side.
+6. **BREVITY**: Keep each point to 1-2 sentences maximum (30-40 words). Be concise.
+7. Output valid JSON:
 {{
-  "government": ["Point 1 [Citation]...", "Point 2 [Citation]..."],
-  "opposition": ["Point 1 [Citation]...", "Point 2 [Citation]..."]
+  "government": ["Point 1 [Citation]", "Point 2 [Citation]", "Point 3 [Citation]", "Point 4 [Citation]", "Point 5 [Citation]"],
+  "opposition": ["Point 1 [Citation]", "Point 2 [Citation]", "Point 3 [Citation]", "Point 4 [Citation]", "Point 5 [Citation]"]
 }}
 """
 
@@ -824,49 +829,99 @@ def get_briefing_prompt(raw_evidence_text: str) -> str:
 # LAWYER AGENT PROMPTS (Phase 3)
 # =============================================================================
 
-LAWYER_SYSTEM = """You are a highly skilled Lawyer in a corporate ESG tribunal.
+LAWYER_SYSTEM = """You are a financial analyst presenting a case about {company_name} for a {persona}.
 Role: {role}
-   - GOVERNMENT: You defend {company_name}. You emphasize verifying progress, context, and long-term plans.
-   - OPPOSITION: You critique {company_name}. You emphasize risks, gaps, missed targets, and greenwashing liabilities.
+   - GOVERNMENT: You present the positive case. You emphasize verified progress, context, and strengths.
+   - OPPOSITION: You present the critical case. You emphasize risks, gaps, concerns, and weaknesses.
 
-User Persona: {persona} (Tailor your rhetoric to what this stakeholder cares about).
+User Persona: {persona}
+   - INVESTOR/EQUITY_ANALYST: Focus on returns, valuation, growth potential
+   - RELATIONSHIP_MANAGER: Focus on credit risk, client relationship quality, lending opportunities
+   - CREDIT_RISK: Focus on default risk, financial health, governance red flags
 
-Your Goal: Win the argument using the provided EVIDENCE.
+Your Goal: Present a clear, evidence-based argument tailored to what this {persona} cares about.
 - Use Citations [N#], [F#], [D#] from your brief.
-- Rebut the opponent's last point directly.
-- Be concise (max 3 sentences).
-- If the evidence is weak, admit it but pivot to a stronger adjacent point.
+- Address the opponent's points directly when responding.
+- Be analytical and professional. Explain WHY your points matter to this {persona}.
 """
 
-LAWYER_TURN_TEMPLATE = """
-MY EVIDENCE BRIEF (Use these points):
+LAWYER_OPENING_TEMPLATE = """You are presenting the {role} case for {company_name} to a {persona}.
+Your goal is to make a clear, data-driven argument.
+
+### YOUR KEY POINTS:
 {my_brief}
 
-OPPONENT'S EVIDENCE BRIEF (Be ready to counter):
+### PERSONA CONTEXT:
+- INVESTOR/EQUITY_ANALYST: Focus on returns, valuation, growth
+- RELATIONSHIP_MANAGER: Focus on credit soundness, client relationship, lending safety  
+- CREDIT_RISK: Focus on default risk, financial health, red flags
+
+### INSTRUCTION:
+This is your **OPENING STATEMENT**.
+1.  **LEAD WITH YOUR THESIS**: State your position clearly for this {persona}'s concerns.
+2.  **CITE KEY EVIDENCE**: Present the strongest 2 points from your brief with citations [N#]/[F#]/[D#].
+3.  **BE CONCISE**: Use professional, analytical language. No filler.
+4.  **FOCUS ON YOUR CASE**: Don't address the opponent yet. Present your strongest arguments.
+5.  **STRICT LENGTH**: 50-150 words MAXIMUM. Absolutely no more than 150 words.
+
+Generate your opening statement.
+"""
+
+LAWYER_REBUTTAL_TEMPLATE = """You are presenting the {role} case for {company_name} to a {persona}.
+Your goal is to respond to the opposing analyst's arguments.
+
+### YOUR KEY POINTS:
+{my_brief}
+
+### OPPONENT'S KEY POINTS:
 {opponent_brief}
 
-DEBATE TRANSCRIPT (History):
+### CURRENT DISCUSSION:
 {transcript}
 
-INSTRUCTION:
-You are the {role}.
-The previous speaker said: "{previous_turn}"
+### PERSONA CONTEXT:
+- INVESTOR/EQUITY_ANALYST: Focus on returns, valuation impact
+- RELATIONSHIP_MANAGER: Focus on credit risk, client relationship impact
+- CREDIT_RISK: Focus on default risk, financial health impact
 
-Draft your next argument. Start directly with your point.
+### RESPOND TO:
+The opposing analyst just stated: "{previous_turn}"
+
+1.  **ADDRESS THEIR CLAIM**: Reference their specific point and explain why it's incomplete or misleading for this {persona}.
+2.  **EXPLAIN IMPLICATIONS**: Explain WHY this matters for this {persona}'s specific concerns.
+3.  **REINFORCE YOUR POSITION**: Present your strongest counter-argument with evidence.
+4.  **BE CONCISE**: Use direct, analytical language. No filler.
+5.  **STRICT LENGTH**: 50-150 words MAXIMUM. Absolutely no more than 150 words.
+
+Generate your response.
 """
 
 def get_lawyer_prompt(
     role: str,
+    company_name: str,
     my_brief: str,
     opponent_brief: str,
     transcript: str,
-    previous_turn: str
+    previous_turn: str,
+    persona: str = "INVESTOR"
 ) -> str:
-    return LAWYER_TURN_TEMPLATE.format(
-        role=role.upper(),
-        my_brief=my_brief,
-        opponent_brief=opponent_brief,
-        transcript=transcript,
-        previous_turn=previous_turn
-    )
-
+    # Check if this is an opening statement
+    is_opening =  "Opening Statement" in previous_turn or not transcript.strip()
+    
+    if is_opening:
+        return LAWYER_OPENING_TEMPLATE.format(
+            role=role.upper(),
+            company_name=company_name,
+            my_brief=my_brief,
+            persona=persona
+        )
+    else:
+        return LAWYER_REBUTTAL_TEMPLATE.format(
+            role=role.upper(),
+            company_name=company_name,
+            my_brief=my_brief,
+            opponent_brief=opponent_brief,
+            transcript=transcript,
+            previous_turn=previous_turn,
+            persona=persona
+        )

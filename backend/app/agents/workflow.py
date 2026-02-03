@@ -14,7 +14,7 @@ from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
 from app.agents.news_agent import news_agent, news_critique, news_defense
 from app.agents.financial_agent import financial_agent, financial_critique, financial_defense
-from app.agents.claims_agent import claims_agent
+from app.agents.claims_agent import claims_agent, claims_critique
 from app.agents.briefing import briefing_node
 from app.agents.lawyer_agents import government_agent, opposition_agent
 from app.agents.judge import judge_agent
@@ -167,19 +167,19 @@ def cross_examination(state: AgentState) -> Dict[str, Any]:
     print(f"Cross-examination starting with {len(citation_registry)} citations in registry")
 
     # === NEWS CRITIQUE (Opposition role) ===
-    update_job_progress(job_id, AnalysisStatus.CROSS_EXAMINATION, "Cross-examining findings (News)", 55)
+    update_job_progress(job_id, AnalysisStatus.CROSS_EXAMINATION, "Cross-examining findings (News)", 50)
     start = time.time()
     news_critique_result = news_critique(state)
     print(f"News critique completed in {time.time() - start:.2f}s")
 
     # === FINANCIAL CRITIQUE (Government role) ===
-    update_job_progress(job_id, AnalysisStatus.CROSS_EXAMINATION, "Cross-examining findings (Financial)", 65)
+    update_job_progress(job_id, AnalysisStatus.CROSS_EXAMINATION, "Cross-examining findings (Financial)", 55)
     start = time.time()
     fin_critique_result = financial_critique(state)
     print(f"Financial critique completed in {time.time() - start:.2f}s")
 
     # === CLAIMS CRITIQUE (Objective role) ===
-    update_job_progress(job_id, AnalysisStatus.CROSS_EXAMINATION, "Cross-examining findings (Claims)", 75)
+    update_job_progress(job_id, AnalysisStatus.CROSS_EXAMINATION, "Cross-examining findings (Claims)", 60)
     start = time.time()
     claims_critique_result = claims_critique(state)
     print(f"Claims critique completed in {time.time() - start:.2f}s")
@@ -262,7 +262,7 @@ def judge_with_status(state: AgentState) -> Dict[str, Any]:
     4. Generates FinalAnalysisOutput
     """
     job_id = state.get('job_id')
-    update_job_progress(job_id, AnalysisStatus.SYNTHESIZING, "Synthesizing final report", 85)
+    update_job_progress(job_id, AnalysisStatus.SYNTHESIZING, "Synthesizing final report", 90)
 
     citation_registry = state.get('citation_registry', {})
     print(f"Judge receiving {len(citation_registry)} citations in registry")
@@ -284,10 +284,10 @@ def judge_with_status(state: AgentState) -> Dict[str, Any]:
 def check_debate_end(state: AgentState) -> str:
     """
     Determines if the debate should continue or move to the verdict.
-    Limit: 4 turns (2 rounds).
+    Limit: 6 turns (3 rounds).
     """
     transcript = state.get("debate_transcript", []) or []
-    if len(transcript) >= 4:
+    if len(transcript) >= 6:
         return "judge"
     return "government"
 
@@ -296,21 +296,29 @@ def check_debate_end(state: AgentState) -> str:
 def briefing_with_status(state: AgentState) -> Dict[str, Any]:
     """Wraps briefing node to update status."""
     job_id = state.get('job_id')
-    update_job_progress(job_id, AnalysisStatus.BRIEFING, "Consolidating findings into Legal Briefs", 50)
+    update_job_progress(job_id, AnalysisStatus.BRIEFING, "Consolidating findings into Legal Briefs", 65)
     return briefing_node(state)
 
 
 def government_with_status(state: AgentState) -> Dict[str, Any]:
     """Wraps government node to update status."""
     job_id = state.get('job_id')
-    update_job_progress(job_id, AnalysisStatus.CROSS_EXAMINATION, "Government Agent presenting arguments", 60)
+    transcript = state.get('debate_transcript', []) or []
+    current_turn = len(transcript) + 1  # Next turn number (1-6)
+    # Progress: 66% (briefing done) + (current_turn / 6) * 15% = 66-81%
+    progress = 66 + int((current_turn / 6) * 15)
+    update_job_progress(job_id, AnalysisStatus.SYNTHESIZING, f"Debate Turn {current_turn}/6: Government presenting", progress)
     return government_agent(state)
 
 
 def opposition_with_status(state: AgentState) -> Dict[str, Any]:
     """Wraps opposition node to update status."""
     job_id = state.get('job_id')
-    update_job_progress(job_id, AnalysisStatus.CROSS_EXAMINATION, "Opposition Agent rebutting", 70)
+    transcript = state.get('debate_transcript', []) or []
+    current_turn = len(transcript) + 1  # Next turn number (1-6)
+    # Progress: 66% (briefing done) + (current_turn / 6) * 15% = 66-81%
+    progress = 66 + int((current_turn / 6) * 15)
+    update_job_progress(job_id, AnalysisStatus.SYNTHESIZING, f"Debate Turn {current_turn}/6: Opposition rebutting", progress)
     return opposition_agent(state)
 
 
@@ -330,6 +338,7 @@ def build_graph():
 
     # Add nodes
     builder.add_node("gather_intelligence", gather_intelligence)
+    builder.add_node("critique", cross_examination)
     builder.add_node("briefing", briefing_with_status)
     builder.add_node("government", government_with_status)
     builder.add_node("opposition", opposition_with_status)
@@ -339,7 +348,8 @@ def build_graph():
     builder.set_entry_point("gather_intelligence")
 
     # Define edges (sequential flow with loop)
-    builder.add_edge("gather_intelligence", "briefing")
+    builder.add_edge("gather_intelligence", "critique")
+    builder.add_edge("critique", "briefing")
     builder.add_edge("briefing", "government")
     builder.add_edge("government", "opposition")
     

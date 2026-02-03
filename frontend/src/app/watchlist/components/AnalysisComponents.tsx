@@ -300,24 +300,27 @@ const ProgressStep = ({ onComplete, companyId, topic, companyName }: { onComplet
     const [error, setError] = useState<string | null>(null);
     const steps = [
         { label: "Phase 1: Research", sub: "Gathering Intelligence (News, Financials, Documents)" },
-        { label: "Phase 2: Briefing", sub: "Consolidating findings into Legal Briefs" },
-        { label: "Phase 3: The Debate", sub: "Government vs. Opposition Arguments" },
-        { label: "Phase 4: The Verdict", sub: "Judge issuing final decision based on Ground Truth" },
+        { label: "Phase 2: Cross-Examination", sub: "Critique agents verifying claims against evidence" },
+        { label: "Phase 3: Briefing", sub: "Consolidating findings into Legal Briefs" },
+        { label: "Phase 4: The Debate", sub: "Government vs. Opposition Arguments" },
+        { label: "Phase 5: The Verdict", sub: "Judge issuing final decision based on Ground Truth" },
         { label: "Finalizing", sub: "Embedding report for RAG" }
     ];
 
     const hasTriggered = useRef(false);
 
-    const statusToStep = (status: string): number => {
-        // Backend statuses might need alignment, but mapping existing ones for now
+    const statusToStep = (status: string, progress: number): number => {
         switch (status) {
             case 'PENDING': return 0;
             case 'GATHERING_INTEL': return 0; 
-            case 'BRIEFING': return 1; // Need to ensure backend sends this status if exists
-            case 'CROSS_EXAMINATION': return 2; // Maps to Debate
-            case 'SYNTHESIZING': return 3; // Maps to Verdict
-            case 'EMBEDDING': return 4;
-            case 'COMPLETED': return 5;
+            case 'CROSS_EXAMINATION': return 1; // Now Phase 2
+            case 'BRIEFING': return 2; // Phase 3
+            case 'SYNTHESIZING': 
+                // Distinguish between Debate (Phase 4) and Verdict (Phase 5) based on progress
+                // Debate runs at 70-75%, Judge runs at 90%
+                return progress >= 80 ? 4 : 3;
+            case 'EMBEDDING': return 5;
+            case 'COMPLETED': return 6;
             default: return 0;
         }
     };
@@ -375,7 +378,7 @@ const ProgressStep = ({ onComplete, companyId, topic, companyName }: { onComplet
                     if (statusResponse.current_step) {
                         setCurrentStep(statusResponse.current_step);
                     }
-                    setStepIndex(statusToStep(statusResponse.status));
+                    setStepIndex(statusToStep(statusResponse.status, statusResponse.progress || 0));
 
                 } catch (e) {
                     console.error("Status polling error:", e);
@@ -924,14 +927,82 @@ const RoleBasedDecisionCard = ({ report, registry }: { report: AnalysisReport; r
                 </div>
             </div>
 
-            {/* Full Justification */}
-            <div className="mb-6">
-                <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Detailed Justification</div>
-                <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none">
-                    <ReactMarkdown components={citationComponents}>
-                        {insight.justification || "No specific justification provided."}
-                    </ReactMarkdown>
-                </div>
+            {/* Full Justification - Clean Layout */}
+            <div className="mb-6 space-y-4">
+                {(() => {
+                    // Helper to split justification
+                    const text = insight.justification || "";
+                    let confidenceText = "";
+                    let rationaleText = "";
+                    let rationaleTitle = "Investment Rationale";
+
+                    // Try to match Confidence Reasoning
+                    // Capture text after marker until next marker or end
+                    const confidenceMatch = text.match(/\*\*Confidence Reasoning:\*\*\s*([\s\S]*?)(?=\*\*|$)/i);
+                    if (confidenceMatch) {
+                        confidenceText = confidenceMatch[1].trim();
+                    }
+
+                    // Try to match Rationale
+                    const engagementMatch = text.match(/\*\*Engagement Rationale:\*\*\s*([\s\S]*?)(?=$)/i);
+                    const investmentMatch = text.match(/\*\*Investment Rationale:\*\*\s*([\s\S]*?)(?=$)/i);
+
+                    if (engagementMatch) {
+                        rationaleText = engagementMatch[1].trim();
+                        // Clean any potential double prefix if it exists in the captured group
+                        rationaleText = rationaleText.replace(/^Engagement Rationale:\s*/i, "");
+                        rationaleTitle = "Engagement Rationale";
+                    } else if (investmentMatch) {
+                        rationaleText = investmentMatch[1].trim();
+                        rationaleText = rationaleText.replace(/^Investment Rationale:\s*/i, "");
+                        rationaleTitle = "Investment Rationale";
+                    } else if (!confidenceMatch) {
+                        // Fallback: entire text is rationale
+                        rationaleText = text;
+                    }
+
+                    return (
+                        <>
+                            {confidenceText && (
+                                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Shield size={16} className="text-indigo-400" />
+                                        <h4 className="text-xs font-bold text-indigo-200 uppercase tracking-wider">Confidence Reasoning</h4>
+                                    </div>
+                                    <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none">
+                                        <ReactMarkdown components={citationComponents}>{confidenceText}</ReactMarkdown>
+                                    </div>
+                                </div>
+                            )}
+
+                            {rationaleText && (
+                                <div className={cn(
+                                    "rounded-xl p-4 border",
+                                    insight.decision.includes("SELL") || insight.decision.includes("DIVEST") ? "bg-red-500/5 border-red-500/10" :
+                                    insight.decision.includes("BUY") || insight.decision.includes("INVEST") ? "bg-emerald-500/5 border-emerald-500/10" :
+                                    "bg-blue-500/5 border-blue-500/10"
+                                )}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <TrendingUp size={16} className={cn(
+                                            insight.decision.includes("SELL") || insight.decision.includes("DIVEST") ? "text-red-400" :
+                                            insight.decision.includes("BUY") || insight.decision.includes("INVEST") ? "text-emerald-400" :
+                                            "text-blue-400"
+                                        )} />
+                                        <h4 className={cn(
+                                            "text-xs font-bold uppercase tracking-wider",
+                                            insight.decision.includes("SELL") || insight.decision.includes("DIVEST") ? "text-red-200" :
+                                            insight.decision.includes("BUY") || insight.decision.includes("INVEST") ? "text-emerald-200" :
+                                            "text-blue-200"
+                                        )}>{rationaleTitle}</h4>
+                                    </div>
+                                    <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none">
+                                        <ReactMarkdown components={citationComponents}>{rationaleText}</ReactMarkdown>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
             </div>
 
             {/* All Key Concerns */}
@@ -1250,7 +1321,7 @@ const DebateReportSection = ({ report, registry }: { report: AnalysisReport; reg
                         <div className="w-8 h-8 rounded-lg bg-gray-500/20 flex items-center justify-center">
                             <MessageSquare size={16} className="text-gray-400" />
                         </div>
-                        <h3 className="font-semibold text-white">Full Debate Transcript</h3>
+                        <h3 className="font-semibold text-white">Debate Transcript</h3>
                     </div>
             {/* Debate Transcript */}
             {debateReport.transcript && (

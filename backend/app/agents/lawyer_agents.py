@@ -18,9 +18,45 @@ def opposition_agent(state: AgentState) -> Dict[str, Any]:
     print("Debate: Opposition is speaking...")
     return _run_lawyer_turn("Opposition", state)
 
+def _format_evidence_context(registry: Dict[str, Any]) -> str:
+    """Format citation registry into a compact list for the prompt."""
+    if not registry:
+        return "No specific evidence citations available."
+    
+    lines = []
+    # Sort by ID to group N1, N2.. F1, F2..
+    sorted_keys = sorted(registry.keys(), key=lambda x: (x[0], int(x[1:])) if x[1:].isdigit() else (x, 0))
+    
+    for key in sorted_keys:
+        item = registry[key]
+        title = item.get("title", "Unknown Source")
+        # Truncate title if too long
+        if len(title) > 60:
+            title = title[:57] + "..."
+            
+        # Add snippet if available (very short)
+        snippet = ""
+        if item.get("row_line"): 
+            snippet = f" - {item['row_line']}"
+        elif item.get("snippet"):
+             snippet = f" - {item['snippet'][:50]}..."
+             
+        lines.append(f"[{key}] {title}{snippet}")
+        
+    return "\n".join(lines[:60]) # Limit to top 60 citations to be safe
+
 def _run_lawyer_turn(role: str, state: AgentState) -> Dict[str, Any]:
     company_name = state["company_name"]
     persona = state.get("analysis_persona", "RELATIONSHIP_MANAGER")
+    
+    # Format persona to human-readable text
+    persona_readable = {
+        'INVESTOR': 'investor',
+        'EQUITY_ANALYST': 'equity analyst',
+        'RELATIONSHIP_MANAGER': 'relationship manager',
+        'CREDIT_RISK': 'credit risk officer'
+    }.get(persona, 'investor')
+    
     briefs = state.get("legal_briefs", {})
     transcript = state.get("debate_transcript", []) or []
     
@@ -34,7 +70,7 @@ def _run_lawyer_turn(role: str, state: AgentState) -> Dict[str, Any]:
     my_brief_text = "\n".join([f"- {p}" for p in my_brief_list])
     opp_brief_text = "\n".join([f"- {p}" for p in opp_brief_list])
     
-    transcript_text = "\n".join(transcript[-4:]) # Context window: last 4 turns
+    transcript_text = "\n".join(transcript[-2:]) # Context window: last 2 turns (reduced for token efficiency)
     
     # Determine previous turn text
     if transcript:
@@ -50,16 +86,22 @@ def _run_lawyer_turn(role: str, state: AgentState) -> Dict[str, Any]:
     system_msg = LAWYER_SYSTEM.format(
         role=role.upper(),
         company_name=company_name,
-        persona=persona
+        persona=persona_readable
     )
     
     prompt = get_lawyer_prompt(
         role=role,
+        company_name=company_name,
         my_brief=my_brief_text,
         opponent_brief=opp_brief_text,
         transcript=transcript_text,
-        previous_turn=previous_turn
+        previous_turn=previous_turn,
+        persona=persona_readable
     )
+
+
+
+
 
     try:
         # Use Cerebras for debate (faster inference is good for loops)
