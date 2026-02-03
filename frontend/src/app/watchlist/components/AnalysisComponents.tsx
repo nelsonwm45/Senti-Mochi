@@ -299,21 +299,23 @@ const ProgressStep = ({ onComplete, companyId, topic, companyName }: { onComplet
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const steps = [
-        { label: "Initializing", sub: "Starting analysis engine" },
-        { label: "Gathering Intel", sub: "Analyzing news, financials & documents" },
-        { label: "Cross-Examination", sub: "Agents debating findings" },
-        { label: "Synthesizing", sub: "Generating final report" },
-        { label: "Finalizing", sub: "Embedding for search" }
+        { label: "Phase 1: Research", sub: "Gathering Intelligence (News, Financials, Documents)" },
+        { label: "Phase 2: Briefing", sub: "Consolidating findings into Legal Briefs" },
+        { label: "Phase 3: The Debate", sub: "Government vs. Opposition Arguments" },
+        { label: "Phase 4: The Verdict", sub: "Judge issuing final decision based on Ground Truth" },
+        { label: "Finalizing", sub: "Embedding report for RAG" }
     ];
 
     const hasTriggered = useRef(false);
 
     const statusToStep = (status: string): number => {
+        // Backend statuses might need alignment, but mapping existing ones for now
         switch (status) {
             case 'PENDING': return 0;
-            case 'GATHERING_INTEL': return 1;
-            case 'CROSS_EXAMINATION': return 2;
-            case 'SYNTHESIZING': return 3;
+            case 'GATHERING_INTEL': return 0; 
+            case 'BRIEFING': return 1; // Need to ensure backend sends this status if exists
+            case 'CROSS_EXAMINATION': return 2; // Maps to Debate
+            case 'SYNTHESIZING': return 3; // Maps to Verdict
             case 'EMBEDDING': return 4;
             case 'COMPLETED': return 5;
             default: return 0;
@@ -1029,10 +1031,10 @@ const DebateTranscriptChat = ({ transcript, registry }: { transcript: string; re
 
     const getAgentIdentity = (variant: 'pro' | 'con' | 'objective' | 'neutral'): string => {
         switch (variant) {
-            case 'pro': return "Financial Analyst";
-            case 'con': return "News Scout";
-            case 'objective': return "Claims Auditor";
-            case 'neutral': return "Chief Investment Officer";
+            case 'pro': return "Government Agent";
+            case 'con': return "Opposition Agent";
+            case 'objective': return "Judge"; // Fallback if Judge enters chat
+            case 'neutral': return "Moderator";
         }
     };
 

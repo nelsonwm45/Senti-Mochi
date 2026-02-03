@@ -10,12 +10,12 @@ from typing import Dict, Any, List
 from sqlmodel import Session, select, col
 from app.database import engine
 from app.models import NewsArticle, NewsChunk, Company
-from app.agents.base import get_llm
+from app.agents.base import get_llm, extract_json_from_response
 from app.agents.state import AgentState
 from app.agents.cache import generate_cache_key, hash_content, get_cached_result, set_cached_result
 from app.agents.persona_config import get_persona_config
 from app.agents.prompts import NEWS_AGENT_SYSTEM, get_news_agent_prompt, get_critique_prompt, get_defense_prompt
-from app.agents.citation_models import SourceMetadata
+from app.agents.citation_models import SourceMetadata, EvidencePoint
 from app.services.news_relevance import news_relevance_filter
 from app.services.content_optimizer import content_optimizer
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -160,74 +160,84 @@ def news_agent(state: AgentState) -> Dict[str, Any]:
     content_hash = hash_content(context)
     cache_key = generate_cache_key("news_v4", company_id, content_hash)
 
+    # Truncation Logic with Fallback Strategy
+    full_context = context
+    raw_response_content = ""
+
     # Check cache first
     cached_result = get_cached_result(cache_key)
     if cached_result:
-        return {
-            "news_analysis": cached_result,
-            "citation_registry": citation_registry
-        }
+        print(f"[News Agent] Cache Hit for {company_name}")
+        raw_response_content = cached_result
+    else:
+        # Attempt Primary: Cerebras (llama-3.3-70b)
+        try:
+            print(f"[News Agent] Attempting to use Cerebras (llama-3.3-70b)...")
+            prompt = get_news_agent_prompt(
+                company_name=company_name,
+                persona=persona,
+                news_context=full_context,
+                source_list=source_list
+            )
+            
+            llm = get_llm("llama-3.3-70b")
+            response = llm.invoke([
+                SystemMessage(content=NEWS_AGENT_SYSTEM),
+                HumanMessage(content=prompt)
+            ])
+            print(f"[News Agent] SUCCESS: Processed by Cerebras (llama-3.3-70b)")
+            raw_response_content = response.content
+            
+        except Exception as e:
+            print(f"[News Agent] Cerebras failed: {e}. Fallback to Groq (llama-3.1-8b-instant)...")
+            
+            # Apply truncation for Groq
+            truncated_context = content_optimizer._smart_truncate(full_context, 3500)
+            
+            prompt = get_news_agent_prompt(
+                company_name=company_name,
+                persona=persona,
+                news_context=truncated_context,
+                source_list=source_list
+            )
+            
+            llm = get_llm("llama-3.1-8b-instant")
+            response = llm.invoke([
+                SystemMessage(content=NEWS_AGENT_SYSTEM),
+                HumanMessage(content=prompt)
+            ])
+            print(f"[News Agent] SUCCESS: Processed by Groq (llama-3.1-8b-instant)")
+            raw_response_content = response.content
 
-    # Truncation Logic with Fallback Strategy
-    # Cerebras supports 60k+ context, so we try that first WITHOUT truncation.
-    # If it fails, we fallback to Groq and apply the strict truncation (3500 chars).
-    
-    # context is the full context
-    full_context = context
-    
-    # Attempt Primary: Cerebras (llama-3.3-70b)
-    try:
-        print(f"[News Agent] Attempting to use Cerebras (llama-3.3-70b)...")
-        # Reuse full context
-        prompt = get_news_agent_prompt(
-            company_name=company_name,
-            persona=persona,
-            news_context=full_context,
-            source_list=source_list
-        )
-        
-        llm = get_llm("llama-3.3-70b")
-        response = llm.invoke([
-            SystemMessage(content=NEWS_AGENT_SYSTEM),
-            HumanMessage(content=prompt)
-        ])
-        print(f"[News Agent] SUCCESS: Processed by Cerebras (llama-3.3-70b)")
-        
         # Cache the result
-        set_cached_result(cache_key, response.content)
+        set_cached_result(cache_key, raw_response_content)
 
-        return {
-            "news_analysis": response.content,
-            "citation_registry": citation_registry
-        }
+    # === PROCESS OUTPUT & EXTRACT EVIDENCE ===
+    evidence_list = extract_json_from_response(raw_response_content)
+    
+    # Strip JSON block for clean analysis display
+    clean_analysis = raw_response_content
+    if "```json" in clean_analysis:
+        clean_analysis = clean_analysis.split("```json")[0].strip()
+    elif "```" in clean_analysis and "[" in clean_analysis and clean_analysis.rfind("```") > clean_analysis.rfind("["):
+         # Try to split on last code block if generic
+        parts = clean_analysis.rsplit("```", 1)
+        if len(parts) > 0:
+            clean_analysis = parts[0].strip()
 
-    except Exception as e:
-        print(f"[News Agent] Cerebras failed: {e}. Fallback to Groq (llama-3.1-8b-instant)...")
-        
-        # Apply truncation for Groq
-        truncated_context = content_optimizer._smart_truncate(full_context, 3500)
-        
-        prompt = get_news_agent_prompt(
-            company_name=company_name,
-            persona=persona,
-            news_context=truncated_context,
-            source_list=source_list
-        )
-        
-        llm = get_llm("llama-3.1-8b-instant")
-        response = llm.invoke([
-            SystemMessage(content=NEWS_AGENT_SYSTEM),
-            HumanMessage(content=prompt)
-        ])
-        print(f"[News Agent] SUCCESS: Processed by Groq (llama-3.1-8b-instant)")
-        
-        # Cache the result
-        set_cached_result(cache_key, response.content)
+    # Convert to Pydantic models
+    evidence_objects = []
+    for item in evidence_list:
+        try:
+            evidence_objects.append(EvidencePoint(**item))
+        except Exception as e:
+            print(f"[News Agent] Failed to parse evidence point: {item} - {e}")
 
-        return {
-            "news_analysis": response.content,
-            "citation_registry": citation_registry
-        }
+    return {
+        "news_analysis": clean_analysis,
+        "citation_registry": citation_registry,
+        "raw_evidence": {"news": evidence_objects}
+    }
 
 
 def news_critique(state: AgentState) -> Dict[str, Any]:

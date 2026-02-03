@@ -547,6 +547,28 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     opp_defense = "No defense provided."
     if len(opp_args) > 1:
         opp_defense = opp_args[1]
+    # Format raw evidence for ground truth check
+    raw_ev_dict = state.get('raw_evidence', {})
+    raw_evidence_str = ""
+    for category, points in raw_ev_dict.items():
+        raw_evidence_str += f"### {category.upper()} EVIDENCE:\n"
+        if points:
+            for p in points:
+                # Handle both object and dict (serialization safety)
+                if isinstance(p, dict):
+                    content = p.get('content', '')
+                    citation = p.get('citation', '')
+                elif hasattr(p, 'content'):
+                    content = getattr(p, 'content', '')
+                    citation = getattr(p, 'citation', '')
+                else:
+                    content = str(p)
+                    citation = ""
+                
+                raw_evidence_str += f"- {content} {citation}\n"
+        else:
+            raw_evidence_str += "No structured evidence.\n"
+        raw_evidence_str += "\n"
 
     prompt = get_judge_prompt(
         company_name=company_name,
@@ -558,7 +580,8 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
         financial_critique=state.get('financial_critique', 'No critique')[:800],
         claims_critique=state.get('claims_critique', 'No critique')[:800],
         government_defense=gov_defense[:800],
-        opposition_defense=opp_defense[:800]
+        opposition_defense=opp_defense[:800],
+        raw_evidence=raw_evidence_str[:4000] # Limit size to avoid overflow
     )
 
     # Setup Parser

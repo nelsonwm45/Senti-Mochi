@@ -207,6 +207,18 @@ class MarketSentiment(BaseModel):
     )
 
 
+
+class EvidencePoint(BaseModel):
+    """
+    A single point of evidence extracted by Researcher Agents.
+    Used to build the Ground Truth and Legal Briefs.
+    """
+    content: str = Field(..., description="The evidence claim/fact")
+    citation: str = Field(..., description="Citation ID e.g., '[N1]'")
+    sentiment: Literal["PRO", "CON"] = Field(..., description="Supports (PRO) or opposes (CON) the user's goal")
+    confidence: int = Field(default=50, description="Confidence in this extraction (0-100)")
+
+
 # =============================================================================
 # UI SECTION 5: DEBATE REPORT
 # =============================================================================
@@ -406,3 +418,16 @@ def extract_citations_from_text(text: str) -> List[str]:
     import re
     citation_pattern = r'\[([NFD]\d+)\]'
     return list(set(re.findall(citation_pattern, text)))
+
+
+# =============================================================================
+# LEGAL TEAM ARCHITECTURE
+# =============================================================================
+
+class LegalBrief(BaseModel):
+    """
+    Consolidated brief for one side (Government or Opposition).
+    Derived from raw evidence using the Briefing Node.
+    """
+    role: Literal["Government", "Opposition"]
+    points: List[str] = Field(..., description="List of synthesized points/claims with preserved citations")

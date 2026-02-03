@@ -10,12 +10,12 @@ from typing import Dict, Any, List
 from sqlmodel import Session, select, col
 from app.database import engine
 from app.models import DocumentChunk, Document
-from app.agents.base import get_llm
+from app.agents.base import get_llm, extract_json_from_response
 from app.agents.state import AgentState
 from app.agents.cache import generate_cache_key, hash_content, get_cached_result, set_cached_result
 from app.agents.persona_config import get_persona_config
 from app.agents.prompts import CLAIMS_AGENT_SYSTEM, get_claims_agent_prompt, get_critique_prompt
-from app.agents.citation_models import SourceMetadata
+from app.agents.citation_models import SourceMetadata, EvidencePoint
 from langchain_core.messages import SystemMessage, HumanMessage
 from sentence_transformers import SentenceTransformer
 import warnings
@@ -216,8 +216,9 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
 
         # Truncation Logic with Fallback Strategy
         full_context = context
+        raw_response_content = ""
 
-        # Generate cache key based on content hash (Move this UP before try/except)
+        # Generate cache key based on content hash
         # Use v5 to invalidate previous caches AGAIN to be sure
         content_for_hash = full_context + "|" + ",".join(chunk_ids)
         content_hash = hash_content(content_for_hash)
@@ -226,65 +227,80 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
         # Check cache first
         cached_result = get_cached_result(cache_key)
         if cached_result:
-            print("Claims Agent: Cache HIT. Returning registry.")
-            return {
-                "claims_analysis": cached_result,
-                "citation_registry": citation_registry
-            }
-
-        # Attempt Primary: Cerebras (llama-3.3-70b)
-        try:
-            print(f"[Claims Agent] Attempting to use Cerebras (llama-3.3-70b)...")
-            prompt = get_claims_agent_prompt(
-                company_name=company_name,
-                persona=persona,
-                claims_context=full_context,
-                source_list=source_list
-            )
-
-            llm = get_llm("llama-3.3-70b")
-            response = llm.invoke([
-                SystemMessage(content=CLAIMS_AGENT_SYSTEM),
-                HumanMessage(content=prompt)
-            ])
-            print(f"[Claims Agent] SUCCESS: Processed by Cerebras (llama-3.3-70b)")
+            print("Claims Agent: Cache HIT.")
+            raw_response_content = cached_result
+        else:
+            # Attempt Primary: Cerebras (llama-3.3-70b)
+            try:
+                print(f"[Claims Agent] Attempting to use Cerebras (llama-3.3-70b)...")
+                prompt = get_claims_agent_prompt(
+                    company_name=company_name,
+                    persona=persona,
+                    claims_context=full_context,
+                    source_list=source_list
+                )
+    
+                llm = get_llm("llama-3.3-70b")
+                response = llm.invoke([
+                    SystemMessage(content=CLAIMS_AGENT_SYSTEM),
+                    HumanMessage(content=prompt)
+                ])
+                print(f"[Claims Agent] SUCCESS: Processed by Cerebras (llama-3.3-70b)")
+                raw_response_content = response.content
+                
+            except Exception as e:
+                print(f"[Claims Agent] Cerebras failed: {e}. Fallback to Groq (llama-3.1-8b-instant)...")
+                
+                # Apply truncation for Groq (8000 chars)
+                if len(full_context) > 8000:
+                    truncated_context = full_context[:8000] + "..."
+                else:
+                    truncated_context = full_context
+    
+                prompt = get_claims_agent_prompt(
+                    company_name=company_name,
+                    persona=persona,
+                    claims_context=truncated_context,
+                    source_list=source_list
+                )
+    
+                llm = get_llm("llama-3.1-8b-instant")
+                response = llm.invoke([
+                    SystemMessage(content=CLAIMS_AGENT_SYSTEM),
+                    HumanMessage(content=prompt)
+                ])
+                print(f"[Claims Agent] SUCCESS: Processed by Groq (llama-3.1-8b-instant)")
+                raw_response_content = response.content
             
-            set_cached_result(cache_key, response.content)
+            # Cache the result
+            set_cached_result(cache_key, raw_response_content)
 
-            return {
-                "claims_analysis": response.content,
-                "citation_registry": citation_registry
-            }
-
-        except Exception as e:
-            print(f"[Claims Agent] Cerebras failed: {e}. Fallback to Groq (llama-3.1-8b-instant)...")
-            
-            # Apply truncation for Groq (8000 chars)
-            if len(full_context) > 8000:
-                truncated_context = full_context[:8000] + "..."
-            else:
-                truncated_context = full_context
-
-            prompt = get_claims_agent_prompt(
-                company_name=company_name,
-                persona=persona,
-                claims_context=truncated_context,
-                source_list=source_list
-            )
-
-            llm = get_llm("llama-3.1-8b-instant")
-            response = llm.invoke([
-                SystemMessage(content=CLAIMS_AGENT_SYSTEM),
-                HumanMessage(content=prompt)
-            ])
-            print(f"[Claims Agent] SUCCESS: Processed by Groq (llama-3.1-8b-instant)")
-            
-            set_cached_result(cache_key, response.content)
-
-            return {
-                "claims_analysis": response.content,
-                "citation_registry": citation_registry
-            }
+        # === PROCESS OUTPUT & EXTRACT EVIDENCE ===
+        evidence_list = extract_json_from_response(raw_response_content)
+        
+        # Strip JSON block for clean analysis display
+        clean_analysis = raw_response_content
+        if "```json" in clean_analysis:
+            clean_analysis = clean_analysis.split("```json")[0].strip()
+        elif "```" in clean_analysis and "[" in clean_analysis and clean_analysis.rfind("```") > clean_analysis.rfind("["):
+             # Try to split on last code block if generic
+            parts = clean_analysis.rsplit("```", 1)
+            if len(parts) > 0:
+                clean_analysis = parts[0].strip()
+    
+        # Convert to Pydantic models
+        evidence_objects = []
+        for item in evidence_list:
+            try:
+                evidence_objects.append(EvidencePoint(**item))
+            except Exception as e:
+                print(f"[Claims Agent] Failed to parse evidence point: {item} - {e}")
+    
+        return {
+            "claims_analysis": clean_analysis,
+            "citation_registry": citation_registry,
+            "raw_evidence": {"claims": evidence_objects}
+        }
 
     except Exception as e:
         print(f"Error in Claims Agent: {e}")

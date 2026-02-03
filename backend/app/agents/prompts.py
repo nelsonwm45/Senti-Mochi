@@ -337,6 +337,11 @@ Review the following analyses for {company_name}:
 3. CLAIMS/DOCUMENTS ANALYSIS (sources: [D#]):
 {claims_analysis}
 
+
+
+4. RAW EVIDENCE (GROUND TRUTH):
+{raw_evidence}
+
 --- DEBATE / CROSS-EXAMINATION PHASE ---
 
 4. NEWS CRITIQUE (Opposition Argument):
@@ -394,14 +399,14 @@ SYNTHESIS INSTRUCTIONS:
    - Format for Transcript:
      **Government (Pro)**: [Opening Argument] [F#]
      **Opposition (Con)**: [Critique] [N#]
-     **Claims (Objective)**: [Fact Check/Correction] [D#]
      **Government (Defense)**: [Rebuttal] [F#]
      **Opposition (Rebuttal)**: [Final Word] [N#]
    - STRICTLY PRESERVE all citations.
 
 6. VERDICT (JSON Field: `verdict`, `verdict_reasoning`):
    - verdict: Your ESG assessment verdict
-   - verdict_reasoning: 2-3 sentences explaining your ESG verdict, referencing document [D#] and news [N#] evidence
+   - verdict_reasoning: 2-3 sentences explaining your ESG verdict, referencing document [D#] and news [N#] evidence.
+   - GROUND TRUTH CHECK: If the debate contained false claims contradicting the RAW EVIDENCE, explicitly mention this in your reasoning.
    - verdict_key_factors: 3-5 key ESG factors with citations [D#], [N#]
 
 CRITICAL: You MUST preserve ALL [N#], [F#], [D#] citations from the sub-agents, including any associated page numbers (e.g., [D1], Page 123).
@@ -458,6 +463,34 @@ MARKET ANALYST-SPECIFIC EVALUATION:
 # UTILITY FUNCTIONS
 # =============================================================================
 
+
+# =============================================================================
+# EVIDENCE EXTRACTION INSTRUCTIONS (SHARED)
+# =============================================================================
+
+EVIDENCE_EXTRACTION_INSTRUCTIONS = """
+---
+EVIDENCE EXTRACTION (MANDATORY JSON OUTPUT):
+In addition to the analysis above, you MUST append a JSON block at the very end of your response containing every key finding.
+Use this format:
+```json
+[
+  {{
+    "content": "Finding text...",
+    "citation": "[X#]",
+    "sentiment": "PRO" or "CON",
+    "confidence": 80
+  }}
+]
+```
+Rules for Extraction:
+1. "content": The exact claim or fact.
+2. "citation": The [N#], [F#], or [D#] ID.
+3. "sentiment": "PRO" if it supports the user's goal ({government_stance}), "CON" if it opposes it ({opposition_stance}).
+4. "confidence": 0-100 based on source reliability.
+"""
+
+
 def get_news_agent_prompt(
     company_name: str,
     persona: str,
@@ -469,13 +502,20 @@ def get_news_agent_prompt(
     persona_label = persona.replace('_', ' ').title()
     focus_areas = ", ".join(config['news_focus'])
 
-    return NEWS_AGENT_TEMPLATE.format(
+    base_prompt = NEWS_AGENT_TEMPLATE.format(
         persona_label=persona_label,
         focus_areas=focus_areas,
         source_list=source_list,
         company_name=company_name,
         news_context=news_context
     )
+
+    extraction_instr = EVIDENCE_EXTRACTION_INSTRUCTIONS.format(
+        government_stance=config['government_stance'],
+        opposition_stance=config['opposition_stance']
+    )
+
+    return base_prompt + "\n" + extraction_instr
 
 
 def get_financial_agent_prompt(
@@ -489,13 +529,20 @@ def get_financial_agent_prompt(
     persona_label = persona.replace('_', ' ').title()
     focus_metrics = ", ".join(config['financial_focus'])
 
-    return FINANCIAL_AGENT_TEMPLATE.format(
+    base_prompt = FINANCIAL_AGENT_TEMPLATE.format(
         persona_label=persona_label,
         focus_metrics=focus_metrics,
         source_list=source_list,
         company_name=company_name,
         financial_context=financial_context
     )
+
+    extraction_instr = EVIDENCE_EXTRACTION_INSTRUCTIONS.format(
+        government_stance=config['government_stance'],
+        opposition_stance=config['opposition_stance']
+    )
+
+    return base_prompt + "\n" + extraction_instr
 
 
 def get_claims_agent_prompt(
@@ -514,7 +561,7 @@ def get_claims_agent_prompt(
     if persona == 'CREDIT_RISK':
         priority_note = "\n\n**HIGHEST PRIORITY: Governance** - Flag any fraud risks, weak internal controls, board independence issues, or related party transactions."
 
-    return CLAIMS_AGENT_TEMPLATE.format(
+    base_prompt = CLAIMS_AGENT_TEMPLATE.format(
         persona_label=persona_label,
         focus_areas=focus_areas,
         priority_note=priority_note,
@@ -522,6 +569,13 @@ def get_claims_agent_prompt(
         company_name=company_name,
         claims_context=claims_context
     )
+
+    extraction_instr = EVIDENCE_EXTRACTION_INSTRUCTIONS.format(
+        government_stance=config['government_stance'],
+        opposition_stance=config['opposition_stance']
+    )
+
+    return base_prompt + "\n" + extraction_instr
 
 
 def get_judge_prompt(
@@ -534,7 +588,8 @@ def get_judge_prompt(
     financial_critique: str,
     claims_critique: str,
     government_defense: str,
-    opposition_defense: str
+    opposition_defense: str,
+    raw_evidence: str
 ) -> str:
     """Generate the Judge Agent prompt with role-specific instructions."""
     config = get_persona_config(persona)
@@ -558,8 +613,10 @@ def get_judge_prompt(
         claims_critique=claims_critique,
         government_defense=government_defense,
         opposition_defense=opposition_defense,
-        role_specific_instructions=role_specific_instructions
+        role_specific_instructions=role_specific_instructions,
+        raw_evidence=raw_evidence
     )
+
 
 
 def get_critique_prompt(
@@ -730,3 +787,86 @@ def get_talking_points_prompt(
         claims_analysis=claims_analysis,
         news_analysis=news_analysis
     )
+
+# =============================================================================
+# BRIEFING CLERK PROMPTS
+# =============================================================================
+
+BRIEFING_CLERK_SYSTEM = """You are the Briefing Clerk for a high-stakes corporate trial.
+Your goal is to consolidate raw evidence into clear, verifiable legal briefs for two sides:
+1. GOVERNMENT (Supports the company's ESG claims/performance)
+2. OPPOSITION (Critiques the company's ESG claims/performance)
+
+You must be OBJECTIVE in your sorting. Do not invent points. Use only the provided evidence.
+"""
+
+BRIEFING_CLERK_TEMPLATE = """
+RAW EVIDENCE FROM INVESTIGATORS:
+{raw_evidence}
+
+INSTRUCTIONS:
+1. Review all evidence points.
+2. Group them into "Government" (Positive/Pro-Company) and "Opposition" (Negative/Anti-Company).
+3. Deduplicate similar points. Merge them into a single strong point with multiple citations.
+4. If a point has no citation, DISCARD IT. Verifiability is paramount.
+5. Output valid JSON:
+{{
+  "government": ["Point 1 [Citation]...", "Point 2 [Citation]..."],
+  "opposition": ["Point 1 [Citation]...", "Point 2 [Citation]..."]
+}}
+"""
+
+def get_briefing_prompt(raw_evidence_text: str) -> str:
+    return BRIEFING_CLERK_TEMPLATE.format(raw_evidence=raw_evidence_text)
+
+
+# =============================================================================
+# LAWYER AGENT PROMPTS (Phase 3)
+# =============================================================================
+
+LAWYER_SYSTEM = """You are a highly skilled Lawyer in a corporate ESG tribunal.
+Role: {role}
+   - GOVERNMENT: You defend {company_name}. You emphasize verifying progress, context, and long-term plans.
+   - OPPOSITION: You critique {company_name}. You emphasize risks, gaps, missed targets, and greenwashing liabilities.
+
+User Persona: {persona} (Tailor your rhetoric to what this stakeholder cares about).
+
+Your Goal: Win the argument using the provided EVIDENCE.
+- Use Citations [N#], [F#], [D#] from your brief.
+- Rebut the opponent's last point directly.
+- Be concise (max 3 sentences).
+- If the evidence is weak, admit it but pivot to a stronger adjacent point.
+"""
+
+LAWYER_TURN_TEMPLATE = """
+MY EVIDENCE BRIEF (Use these points):
+{my_brief}
+
+OPPONENT'S EVIDENCE BRIEF (Be ready to counter):
+{opponent_brief}
+
+DEBATE TRANSCRIPT (History):
+{transcript}
+
+INSTRUCTION:
+You are the {role}.
+The previous speaker said: "{previous_turn}"
+
+Draft your next argument. Start directly with your point.
+"""
+
+def get_lawyer_prompt(
+    role: str,
+    my_brief: str,
+    opponent_brief: str,
+    transcript: str,
+    previous_turn: str
+) -> str:
+    return LAWYER_TURN_TEMPLATE.format(
+        role=role.upper(),
+        my_brief=my_brief,
+        opponent_brief=opponent_brief,
+        transcript=transcript,
+        previous_turn=previous_turn
+    )
+

@@ -61,5 +61,39 @@ def get_llm(model_name: str = "llama-3.3-70b-versatile") -> BaseChatModel:
         print(f"DEBUG: Using Groq provider for model {model_name}")
         return llm
 
+
     else:
         raise ValueError(f"Unsupported model: {model_name}")
+
+
+def extract_json_from_response(response_text: str) -> list:
+    """
+    Extracts and parses a JSON block from the LLM response text.
+    Expected format: ```json [...] ``` or just [...] at the end.
+    Returns empty list if parsing fails.
+    """
+    import re
+    import json
+    
+    # Try to find JSON block
+    json_match = re.search(r"```json\s*(\[.*?\])\s*```", response_text, re.DOTALL)
+    if not json_match:
+        # Try generic code block
+        json_match = re.search(r"```\s*(\[.*?\])\s*```", response_text, re.DOTALL)
+        
+    if json_match:
+        json_str = json_match.group(1)
+    else:
+        # optimize: try to find the last occurrence of '[' and ']'
+        try:
+            start = response_text.rindex('[')
+            end = response_text.rindex(']') + 1
+            json_str = response_text[start:end]
+        except ValueError:
+            return []
+
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        print(f"Failed to parse JSON evidence from response.")
+        return []
