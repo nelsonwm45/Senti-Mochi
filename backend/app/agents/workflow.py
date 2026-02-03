@@ -12,8 +12,8 @@ The citation_registry is propagated through all phases, accumulating source meta
 
 from langgraph.graph import StateGraph, END
 from app.agents.state import AgentState
-from app.agents.news_agent import news_agent, news_critique
-from app.agents.financial_agent import financial_agent, financial_critique
+from app.agents.news_agent import news_agent, news_critique, news_defense
+from app.agents.financial_agent import financial_agent, financial_critique, financial_defense
 from app.agents.claims_agent import claims_agent, claims_critique
 from app.agents.judge import judge_agent
 from app.models import AnalysisStatus
@@ -196,6 +196,48 @@ def cross_examination(state: AgentState) -> Dict[str, Any]:
     return update
 
 
+def defense_phase(state: AgentState) -> Dict[str, Any]:
+    """
+    Phase 3: Rebuttal/Defense Phase (New).
+    Government defends against News Critique.
+    Opposition rebuts Financial Critique.
+    """
+    job_id = state.get('job_id')
+    print("Orchestrator: Starting defense/rebuttal phase...")
+
+    # === FINANCIAL DEFENSE (Government defending) ===
+    update_job_progress(job_id, AnalysisStatus.CROSS_EXAMINATION, "Government Defense (Financial)", 80)
+    start = time.time()
+    fin_defense_result = financial_defense(state)
+    print(f"Financial defense completed in {time.time() - start:.2f}s")
+
+    # === NEWS DEFENSE (Opposition rebutting) ===
+    update_job_progress(job_id, AnalysisStatus.CROSS_EXAMINATION, "Opposition Rebuttal (News)", 82)
+    start = time.time()
+    news_defense_result = news_defense(state)
+    print(f"News defense completed in {time.time() - start:.2f}s")
+
+    # Combine updates
+    update = {}
+    update.update(fin_defense_result)
+    update.update(news_defense_result)
+
+    # Append to arguments for Judge
+    gov_args = state.get('government_arguments', []) or []
+    opp_args = state.get('opposition_arguments', []) or []
+
+    if fin_defense_result.get('financial_defense'):
+        gov_args.append(fin_defense_result['financial_defense'])
+    
+    if news_defense_result.get('news_defense'):
+        opp_args.append(news_defense_result['news_defense'])
+
+    update['government_arguments'] = gov_args
+    update['opposition_arguments'] = opp_args
+
+    return update
+
+
 def judge_with_status(state: AgentState) -> Dict[str, Any]:
     """
     Phase 3: Judge synthesizes all findings into final decision.
@@ -242,6 +284,7 @@ def build_graph():
     # Add nodes
     builder.add_node("gather_intelligence", gather_intelligence)
     builder.add_node("cross_examination", cross_examination)
+    builder.add_node("defense", defense_phase)
     builder.add_node("judge", judge_with_status)
 
     # Set entry point
@@ -249,7 +292,8 @@ def build_graph():
 
     # Define edges (sequential flow)
     builder.add_edge("gather_intelligence", "cross_examination")
-    builder.add_edge("cross_examination", "judge")
+    builder.add_edge("cross_examination", "defense")
+    builder.add_edge("defense", "judge")
     builder.add_edge("judge", END)
 
     return builder.compile()

@@ -65,6 +65,7 @@ export interface DebateReport {
 	// Optional enhanced verdict fields
 	verdict_reasoning?: string;
 	verdict_key_factors?: string[];
+	transcript?: string;
 }
 
 // Market Sentiment structure (from News)
@@ -102,7 +103,8 @@ export interface AnalysisReport {
 	esg_analysis: ESGReport;
 	financial_analysis: FinancialReport;
 	market_sentiment?: MarketSentiment;
-    talking_points?: TalkingPoints;
+	debate_report?: DebateReport;
+	talking_points?: TalkingPoints;
 
 	// Role-specific fields
 	analysis_persona?: string;
@@ -116,6 +118,7 @@ export interface AnalysisReport {
 
 // Helper to extract debate report from agent_logs
 export function getDebateReport(report: AnalysisReport): DebateReport | null {
+	if (report.debate_report) return report.debate_report;
 	if (!report.agent_logs) return null;
 
 	const debateLog = report.agent_logs.find(log => log.agent === 'debate');
@@ -229,34 +232,34 @@ export const analysisApi = {
 		return apiClient.delete(`/api/v1/analysis/report/${reportId}`);
 	},
 
-    generateTalkingPoints: async (reportId: string): Promise<TalkingPoints> => {
-        return apiClient.post(`/api/v1/analysis/report/${reportId}/talking-points/generate`).then(res => res.data);
-    },
+	generateTalkingPoints: async (reportId: string): Promise<TalkingPoints> => {
+		return apiClient.post(`/api/v1/analysis/report/${reportId}/talking-points/generate`).then(res => res.data);
+	},
 
-    updateTalkingPoints: async (reportId: string, talkingPoints: TalkingPoints): Promise<TalkingPoints> => {
-        return apiClient.put(`/api/v1/analysis/report/${reportId}/talking-points`, talkingPoints).then(res => res.data);
-    }
+	updateTalkingPoints: async (reportId: string, talkingPoints: TalkingPoints): Promise<TalkingPoints> => {
+		return apiClient.put(`/api/v1/analysis/report/${reportId}/talking-points`, talkingPoints).then(res => res.data);
+	}
 };
 
 // =============================================================================
 // Talking Points Types
 // =============================================================================
 export interface TalkingPoints {
-    headline_summary?: {
-        overall_tone: string;
-        direction_of_change: string;
-    };
-    key_developments?: string[];
-    business_implications?: {
-        operational_impact: string;
-        financial_pressure_or_upside: string;
-        strategic_implications: string;
-    };
-    conversation_starters?: string[];
-    opportunity_angles?: {
-        financing: string;
-        risk_management: string;
-        advisory: string;
-    };
-    others?: string;
+	headline_summary?: {
+		overall_tone: string;
+		direction_of_change: string;
+	};
+	key_developments?: string[];
+	business_implications?: {
+		operational_impact: string;
+		financial_pressure_or_upside: string;
+		strategic_implications: string;
+	};
+	conversation_starters?: string[];
+	opportunity_angles?: {
+		financing: string;
+		risk_management: string;
+		advisory: string;
+	};
+	others?: string;
 }

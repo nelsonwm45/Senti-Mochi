@@ -14,7 +14,7 @@ from app.agents.base import get_llm
 from app.agents.state import AgentState
 from app.agents.cache import generate_cache_key, hash_content, get_cached_result, set_cached_result
 from app.agents.persona_config import get_persona_config
-from app.agents.prompts import FINANCIAL_AGENT_SYSTEM, get_financial_agent_prompt, get_critique_prompt
+from app.agents.prompts import FINANCIAL_AGENT_SYSTEM, get_financial_agent_prompt, get_critique_prompt, get_defense_prompt
 from app.agents.citation_models import SourceMetadata
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
@@ -240,3 +240,42 @@ def financial_critique(state: AgentState) -> Dict[str, Any]:
         ])
         print(f"[Financial Agent] Critique: SUCCESS (Groq)")
         return {"financial_critique": response.content}
+
+def financial_defense(state: AgentState) -> Dict[str, Any]:
+    """
+    Defends the Government position against Opposition critique.
+    """
+    persona = state.get('analysis_persona', 'INVESTOR')
+    persona_label = persona.replace('_', ' ').title()
+    print(f"Financial Agent: Defending against Opposition critique for {state['company_name']}")
+
+    my_analysis = state.get("financial_analysis", "No financial analysis provided.")
+    # Opposition critique is stored in 'news_critique' from the critique phase
+    opposition_critique = state.get("news_critique", "No opposition critique provided.")
+
+    prompt = get_defense_prompt(
+        agent_type="financial",
+        persona=persona,
+        my_analysis=my_analysis,
+        opponent_critique=opposition_critique
+    )
+
+    system_msg = f"You are the Government (Pro-Company) attempting to defend your financial thesis. PRESERVE [F#] citations."
+
+    # Using Cerebras for strong reasoning
+    try:
+        llm = get_llm("llama-3.3-70b")
+        response = llm.invoke([
+            SystemMessage(content=system_msg),
+            HumanMessage(content=prompt)
+        ])
+        print(f"[Financial Agent] Defense: SUCCESS")
+        return {"financial_defense": response.content}
+    except Exception as e:
+        print(f"[Financial Agent] Defense: Failed {e}, fallback groq")
+        llm = get_llm("llama-3.1-8b-instant")
+        response = llm.invoke([
+            SystemMessage(content=system_msg),
+            HumanMessage(content=prompt)
+        ])
+        return {"financial_defense": response.content}

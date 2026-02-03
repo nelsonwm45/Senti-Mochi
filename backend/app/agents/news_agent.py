@@ -14,7 +14,7 @@ from app.agents.base import get_llm
 from app.agents.state import AgentState
 from app.agents.cache import generate_cache_key, hash_content, get_cached_result, set_cached_result
 from app.agents.persona_config import get_persona_config
-from app.agents.prompts import NEWS_AGENT_SYSTEM, get_news_agent_prompt, get_critique_prompt
+from app.agents.prompts import NEWS_AGENT_SYSTEM, get_news_agent_prompt, get_critique_prompt, get_defense_prompt
 from app.agents.citation_models import SourceMetadata
 from app.services.news_relevance import news_relevance_filter
 from app.services.content_optimizer import content_optimizer
@@ -274,3 +274,43 @@ def news_critique(state: AgentState) -> Dict[str, Any]:
         ])
         print(f"[News Agent] Critique: SUCCESS (Groq)")
         return {"news_critique": response.content}
+
+
+def news_defense(state: AgentState) -> Dict[str, Any]:
+    """
+    Simulates the Opposition (Skeptic) rebuttal against the Government's critique.
+    """
+    persona = state.get('analysis_persona', 'INVESTOR')
+    persona_label = persona.replace('_', ' ').title()
+    print(f"News Agent: Defending (Rebutting) against Government critique for {state['company_name']}")
+
+    my_analysis = state.get("news_analysis", "No news analysis provided.")
+    # Government critique is stored in 'financial_critique'
+    government_critique = state.get("financial_critique", "No government critique provided.")
+
+    prompt = get_defense_prompt(
+        agent_type="news",
+        persona=persona,
+        my_analysis=my_analysis,
+        opponent_critique=government_critique
+    )
+
+    system_msg = f"You are the Opposition (Skeptic) attempting to rebut the Government's defense. PRESERVE [N#] citations."
+
+    try:
+        llm = get_llm("llama-3.3-70b")
+        response = llm.invoke([
+            SystemMessage(content=system_msg),
+            HumanMessage(content=prompt)
+        ])
+        print(f"[News Agent] Defense: SUCCESS")
+        return {"news_defense": response.content}
+    except Exception as e:
+        print(f"[News Agent] Defense: Failed {e}, fallback groq")
+        llm = get_llm("llama-3.1-8b-instant")
+        response = llm.invoke([
+            SystemMessage(content=system_msg),
+            HumanMessage(content=prompt)
+        ])
+        return {"news_defense": response.content}
+
