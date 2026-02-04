@@ -222,7 +222,7 @@ def claims_agent(state: AgentState) -> Dict[str, Any]:
         # Use v5 to invalidate previous caches AGAIN to be sure
         content_for_hash = full_context + "|" + ",".join(chunk_ids)
         content_hash = hash_content(content_for_hash)
-        cache_key = generate_cache_key("claims_v12", company_id, content_hash)
+        cache_key = generate_cache_key("claims_v13", company_id, content_hash)
         
         # Check cache first
         cached_result = get_cached_result(cache_key)

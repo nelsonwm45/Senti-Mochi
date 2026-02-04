@@ -240,21 +240,27 @@ OUTPUT FORMAT (MANDATORY - use bullet points):
 • Board independence: [%] - [Context/Details] [D#, Page X]
 • Key policies: [names] - [Explanation of scope/impact] [D#, Page X]
 • Risk framework: [details] - [How it is implemented] [D#, Page X]
+• Executive Compensation: [KPIs/Metrics] - [Alignment with performance] [D#, Page X]
+• Shareholder Rights: [Voting structure/protections] [D#, Page X]
 
 ## Environmental
 • Net Zero/Carbon Neutral target: [year] - [Strategy/Roadmap details] [D#, Page X]
 • GHG Emissions (Scope 1/2/3): [values] - [YoY trends/Analysis] [D#, Page X]
 • Energy/Water/Waste metrics: [values] - [reduction initiatives] [D#, Page X]
 • Certifications/Green initiatives: [details] - [Impact description] [D#, Page X]
+• Climate Risk Strategy: [Physical/Transition risks] - [Mitigation plans] [D#, Page X]
 
 ## Social
 • DEI/Gender diversity: [statistics] - [Context on trends] [D#, Page X]
 • Employee training/turnover: [metrics] - [Program details] [D#, Page X]
 • Community/CSR initiatives: [details] - [Beneficiary impact] [D#, Page X]
+• Labor Practices: [Unionization/Safety stats] - [Policy details] [D#, Page X]
+• Supply Chain Social: [Audits/Compliance] - [Human rights standards] [D#, Page X]
 
 ## Disclosure Quality
 • Frameworks adopted: [GRI/ISSB/TCFD] - [Adherence level] [D#, Page X]
 • Assurance level: [Limited/Reasonable] - [Provider details] [D#, Page X]
+• Data Availability: [Completeness/Gaps] - [Commentary] [D#, Page X]
 
 ## Year-over-Year ESG Performance
 • [Metric]: [Previous Year Value] → [Current Year Value] ([+/-X%] change) - [Explanation of driver] [D#, Page X]
@@ -262,13 +268,13 @@ OUTPUT FORMAT (MANDATORY - use bullet points):
 • Include ALL YoY comparisons found in documents for: emissions, energy, water, waste, diversity, safety incidents, board composition, or any ESG KPIs
 
 RULES:
-1. BULLET POINTS ONLY - one distinct finding per line
-2. EXPLAIN THE FINDING: Do not just list data. Provide brief context or explanation for WHY it matters or HOW it is achieved.
-3. CITATION FORMAT: "• [Item]: [Specific value/name] - [Explanation] [D#, Page Number]". ALWAYS include page numbers inside the brackets if available.
-4. If specific metrics are not found, include ANY relevant qualitative or quantitative data for that section with citations.
-5. Do NOT write "No data available" unless the document truly contains ZERO relevant information for that category.
-6. Max 10-12 bullets per section - capture as much detail as possible.
-7. **YoY PRIORITY**: When documents contain historical comparisons or multi-year data, ALWAYS extract and highlight trends using format: "[Previous] → [Current] ([Change%])"
+1. MAXIMIZE DATA DENSITY: Aim for 15-20 distinct bullet points per section if data allows.
+2. EXTRACT EVERY RELEVANT FACT: Do not summarize multiple points into one. List them separately.
+3. PERSONA RELEVANCE: Prioritize findings that matter most to a {persona_label}. (e.g., for Investors, focus on financial materiality of ESG; for Relationship Managers, focus on positive talking points).
+4. CITATION FORMAT: "• [Item]: [Specific value/name] - [Explanation] [D#, Page Number]". ALWAYS include page numbers.
+5. EXPLAIN THE "WHY": For every data point, briefly explain its significance or impact.
+6. Do NOT write "No data available" unless the document truly contains ZERO relevant information.
+7. **YoY PRIORITY**: Highlight trends using "[Previous] → [Current] ([Change%])" format.
 
 Provide your analysis:"""
 
@@ -378,7 +384,7 @@ SYNTHESIS INSTRUCTIONS:
 
 3. ESG ANALYSIS (for each: Overview, Governance, Environmental, Social, Disclosure):
    - preview_summary: 3-5 comprehensive sentences describing key findings, their significance, and implications with citations [D#]
-   - detailed_findings: 10-12 bullet points with [D#] citations. Format: "**[Topic]**: [Detailed explanation/finding] [D#]". Use **bold** for the topic.
+   - detailed_findings: 15-20 distinct bullet points with [D#] citations. Format: "**[Topic]**: [Detailed explanation/finding] [D#]". Use **bold** for the topic.
    - confidence_score: 0-100 based on data quality
    - highlights: 3-5 specific data points (plain text)
 

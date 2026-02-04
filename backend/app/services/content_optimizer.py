@@ -257,9 +257,9 @@ class ContentOptimizer:
         total_chars = tokens_to_chars(max_total_tokens)
 
         # Allocation
-        news_budget = int(total_chars * 0.25)      # ~1000 chars
-        financial_budget = int(total_chars * 0.30) # ~1200 chars
-        claims_budget = int(total_chars * 0.45)    # ~1800 chars
+        news_budget = int(total_chars * 0.20)      # ~20%
+        financial_budget = int(total_chars * 0.25) # ~25%
+        claims_budget = int(total_chars * 0.55)    # ~55% (Prioritize ESG details)
 
         # Smart truncation with key sentence extraction
         news_opt = self._smart_truncate(news_analysis, news_budget)

@@ -268,7 +268,11 @@ def get_reports(company_id: str, session: Session = Depends(get_session), curren
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/report/{report_id}")
-def get_report(report_id: UUID, session: Session = Depends(get_session)):
+def get_report(
+    report_id: UUID, 
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
     """
     Retrieves a specific analysis report.
     """
@@ -278,7 +282,11 @@ def get_report(report_id: UUID, session: Session = Depends(get_session)):
     return report
 
 @router.delete("/report/{report_id}")
-def delete_report(report_id: UUID, session: Session = Depends(get_session)):
+def delete_report(
+    report_id: UUID, 
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
     """
     Deletes a specific analysis report.
     """

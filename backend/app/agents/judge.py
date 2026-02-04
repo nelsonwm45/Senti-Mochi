@@ -95,7 +95,7 @@ def clean_and_parse_json(text: str, parser: JsonOutputParser) -> "JudgeDecisionO
 class JudgeSectionOutput(BaseModel):
     """Section output for ESG/Financial analysis."""
     preview_summary: str = Field(default="Data not available for analysis.", description="Comprehensive 3-5 sentence summary with key findings and their implications")
-    detailed_findings: List[str] = Field(default_factory=list, description="5-8 bullet points with citations [N#], [F#], [D#]. Use **bold** for important metrics and terms.")
+    detailed_findings: List[str] = Field(default_factory=list, description="15-20 distinct bullet points with citations [N#], [F#], [D#]. Use **bold** for important metrics and terms.")
     confidence_score: int = Field(default=50, ge=0, le=100)
     highlights: List[str] = Field(default_factory=list, description="3-5 key metrics or data points")
 
@@ -543,7 +543,7 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     # Total budget ~9000 chars for analyses, leaving room for prompt template + output
     news_an, fin_an, claims_an = content_optimizer.optimize_for_judge(
         news_an, fin_an, claims_an,
-        max_total_tokens=2800  # Increased to ~11k chars to capture more ESG detail
+        max_total_tokens=4500  # Increased to ~18k chars to capture rich ESG detail
     )
 
     # Extract debate arguments and transcript
