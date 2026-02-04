@@ -1,4 +1,4 @@
-.PHONY: up down stop dev build logs clean restart prune prune-all clean-db clean-db-force reset-db help
+.PHONY: up down stop dev build logs clean restart prune prune-all clean-db clean-db-force reset-db help restart-backend
 
 help:
 	@echo "Available commands:"
@@ -12,6 +12,7 @@ help:
 	@echo "  make restart         - Restart all services"
 	@echo "  make prune           - Remove dangling images"
 	@echo "  make prune-all       - Remove all unused Docker resources"
+	@echo "  make restart-backend - Restart backend container (apply new API keys)"
 	@echo "  make clean-db        - Remove database volumes (with confirmation)"
 	@echo "  make clean-db-force  - Force remove database volumes (no confirmation)"
 	@echo "  make reset-db        - Full reset (remove volumes + restart)"
@@ -93,3 +94,9 @@ reset-db:
 	@docker compose up -d
 	@echo "✅ Database reset complete! Fresh start ready."
 	@echo "💡 Sign up with a new account to trigger auto-seeding."
+
+# Restart backend container to apply new API keys
+restart-backend:
+	@echo "🔄 Restarting backend container..."
+	@docker restart finance_backend
+	@echo "✅ Backend restarted! New API keys applied."
