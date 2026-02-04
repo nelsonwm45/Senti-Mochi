@@ -21,6 +21,7 @@ class DocumentStatus(str, Enum):
 class AnalysisStatus(str, Enum):
     PENDING = "PENDING"
     GATHERING_INTEL = "GATHERING_INTEL"
+    BRIEFING = "BRIEFING"
     CROSS_EXAMINATION = "CROSS_EXAMINATION"
     SYNTHESIZING = "SYNTHESIZING"
     EMBEDDING = "EMBEDDING"
@@ -224,6 +225,9 @@ class AnalysisReport(SQLModel, table=True):
     confidence_score: int  # 0-100
     summary: str = Field(sa_column=Column(Text)) # Markdown text
     
+    # Ownership
+    user_id: UUID = Field(foreign_key="users.id", index=True, default=None) 
+    
     # New Role-Based Fields
     justification: Optional[str] = Field(default=None, sa_column=Column(Text))
     key_concerns: list[str] = Field(default=[], sa_column=Column(JSON))
@@ -270,6 +274,7 @@ class AnalysisJob(SQLModel, table=True):
     __tablename__ = "analysis_jobs"
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     company_id: UUID = Field(foreign_key="companies.id", index=True)
+    user_id: UUID = Field(foreign_key="users.id", index=True, default=None)
     analysis_persona: Optional[str] = None  # Which persona to use for this analysis
     status: AnalysisStatus = Field(default=AnalysisStatus.PENDING)
     current_step: Optional[str] = None  # Human-readable step description

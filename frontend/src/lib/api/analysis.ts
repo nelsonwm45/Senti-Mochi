@@ -63,6 +63,7 @@ export interface DebateReport {
 	opposition_stand: DebateStance;
 	judge_verdict: string;
 	// Optional enhanced verdict fields
+	verdict_confidence?: number;
 	verdict_reasoning?: string;
 	verdict_key_factors?: string[];
 	transcript?: string;

@@ -299,23 +299,28 @@ const ProgressStep = ({ onComplete, companyId, topic, companyName }: { onComplet
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const steps = [
-        { label: "Initializing", sub: "Starting analysis engine" },
-        { label: "Gathering Intel", sub: "Analyzing news, financials & documents" },
-        { label: "Cross-Examination", sub: "Agents debating findings" },
-        { label: "Synthesizing", sub: "Generating final report" },
-        { label: "Finalizing", sub: "Embedding for search" }
+        { label: "Phase 1: Research", sub: "Gathering Intelligence (News, Financials, Documents)" },
+        { label: "Phase 2: Cross-Examination", sub: "Critique agents verifying claims against evidence" },
+        { label: "Phase 3: Briefing", sub: "Consolidating findings into Legal Briefs" },
+        { label: "Phase 4: The Debate", sub: "Government vs. Opposition Arguments" },
+        { label: "Phase 5: The Verdict", sub: "Judge issuing final decision based on Ground Truth" },
+        { label: "Finalizing", sub: "Embedding report for RAG" }
     ];
 
     const hasTriggered = useRef(false);
 
-    const statusToStep = (status: string): number => {
+    const statusToStep = (status: string, progress: number): number => {
         switch (status) {
             case 'PENDING': return 0;
-            case 'GATHERING_INTEL': return 1;
-            case 'CROSS_EXAMINATION': return 2;
-            case 'SYNTHESIZING': return 3;
-            case 'EMBEDDING': return 4;
-            case 'COMPLETED': return 5;
+            case 'GATHERING_INTEL': return 0; 
+            case 'CROSS_EXAMINATION': return 1; // Now Phase 2
+            case 'BRIEFING': return 2; // Phase 3
+            case 'SYNTHESIZING': 
+                // Distinguish between Debate (Phase 4) and Verdict (Phase 5) based on progress
+                // Debate runs at 70-75%, Judge runs at 90%
+                return progress >= 80 ? 4 : 3;
+            case 'EMBEDDING': return 5;
+            case 'COMPLETED': return 6;
             default: return 0;
         }
     };
@@ -373,7 +378,7 @@ const ProgressStep = ({ onComplete, companyId, topic, companyName }: { onComplet
                     if (statusResponse.current_step) {
                         setCurrentStep(statusResponse.current_step);
                     }
-                    setStepIndex(statusToStep(statusResponse.status));
+                    setStepIndex(statusToStep(statusResponse.status, statusResponse.progress || 0));
 
                 } catch (e) {
                     console.error("Status polling error:", e);
@@ -922,14 +927,82 @@ const RoleBasedDecisionCard = ({ report, registry }: { report: AnalysisReport; r
                 </div>
             </div>
 
-            {/* Full Justification */}
-            <div className="mb-6">
-                <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Detailed Justification</div>
-                <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none">
-                    <ReactMarkdown components={citationComponents}>
-                        {insight.justification || "No specific justification provided."}
-                    </ReactMarkdown>
-                </div>
+            {/* Full Justification - Clean Layout */}
+            <div className="mb-6 space-y-4">
+                {(() => {
+                    // Helper to split justification
+                    const text = insight.justification || "";
+                    let confidenceText = "";
+                    let rationaleText = "";
+                    let rationaleTitle = "Investment Rationale";
+
+                    // Try to match Confidence Reasoning
+                    // Capture text after marker until next marker or end
+                    const confidenceMatch = text.match(/\*\*Confidence Reasoning:\*\*\s*([\s\S]*?)(?=\*\*|$)/i);
+                    if (confidenceMatch) {
+                        confidenceText = confidenceMatch[1].trim();
+                    }
+
+                    // Try to match Rationale
+                    const engagementMatch = text.match(/\*\*Engagement Rationale:\*\*\s*([\s\S]*?)(?=$)/i);
+                    const investmentMatch = text.match(/\*\*Investment Rationale:\*\*\s*([\s\S]*?)(?=$)/i);
+
+                    if (engagementMatch) {
+                        rationaleText = engagementMatch[1].trim();
+                        // Clean any potential double prefix if it exists in the captured group
+                        rationaleText = rationaleText.replace(/^Engagement Rationale:\s*/i, "");
+                        rationaleTitle = "Engagement Rationale";
+                    } else if (investmentMatch) {
+                        rationaleText = investmentMatch[1].trim();
+                        rationaleText = rationaleText.replace(/^Investment Rationale:\s*/i, "");
+                        rationaleTitle = "Investment Rationale";
+                    } else if (!confidenceMatch) {
+                        // Fallback: entire text is rationale
+                        rationaleText = text;
+                    }
+
+                    return (
+                        <>
+                            {confidenceText && (
+                                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Shield size={16} className="text-indigo-400" />
+                                        <h4 className="text-xs font-bold text-indigo-200 uppercase tracking-wider">Confidence Reasoning</h4>
+                                    </div>
+                                    <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none">
+                                        <ReactMarkdown components={citationComponents}>{confidenceText}</ReactMarkdown>
+                                    </div>
+                                </div>
+                            )}
+
+                            {rationaleText && (
+                                <div className={cn(
+                                    "rounded-xl p-4 border",
+                                    insight.decision.includes("SELL") || insight.decision.includes("DIVEST") ? "bg-red-500/5 border-red-500/10" :
+                                    insight.decision.includes("BUY") || insight.decision.includes("INVEST") ? "bg-emerald-500/5 border-emerald-500/10" :
+                                    "bg-blue-500/5 border-blue-500/10"
+                                )}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <TrendingUp size={16} className={cn(
+                                            insight.decision.includes("SELL") || insight.decision.includes("DIVEST") ? "text-red-400" :
+                                            insight.decision.includes("BUY") || insight.decision.includes("INVEST") ? "text-emerald-400" :
+                                            "text-blue-400"
+                                        )} />
+                                        <h4 className={cn(
+                                            "text-xs font-bold uppercase tracking-wider",
+                                            insight.decision.includes("SELL") || insight.decision.includes("DIVEST") ? "text-red-200" :
+                                            insight.decision.includes("BUY") || insight.decision.includes("INVEST") ? "text-emerald-200" :
+                                            "text-blue-200"
+                                        )}>{rationaleTitle}</h4>
+                                    </div>
+                                    <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none">
+                                        <ReactMarkdown components={citationComponents}>{rationaleText}</ReactMarkdown>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
             </div>
 
             {/* All Key Concerns */}
@@ -1029,10 +1102,10 @@ const DebateTranscriptChat = ({ transcript, registry }: { transcript: string; re
 
     const getAgentIdentity = (variant: 'pro' | 'con' | 'objective' | 'neutral'): string => {
         switch (variant) {
-            case 'pro': return "Financial Analyst";
-            case 'con': return "News Scout";
-            case 'objective': return "Claims Auditor";
-            case 'neutral': return "Chief Investment Officer";
+            case 'pro': return "Government Agent";
+            case 'con': return "Opposition Agent";
+            case 'objective': return "Judge"; // Fallback if Judge enters chat
+            case 'neutral': return "Moderator";
         }
     };
 
@@ -1195,50 +1268,101 @@ const DebateReportSection = ({ report, registry }: { report: AnalysisReport; reg
                 </GlassCard>
             </div>
 
-            {/* Judge Verdict */}
-            <GlassCard className="border-l-2 border-l-purple-500/50">
-                <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                        <Gavel size={16} className="text-purple-400" />
-                    </div>
-                    <h3 className="font-semibold text-white">Judge's Verdict</h3>
-                </div>
-
-                {/* Verdict Decision */}
-                <div className="text-xl font-bold text-purple-400 mb-3">
-                    {debateReport.judge_verdict}
-                </div>
-
-                {/* Verdict Reasoning (only if present) */}
-                {debateReport.verdict_reasoning && (
-                    <div className="mb-4">
-                        <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Reasoning</div>
-                        <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none bg-white/5 p-3 rounded-lg border border-white/10">
-                            <ReactMarkdown components={citationComponents}>{debateReport.verdict_reasoning}</ReactMarkdown>
+            {/* Judge Verdict - Cohesive Redesign */}
+            <GlassCard className="border-l-4 border-l-purple-500 overflow-hidden relative group p-0">
+                {/* Background Accent */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 blur-3xl -mr-32 -mt-32 rounded-full group-hover:bg-purple-500/10 transition-all duration-1000" />
+                
+                {/* Header Section */}
+                <div className="p-6 pb-4 border-b border-white/5 bg-gradient-to-r from-purple-500/[0.03] to-transparent">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                                <Gavel size={16} className="text-purple-400" />
+                                <h3 className="font-bold text-white text-base tracking-tight italic">Judicial Synthesis</h3>
+                            </div>
+                            <div className="text-3xl font-black bg-gradient-to-r from-purple-300 via-purple-100 to-fuchsia-300 bg-clip-text text-transparent drop-shadow-sm">
+                                {debateReport.judge_verdict}
+                            </div>
                         </div>
-                    </div>
-                )}
 
-                {/* Key Deciding Factors (only if present) */}
-                {debateReport.verdict_key_factors && debateReport.verdict_key_factors.length > 0 && (
-                    <div>
-                        <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                            <Scale size={12} /> Key Deciding Factors
-                        </div>
-                        <div className="space-y-2">
-                            {debateReport.verdict_key_factors.map((factor, idx) => (
-                                <div key={idx} className="text-sm text-gray-300 flex items-start gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
-                                    <span className="text-purple-400 font-bold">{idx + 1}.</span>
-                                    <div className="prose prose-invert prose-sm max-w-none">
-                                        <ReactMarkdown components={citationComponents}>
-                                            {factor}
-                                        </ReactMarkdown>
-                                    </div>
+                        {/* Right: Confidence Visualization */}
+                        <div className="flex items-center gap-4 bg-purple-500/10 rounded-2xl px-5 py-3 border border-purple-500/20 backdrop-blur-md">
+                            <div className="relative w-12 h-12">
+                                <svg className="w-full h-full -rotate-90">
+                                    <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="4" className="text-white/5" />
+                                    <motion.circle
+                                        cx="24"
+                                        cy="24"
+                                        r="20"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                        strokeDasharray={2 * Math.PI * 20}
+                                        initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
+                                        animate={{ strokeDashoffset: 2 * Math.PI * 20 * (1 - (debateReport.verdict_confidence || 50) / 100) }}
+                                        transition={{ duration: 1.5, ease: "easeOut" }}
+                                        className="text-purple-500"
+                                        strokeLinecap="round"
+                                    />
+                                </svg>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-xs font-bold text-white leading-none">{debateReport.verdict_confidence || 50}%</span>
                                 </div>
-                            ))}
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-bold text-purple-300 uppercase tracking-widest leading-none mb-1">Confidence</span>
+                                <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">Evidence Match</span>
+                            </div>
                         </div>
                     </div>
-                )}
+                </div>
+
+                {/* Content Section */}
+                <div className="p-6 space-y-6 bg-[#0a0a0c]/40 relative z-10">
+                    {/* Integrated Rationale */}
+                    {debateReport.verdict_reasoning && (
+                        <div className="relative">
+                            {/* Visual Bridge */}
+                            <div className="absolute -left-6 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-500/50 to-transparent opacity-30" />
+                            
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Core Justification</span>
+                            </div>
+                            
+                            <div className="text-sm text-gray-300 leading-relaxed font-normal bg-white/5 p-4 rounded-xl border border-white/5 shadow-inner backdrop-blur-sm">
+                                <ReactMarkdown components={citationComponents}>{debateReport.verdict_reasoning}</ReactMarkdown>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Key Deciding Factors */}
+                    {debateReport.verdict_key_factors && debateReport.verdict_key_factors.length > 0 && (
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-2">Key Deciding Factors</span>
+                                <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {debateReport.verdict_key_factors.map((factor, idx) => (
+                                    <div key={idx} className="flex items-start gap-3 bg-gradient-to-br from-white/[0.03] to-transparent p-4 rounded-xl border border-white/5 hover:border-purple-500/30 hover:from-purple-500/5 transition-all group/factor">
+                                        <div className="shrink-0 w-8 h-8 rounded-lg bg-black/40 border border-white/5 flex items-center justify-center text-xs font-bold text-purple-400 group-hover/factor:text-purple-300">
+                                            {idx + 1}
+                                        </div>
+                                        <div className="flex-1 text-sm text-gray-400 leading-snug group-hover/factor:text-gray-200 transition-colors">
+                                            <ReactMarkdown components={citationComponents}>
+                                                {factor}
+                                            </ReactMarkdown>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </GlassCard>
             
             {/* Debate Transcript */}
@@ -1248,7 +1372,7 @@ const DebateReportSection = ({ report, registry }: { report: AnalysisReport; reg
                         <div className="w-8 h-8 rounded-lg bg-gray-500/20 flex items-center justify-center">
                             <MessageSquare size={16} className="text-gray-400" />
                         </div>
-                        <h3 className="font-semibold text-white">Full Debate Transcript</h3>
+                        <h3 className="font-semibold text-white">Debate Transcript</h3>
                     </div>
             {/* Debate Transcript */}
             {debateReport.transcript && (

@@ -9,6 +9,7 @@ from all agents, enabling end-to-end citation tracking.
 from typing import TypedDict, Annotated, List, Optional, Dict, Any
 from uuid import UUID
 import operator
+from .citation_models import EvidencePoint
 
 
 class AgentState(TypedDict):
@@ -24,6 +25,7 @@ class AgentState(TypedDict):
     company_id: str  # UUID as string
     company_name: str
     job_id: Optional[str]  # Analysis job ID for status tracking
+    user_id: Optional[str]  # User ID for ownership tracking
     analysis_persona: str  # INVESTOR, RELATIONSHIP_MANAGER, CREDIT_RISK, MARKET_ANALYST
 
     # ==========================================================================
@@ -41,6 +43,12 @@ class AgentState(TypedDict):
     claims_data: Optional[str]  # RAG content from documents
 
     # ==========================================================================
+    # PHASE 1: RAW EVIDENCE (Ground Truth for Judge)
+    # ==========================================================================
+    # Structured evidence points extracted by researchers
+    raw_evidence: Dict[str, List['EvidencePoint']]  # keys: 'news', 'financial', 'claims'
+
+    # ==========================================================================
     # AGENT OUTPUTS (Narratives with embedded citations)
     # ==========================================================================
     # Each analysis contains embedded [N#], [F#], [D#] citations
@@ -49,17 +57,24 @@ class AgentState(TypedDict):
     claims_analysis: Optional[str]
 
     # ==========================================================================
-    # CRITIQUE OUTPUTS (Debate Phase)
+    # CRITIQUE OUTPUTS (Legacy - kept for backward compat if needed)
     # ==========================================================================
     news_critique: Optional[str]
     financial_critique: Optional[str]
     claims_critique: Optional[str]
 
     # ==========================================================================
-    # DEBATE OUTPUTS (Structured debate content)
+    # PHASE 2: LEGAL BRIEFS (Consolidated Evidence)
+    # ==========================================================================
+    # Consolidated lists of PROs and CONs for the lawyers
+    legal_briefs: Dict[str, List[str]]  # keys: 'government', 'opposition'
+
+    # ==========================================================================
+    # PHASE 3: DEBATE OUTPUTS (Structured debate content)
     # ==========================================================================
     government_arguments: Optional[List[str]]  # Pro/bullish arguments with citations
     opposition_arguments: Optional[List[str]]  # Skeptic/bearish arguments with citations
+    debate_transcript: Optional[List[str]]  # Full transcript of the debate loop
 
     # ==========================================================================
     # FINAL OUTPUT

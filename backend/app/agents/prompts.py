@@ -240,21 +240,27 @@ OUTPUT FORMAT (MANDATORY - use bullet points):
 • Board independence: [%] - [Context/Details] [D#, Page X]
 • Key policies: [names] - [Explanation of scope/impact] [D#, Page X]
 • Risk framework: [details] - [How it is implemented] [D#, Page X]
+• Executive Compensation: [KPIs/Metrics] - [Alignment with performance] [D#, Page X]
+• Shareholder Rights: [Voting structure/protections] [D#, Page X]
 
 ## Environmental
 • Net Zero/Carbon Neutral target: [year] - [Strategy/Roadmap details] [D#, Page X]
 • GHG Emissions (Scope 1/2/3): [values] - [YoY trends/Analysis] [D#, Page X]
 • Energy/Water/Waste metrics: [values] - [reduction initiatives] [D#, Page X]
 • Certifications/Green initiatives: [details] - [Impact description] [D#, Page X]
+• Climate Risk Strategy: [Physical/Transition risks] - [Mitigation plans] [D#, Page X]
 
 ## Social
 • DEI/Gender diversity: [statistics] - [Context on trends] [D#, Page X]
 • Employee training/turnover: [metrics] - [Program details] [D#, Page X]
 • Community/CSR initiatives: [details] - [Beneficiary impact] [D#, Page X]
+• Labor Practices: [Unionization/Safety stats] - [Policy details] [D#, Page X]
+• Supply Chain Social: [Audits/Compliance] - [Human rights standards] [D#, Page X]
 
 ## Disclosure Quality
 • Frameworks adopted: [GRI/ISSB/TCFD] - [Adherence level] [D#, Page X]
 • Assurance level: [Limited/Reasonable] - [Provider details] [D#, Page X]
+• Data Availability: [Completeness/Gaps] - [Commentary] [D#, Page X]
 
 ## Year-over-Year ESG Performance
 • [Metric]: [Previous Year Value] → [Current Year Value] ([+/-X%] change) - [Explanation of driver] [D#, Page X]
@@ -262,13 +268,13 @@ OUTPUT FORMAT (MANDATORY - use bullet points):
 • Include ALL YoY comparisons found in documents for: emissions, energy, water, waste, diversity, safety incidents, board composition, or any ESG KPIs
 
 RULES:
-1. BULLET POINTS ONLY - one distinct finding per line
-2. EXPLAIN THE FINDING: Do not just list data. Provide brief context or explanation for WHY it matters or HOW it is achieved.
-3. CITATION FORMAT: "• [Item]: [Specific value/name] - [Explanation] [D#, Page Number]". ALWAYS include page numbers inside the brackets if available.
-4. If specific metrics are not found, include ANY relevant qualitative or quantitative data for that section with citations.
-5. Do NOT write "No data available" unless the document truly contains ZERO relevant information for that category.
-6. Max 10-12 bullets per section - capture as much detail as possible.
-7. **YoY PRIORITY**: When documents contain historical comparisons or multi-year data, ALWAYS extract and highlight trends using format: "[Previous] → [Current] ([Change%])"
+1. MAXIMIZE DATA DENSITY: Aim for 15-20 distinct bullet points per section if data allows.
+2. EXTRACT EVERY RELEVANT FACT: Do not summarize multiple points into one. List them separately.
+3. PERSONA RELEVANCE: Prioritize findings that matter most to a {persona_label}. (e.g., for Investors, focus on financial materiality of ESG; for Relationship Managers, focus on positive talking points).
+4. CITATION FORMAT: "• [Item]: [Specific value/name] - [Explanation] [D#, Page Number]". ALWAYS include page numbers.
+5. EXPLAIN THE "WHY": For every data point, briefly explain its significance or impact.
+6. Do NOT write "No data available" unless the document truly contains ZERO relevant information.
+7. **YoY PRIORITY**: Highlight trends using "[Previous] → [Current] ([Change%])" format.
 
 Provide your analysis:"""
 
@@ -299,7 +305,8 @@ YOUR CRITICAL RESPONSIBILITIES:
 1. PRESERVE all citation IDs from sub-agents: [N#], [F#], [D#]
 2. NEVER strip or remove citation markers
 3. VERIFY that your conclusions are backed by cited evidence
-4. EXPLAIN YOUR CONFIDENCE: Provide a bulleted breakdown explaining the score. Format:
+4. DO NOT start your justification with labels like "Investment Rationale:" or "Reasoning:". Start directly with the text.
+5. EXPLAIN YOUR CONFIDENCE: Provide a bulleted breakdown explaining the score. Format:
    - **Financials**: [Quality assessment]
    - **ESG**: [Quality assessment]
    - **News**: [Quality assessment]
@@ -337,6 +344,11 @@ Review the following analyses for {company_name}:
 3. CLAIMS/DOCUMENTS ANALYSIS (sources: [D#]):
 {claims_analysis}
 
+
+
+4. RAW EVIDENCE (GROUND TRUTH):
+{raw_evidence}
+
 --- DEBATE / CROSS-EXAMINATION PHASE ---
 
 4. NEWS CRITIQUE (Opposition Argument):
@@ -372,7 +384,7 @@ SYNTHESIS INSTRUCTIONS:
 
 3. ESG ANALYSIS (for each: Overview, Governance, Environmental, Social, Disclosure):
    - preview_summary: 3-5 comprehensive sentences describing key findings, their significance, and implications with citations [D#]
-   - detailed_findings: 10-12 bullet points with [D#] citations. Format: "**[Topic]**: [Detailed explanation/finding] [D#]". Use **bold** for the topic.
+   - detailed_findings: 15-20 distinct bullet points with [D#] citations. Format: "**[Topic]**: [Detailed explanation/finding] [D#]". Use **bold** for the topic.
    - confidence_score: 0-100 based on data quality
    - highlights: 3-5 specific data points (plain text)
 
@@ -384,24 +396,24 @@ SYNTHESIS INSTRUCTIONS:
 
 5. DEBATE REPORT (JSON Field: `debate`):
    - You MUST populate the `debate` object in the JSON output.
-   - `transcript`: Generate a full Markdown transcript of the debate (Government Opening -> Opposition Critique -> Government Defense -> Opposition Rebuttal).
+   - `transcript`: USE THE PROVIDED TRANSCRIPT BELOW **VERBATIM**. Copy it exactly as shown. Do NOT summarize, shorten, or modify it.
    - `government_summary`: Summarize the PRO arguments in 1 sentence.
-   - `government_arguments`: List of 2-3 key bullish arguments from the debate.
+   - `government_arguments`: List of **AT LEAST 4** key bullish arguments from the transcript.
    - `opposition_summary`: Summarize the CON critiques in 1 sentence.
-   - `opposition_arguments`: List of 2-3 key bearish arguments from the debate.
-   - `verdict`: Your final verdict on the debate itself.
+   - `opposition_arguments`: List of **AT LEAST 4** key bearish arguments from the transcript.
+   - `verdict`: A short phrase declaring the winner (e.g., "Government Prevails", "Opposition Prevails", "Mixed Decision"). Max 5 words.
+   - `verdict_confidence`: A score from 0-100 indicating your confidence in the verdict.
+   - `verdict_reasoning`: A descriptive 2-3 sentence explanation of WHY this side won.
    - `verdict_key_factors`: 3-5 key factors specific to the debate outcome.
-   - Format for Transcript:
-     **Government (Pro)**: [Opening Argument] [F#]
-     **Opposition (Con)**: [Critique] [N#]
-     **Claims (Objective)**: [Fact Check/Correction] [D#]
-     **Government (Defense)**: [Rebuttal] [F#]
-     **Opposition (Rebuttal)**: [Final Word] [N#]
-   - STRICTLY PRESERVE all citations.
+   - STRICTLY PRESERVE all citations from the transcript.
 
-6. VERDICT (JSON Field: `verdict`, `verdict_reasoning`):
+   ### DEBATE TRANSCRIPT (copy this verbatim to the 'transcript' field):
+   {debate_transcript}
+
+6. VERDICT (JSON Field: `verdict`, `verdict_confidence`, `verdict_reasoning`):
    - verdict: Your ESG assessment verdict
-   - verdict_reasoning: 2-3 sentences explaining your ESG verdict, referencing document [D#] and news [N#] evidence
+   - verdict_reasoning: 2-3 sentences explaining your ESG verdict, referencing document [D#] and news [N#] evidence.
+   - GROUND TRUTH CHECK: If the debate contained false claims contradicting the RAW EVIDENCE, explicitly mention this in your reasoning.
    - verdict_key_factors: 3-5 key ESG factors with citations [D#], [N#]
 
 CRITICAL: You MUST preserve ALL [N#], [F#], [D#] citations from the sub-agents, including any associated page numbers (e.g., [D1], Page 123).
@@ -432,7 +444,8 @@ RELATIONSHIP MANAGER-SPECIFIC EVALUATION:
 - Key Concerns Focus: Client churn risks [N#], Bad PR [N#], Liquidity issues [F#]
 - Financial Priority: Liquidity events (sales opportunities)
 - Trigger Events (new CEO, expansion, awards) → lean ENGAGE
-- Values misalignment on ESG vs bank mandate → lean AVOID""",
+- Values misalignment on ESG vs bank mandate → lean AVOID
+- CRITICAL: DO NOT start your justification with 'Investment Rationale:'. Instead, use 'Engagement Rationale:' or start directly with the strategy.""",
 
     "CREDIT_RISK": """
 CREDIT RISK-SPECIFIC EVALUATION:
@@ -458,6 +471,34 @@ MARKET ANALYST-SPECIFIC EVALUATION:
 # UTILITY FUNCTIONS
 # =============================================================================
 
+
+# =============================================================================
+# EVIDENCE EXTRACTION INSTRUCTIONS (SHARED)
+# =============================================================================
+
+EVIDENCE_EXTRACTION_INSTRUCTIONS = """
+---
+EVIDENCE EXTRACTION (MANDATORY JSON OUTPUT):
+In addition to the analysis above, you MUST append a JSON block at the very end of your response containing every key finding.
+Use this format:
+```json
+[
+  {{
+    "content": "Finding text...",
+    "citation": "[X#]",
+    "sentiment": "PRO" or "CON",
+    "confidence": 80
+  }}
+]
+```
+Rules for Extraction:
+1. "content": The exact claim or fact.
+2. "citation": The [N#], [F#], or [D#] ID.
+3. "sentiment": "PRO" if it supports the user's goal ({government_stance}), "CON" if it opposes it ({opposition_stance}).
+4. "confidence": 0-100 based on source reliability.
+"""
+
+
 def get_news_agent_prompt(
     company_name: str,
     persona: str,
@@ -469,13 +510,20 @@ def get_news_agent_prompt(
     persona_label = persona.replace('_', ' ').title()
     focus_areas = ", ".join(config['news_focus'])
 
-    return NEWS_AGENT_TEMPLATE.format(
+    base_prompt = NEWS_AGENT_TEMPLATE.format(
         persona_label=persona_label,
         focus_areas=focus_areas,
         source_list=source_list,
         company_name=company_name,
         news_context=news_context
     )
+
+    extraction_instr = EVIDENCE_EXTRACTION_INSTRUCTIONS.format(
+        government_stance=config['government_stance'],
+        opposition_stance=config['opposition_stance']
+    )
+
+    return base_prompt + "\n" + extraction_instr
 
 
 def get_financial_agent_prompt(
@@ -489,13 +537,20 @@ def get_financial_agent_prompt(
     persona_label = persona.replace('_', ' ').title()
     focus_metrics = ", ".join(config['financial_focus'])
 
-    return FINANCIAL_AGENT_TEMPLATE.format(
+    base_prompt = FINANCIAL_AGENT_TEMPLATE.format(
         persona_label=persona_label,
         focus_metrics=focus_metrics,
         source_list=source_list,
         company_name=company_name,
         financial_context=financial_context
     )
+
+    extraction_instr = EVIDENCE_EXTRACTION_INSTRUCTIONS.format(
+        government_stance=config['government_stance'],
+        opposition_stance=config['opposition_stance']
+    )
+
+    return base_prompt + "\n" + extraction_instr
 
 
 def get_claims_agent_prompt(
@@ -514,7 +569,7 @@ def get_claims_agent_prompt(
     if persona == 'CREDIT_RISK':
         priority_note = "\n\n**HIGHEST PRIORITY: Governance** - Flag any fraud risks, weak internal controls, board independence issues, or related party transactions."
 
-    return CLAIMS_AGENT_TEMPLATE.format(
+    base_prompt = CLAIMS_AGENT_TEMPLATE.format(
         persona_label=persona_label,
         focus_areas=focus_areas,
         priority_note=priority_note,
@@ -522,6 +577,13 @@ def get_claims_agent_prompt(
         company_name=company_name,
         claims_context=claims_context
     )
+
+    extraction_instr = EVIDENCE_EXTRACTION_INSTRUCTIONS.format(
+        government_stance=config['government_stance'],
+        opposition_stance=config['opposition_stance']
+    )
+
+    return base_prompt + "\n" + extraction_instr
 
 
 def get_judge_prompt(
@@ -534,7 +596,9 @@ def get_judge_prompt(
     financial_critique: str,
     claims_critique: str,
     government_defense: str,
-    opposition_defense: str
+    opposition_defense: str,
+    raw_evidence: str,
+    debate_transcript: str
 ) -> str:
     """Generate the Judge Agent prompt with role-specific instructions."""
     config = get_persona_config(persona)
@@ -558,8 +622,11 @@ def get_judge_prompt(
         claims_critique=claims_critique,
         government_defense=government_defense,
         opposition_defense=opposition_defense,
-        role_specific_instructions=role_specific_instructions
+        role_specific_instructions=role_specific_instructions,
+        raw_evidence=raw_evidence,
+        debate_transcript=debate_transcript
     )
+
 
 
 def get_critique_prompt(
@@ -730,3 +797,138 @@ def get_talking_points_prompt(
         claims_analysis=claims_analysis,
         news_analysis=news_analysis
     )
+
+# =============================================================================
+# BRIEFING CLERK PROMPTS
+# =============================================================================
+
+BRIEFING_CLERK_SYSTEM = """You are the Briefing Clerk for a high-stakes corporate trial.
+Your goal is to consolidate raw evidence into clear, verifiable legal briefs for two sides:
+1. GOVERNMENT (Supports the company's ESG claims/performance)
+2. OPPOSITION (Critiques the company's ESG claims/performance)
+
+You must be OBJECTIVE in your sorting. Do not invent points. Use only the provided evidence.
+"""
+
+BRIEFING_CLERK_TEMPLATE = """
+RAW EVIDENCE FROM INVESTIGATORS:
+{raw_evidence}
+
+INSTRUCTIONS:
+1. Review all evidence points.
+2. Group them into "Government" (Positive/Pro-Company) and "Opposition" (Negative/Anti-Company).
+3. Deduplicate similar points. Merge them into a single strong point with multiple citations.
+4. If a point has no citation, DISCARD IT. Verifiability is paramount.
+5. **CRITICAL**: Select ONLY the 5 STRONGEST points for each side. No more than 5 per side.
+6. **BREVITY**: Keep each point to 1-2 sentences maximum (30-40 words). Be concise.
+7. Output valid JSON:
+{{
+  "government": ["Point 1 [Citation]", "Point 2 [Citation]", "Point 3 [Citation]", "Point 4 [Citation]", "Point 5 [Citation]"],
+  "opposition": ["Point 1 [Citation]", "Point 2 [Citation]", "Point 3 [Citation]", "Point 4 [Citation]", "Point 5 [Citation]"]
+}}
+"""
+
+def get_briefing_prompt(raw_evidence_text: str) -> str:
+    return BRIEFING_CLERK_TEMPLATE.format(raw_evidence=raw_evidence_text)
+
+
+# =============================================================================
+# LAWYER AGENT PROMPTS (Phase 3)
+# =============================================================================
+
+LAWYER_SYSTEM = """You are a financial analyst presenting a case about {company_name} for a {persona}.
+Role: {role}
+   - GOVERNMENT: You present the positive case. You emphasize verified progress, context, and strengths.
+   - OPPOSITION: You present the critical case. You emphasize risks, gaps, concerns, and weaknesses.
+
+User Persona: {persona}
+   - INVESTOR/EQUITY_ANALYST: Focus on returns, valuation, growth potential
+   - RELATIONSHIP_MANAGER: Focus on credit risk, client relationship quality, lending opportunities
+   - CREDIT_RISK: Focus on default risk, financial health, governance red flags
+
+Your Goal: Present a clear, evidence-based argument tailored to what this {persona} cares about.
+- Use Citations [N#], [F#], [D#] from your brief.
+- Address the opponent's points directly when responding.
+- Be analytical and professional. Explain WHY your points matter to this {persona}.
+"""
+
+LAWYER_OPENING_TEMPLATE = """You are presenting the {role} case for {company_name} to a {persona}.
+Your goal is to make a clear, data-driven argument.
+
+### YOUR KEY POINTS:
+{my_brief}
+
+### PERSONA CONTEXT:
+- INVESTOR/EQUITY_ANALYST: Focus on returns, valuation, growth
+- RELATIONSHIP_MANAGER: Focus on credit soundness, client relationship, lending safety  
+- CREDIT_RISK: Focus on default risk, financial health, red flags
+
+### INSTRUCTION:
+This is your **OPENING STATEMENT**.
+1.  **LEAD WITH YOUR THESIS**: State your position clearly for this {persona}'s concerns.
+2.  **CITE KEY EVIDENCE**: Present the strongest 2 points from your brief with citations [N#]/[F#]/[D#].
+3.  **BE CONCISE**: Use professional, analytical language. No filler.
+4.  **FOCUS ON YOUR CASE**: Don't address the opponent yet. Present your strongest arguments.
+5.  **STRICT LENGTH**: 50-150 words MAXIMUM. Absolutely no more than 150 words.
+
+Generate your opening statement.
+"""
+
+LAWYER_REBUTTAL_TEMPLATE = """You are presenting the {role} case for {company_name} to a {persona}.
+Your goal is to respond to the opposing analyst's arguments.
+
+### YOUR KEY POINTS:
+{my_brief}
+
+### OPPONENT'S KEY POINTS:
+{opponent_brief}
+
+### CURRENT DISCUSSION:
+{transcript}
+
+### PERSONA CONTEXT:
+- INVESTOR/EQUITY_ANALYST: Focus on returns, valuation impact
+- RELATIONSHIP_MANAGER: Focus on credit risk, client relationship impact
+- CREDIT_RISK: Focus on default risk, financial health impact
+
+### RESPOND TO:
+The opposing analyst just stated: "{previous_turn}"
+
+1.  **ADDRESS THEIR CLAIM**: Reference their specific point and explain why it's incomplete or misleading for this {persona}.
+2.  **EXPLAIN IMPLICATIONS**: Explain WHY this matters for this {persona}'s specific concerns.
+3.  **REINFORCE YOUR POSITION**: Present your strongest counter-argument with evidence.
+4.  **BE CONCISE**: Use direct, analytical language. No filler.
+5.  **STRICT LENGTH**: 50-150 words MAXIMUM. Absolutely no more than 150 words.
+
+Generate your response.
+"""
+
+def get_lawyer_prompt(
+    role: str,
+    company_name: str,
+    my_brief: str,
+    opponent_brief: str,
+    transcript: str,
+    previous_turn: str,
+    persona: str = "INVESTOR"
+) -> str:
+    # Check if this is an opening statement
+    is_opening =  "Opening Statement" in previous_turn or not transcript.strip()
+    
+    if is_opening:
+        return LAWYER_OPENING_TEMPLATE.format(
+            role=role.upper(),
+            company_name=company_name,
+            my_brief=my_brief,
+            persona=persona
+        )
+    else:
+        return LAWYER_REBUTTAL_TEMPLATE.format(
+            role=role.upper(),
+            company_name=company_name,
+            my_brief=my_brief,
+            opponent_brief=opponent_brief,
+            transcript=transcript,
+            previous_turn=previous_turn,
+            persona=persona
+        )

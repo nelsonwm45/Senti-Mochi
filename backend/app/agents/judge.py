@@ -95,7 +95,7 @@ def clean_and_parse_json(text: str, parser: JsonOutputParser) -> "JudgeDecisionO
 class JudgeSectionOutput(BaseModel):
     """Section output for ESG/Financial analysis."""
     preview_summary: str = Field(default="Data not available for analysis.", description="Comprehensive 3-5 sentence summary with key findings and their implications")
-    detailed_findings: List[str] = Field(default_factory=list, description="5-8 bullet points with citations [N#], [F#], [D#]. Use **bold** for important metrics and terms.")
+    detailed_findings: List[str] = Field(default_factory=list, description="15-20 distinct bullet points with citations [N#], [F#], [D#]. Use **bold** for important metrics and terms.")
     confidence_score: int = Field(default=50, ge=0, le=100)
     highlights: List[str] = Field(default_factory=list, description="3-5 key metrics or data points")
 
@@ -135,6 +135,7 @@ class JudgeDebateOutput(BaseModel):
     # New optional fields for enhanced verdict display
     verdict_reasoning: str = Field(default="", description="2-3 sentence explanation of why this verdict was reached")
     verdict_key_factors: List[str] = Field(default_factory=list, description="3-5 key factors with citations that influenced the verdict")
+    verdict_confidence: int = Field(default=50, ge=0, le=100)
     transcript: str = Field(default="", description="Full markdown transcript of the debate")
 
 
@@ -334,6 +335,10 @@ def build_final_output(
     )
 
     # Build Debate Report
+    # Extract debate transcript from state (bypass LLM copying which often fails)
+    debate_transcript_list = state.get('debate_transcript', []) or []
+    actual_transcript = "\n\n".join(debate_transcript_list) if debate_transcript_list else ""
+    
     debate_report = DebateReport(
         government_stand=DebateStance(
             stance_summary=judge_output.debate.government_summary,
@@ -346,7 +351,8 @@ def build_final_output(
         judge_verdict=judge_output.debate.verdict,
         verdict_reasoning=judge_output.debate.verdict_reasoning,
         verdict_key_factors=judge_output.debate.verdict_key_factors,
-        transcript=judge_output.debate.transcript
+        verdict_confidence=judge_output.debate.verdict_confidence,
+        transcript=actual_transcript  # Use actual transcript from state, not LLM output
     )
 
     # Build Role-Based Insight
@@ -403,12 +409,13 @@ def save_report_to_db(
         with Session(engine) as session:
             report = AnalysisReport(
                 company_id=state['company_id'],
+                user_id=state.get('user_id'),
                 rating=judge_output.decision,
                 confidence_score=judge_output.confidence_score,
                 summary=judge_output.summary,
                 
                 # Role-Based Insights
-                justification=f"> **Confidence Score: {judge_output.confidence_score}%**\n> \n> {judge_output.confidence_reasoning.replace(chr(10), chr(10) + '> ')}\n\n---\n\n> **Investment Rationale:**\n> \n> {judge_output.justification.replace(chr(10), chr(10) + '> ')}",
+                justification=f"**Confidence Reasoning:**\n{judge_output.confidence_reasoning}\n\n**{'Engagement Rationale' if state.get('analysis_persona') == 'RELATIONSHIP_MANAGER' else 'Investment Rationale'}:**\n{judge_output.justification}",
                 key_concerns=judge_output.key_concerns,
                 
                 bull_case=judge_output.bull_case,
@@ -422,6 +429,11 @@ def save_report_to_db(
                     {"agent": "news", "output": state.get('news_analysis')},
                     {"agent": "financial", "output": state.get('financial_analysis')},
                     {"agent": "claims", "output": state.get('claims_analysis')},
+                    {"agent": "critique", "output": {
+                        "news_critique": state.get('news_critique'),
+                        "financial_critique": state.get('financial_critique'),
+                        "claims_critique": state.get('claims_critique')
+                    }},
                     {"agent": "debate", "output": final_output.debate_report.model_dump()},
                     {"agent": "market_sentiment", "output": final_output.market_sentiment.model_dump()},
                     {"agent": "citation_registry", "output": {
@@ -531,12 +543,19 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     # Total budget ~9000 chars for analyses, leaving room for prompt template + output
     news_an, fin_an, claims_an = content_optimizer.optimize_for_judge(
         news_an, fin_an, claims_an,
-        max_total_tokens=2800  # Increased to ~11k chars to capture more ESG detail
+        max_total_tokens=4500  # Increased to ~18k chars to capture rich ESG detail
     )
 
-    # Extract debate arguments
+    # Extract debate arguments and transcript
     gov_args = state.get('government_arguments', []) or []
     opp_args = state.get('opposition_arguments', []) or []
+    debate_transcript_list = state.get('debate_transcript', []) or []
+    debate_transcript_str = "\n\n".join(debate_transcript_list) if debate_transcript_list else "No debate conducted."
+    
+    # DEBUG: Log transcript info
+    print(f"DEBUG: Debate transcript has {len(debate_transcript_list)} entries, {len(debate_transcript_str)} chars")
+    if debate_transcript_list:
+        print(f"DEBUG: First entry: {debate_transcript_list[0][:100]}...")
     
     # Financial/Gov defense is usually the 2nd item if present
     gov_defense = "No defense provided."
@@ -547,6 +566,28 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
     opp_defense = "No defense provided."
     if len(opp_args) > 1:
         opp_defense = opp_args[1]
+    # Format raw evidence for ground truth check
+    raw_ev_dict = state.get('raw_evidence', {})
+    raw_evidence_str = ""
+    for category, points in raw_ev_dict.items():
+        raw_evidence_str += f"### {category.upper()} EVIDENCE:\n"
+        if points:
+            for p in points:
+                # Handle both object and dict (serialization safety)
+                if isinstance(p, dict):
+                    content = p.get('content', '')
+                    citation = p.get('citation', '')
+                elif hasattr(p, 'content'):
+                    content = getattr(p, 'content', '')
+                    citation = getattr(p, 'citation', '')
+                else:
+                    content = str(p)
+                    citation = ""
+                
+                raw_evidence_str += f"- {content} {citation}\n"
+        else:
+            raw_evidence_str += "No structured evidence.\n"
+        raw_evidence_str += "\n"
 
     prompt = get_judge_prompt(
         company_name=company_name,
@@ -558,7 +599,9 @@ def judge_agent(state: AgentState) -> Dict[str, Any]:
         financial_critique=state.get('financial_critique', 'No critique')[:800],
         claims_critique=state.get('claims_critique', 'No critique')[:800],
         government_defense=gov_defense[:800],
-        opposition_defense=opp_defense[:800]
+        opposition_defense=opp_defense[:800],
+        raw_evidence=raw_evidence_str[:4000],  # Limit size to avoid overflow
+        debate_transcript=debate_transcript_str  # Pass actual debate transcript
     )
 
     # Setup Parser

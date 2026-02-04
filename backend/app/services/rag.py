@@ -208,6 +208,7 @@ class RAGService:
         self,
         query_embedding: List[float],
         company_id: UUID,
+        user_id: UUID,
         session: Session,
         limit: int = 3
     ) -> List[Dict]:
@@ -231,6 +232,7 @@ class RAGService:
             JOIN analysis_reports ar ON rc.report_id = ar.id
             JOIN companies c ON ar.company_id = c.id
             WHERE ar.company_id = '{str(company_id)}'
+              AND ar.user_id = '{str(user_id)}'
             ORDER BY similarity DESC
             LIMIT {limit}
         """
@@ -264,7 +266,7 @@ class RAGService:
             
         return chunks
 
-    def get_structured_chunks_for_companies(self, companies: List, session: Session, query_embedding: Optional[List[float]] = None) -> List[Dict]:
+    def get_structured_chunks_for_companies(self, companies: List, session: Session, query_embedding: Optional[List[float]] = None, user_id: Optional[UUID] = None) -> List[Dict]:
         """
         Fetch structured data chunks for a specific list of companies.
         Now includes Semantic Vectors for News if query_embedding is provided.
@@ -290,18 +292,18 @@ class RAGService:
                         return dates[0], stmt_data[dates[0]]
 
                     # 1a. Key Financial Metrics (Summary)
-                    key_metrics_content = f"Key Financial Metrics for {company.name} ({company.ticker}):\n"
+                    key_metrics_content = f"Key Financial Metrics for {company.name} ({company.ticker}):\\n"
                     
                     # Extract key fields from various statements
                     date_inc, inc = get_latest(fin_data.get("income_statement"))
                     if date_inc:
                         for k in ["Total Revenue", "Net Income", "EBITDA", "Gross Profit", "Diluted EPS"]:
-                            if k in inc: key_metrics_content += f"{k}: {inc[k]}\n"
+                            if k in inc: key_metrics_content += f"{k}: {inc[k]}\\n"
                             
                     date_bal, bal = get_latest(fin_data.get("balance_sheet"))
                     if date_bal:
                         for k in ["Total Assets", "Total Liabilities Net Minority Interest", "Total Equity Gross Minority Interest", "Cash And Cash Equivalents"]:
-                            if k in bal: key_metrics_content += f"{k}: {bal[k]}\n"
+                            if k in bal: key_metrics_content += f"{k}: {bal[k]}\\n"
                             
                     chunks.append({
                         "id": uuid4(),
@@ -343,7 +345,7 @@ class RAGService:
                 if latest_article:
                     content_str = f"[{latest_article.published_at.strftime('%Y-%m-%d')}] {latest_article.title} (Source: {latest_article.source})"
                     if latest_article.content:
-                        content_str += f"\nSummary: {latest_article.content[:500]}..." # Truncate for brevity
+                        content_str += f"\\nSummary: {latest_article.content[:500]}..." # Truncate for brevity
                         
                     chunks.append({
                         "id": uuid4(),
@@ -364,8 +366,8 @@ class RAGService:
 
             # 3. Fetch Past Analysis Reports (Semantic Search)
             try:
-                if query_embedding:
-                    report_chunks = self.vector_search_reports(query_embedding, company.id, session, limit=3)
+                if query_embedding and user_id:
+                    report_chunks = self.vector_search_reports(query_embedding, company.id, user_id, session, limit=3)
                     chunks.extend(report_chunks)
             except Exception as e:
                 print(f"Error fetching report chunks for {company.ticker}: {e}")

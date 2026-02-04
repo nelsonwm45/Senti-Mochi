@@ -10,12 +10,12 @@ from typing import Dict, Any, List
 from sqlmodel import Session, select, col
 from app.database import engine
 from app.models import FinancialStatement
-from app.agents.base import get_llm
+from app.agents.base import get_llm, extract_json_from_response
 from app.agents.state import AgentState
 from app.agents.cache import generate_cache_key, hash_content, get_cached_result, set_cached_result
 from app.agents.persona_config import get_persona_config
 from app.agents.prompts import FINANCIAL_AGENT_SYSTEM, get_financial_agent_prompt, get_critique_prompt, get_defense_prompt
-from app.agents.citation_models import SourceMetadata
+from app.agents.citation_models import SourceMetadata, EvidencePoint
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
 
@@ -129,71 +129,87 @@ def financial_agent(state: AgentState) -> Dict[str, Any]:
     content_hash = hash_content(context)
     cache_key = generate_cache_key("financial_v4", company_id, content_hash)
 
+    full_context = context
+    raw_response_content = ""
+
     # Check cache first
     cached_result = get_cached_result(cache_key)
     if cached_result:
-        return {
-            "financial_analysis": cached_result,
-            "citation_registry": citation_registry
-        }
+        print(f"[Financial Agent] Cache Hit for {company_name}")
+        raw_response_content = cached_result
+    else:
 
-    # Truncate if too long
-    # Truncation Logic with Fallback Strategy
-    full_context = context
+        # Attempt Primary: Cerebras (llama-3.3-70b)
+        try:
+            print(f"[Financial Agent] Attempting to use Cerebras (llama-3.3-70b)...")
+            prompt = get_financial_agent_prompt(
+                company_name=company_name,
+                persona=persona,
+                financial_context=full_context,
+                source_list=source_list
+            )
+            
+            llm = get_llm("llama-3.3-70b")
+            response = llm.invoke([
+                SystemMessage(content=FINANCIAL_AGENT_SYSTEM),
+                HumanMessage(content=prompt)
+            ])
+            print(f"[Financial Agent] SUCCESS: Processed by Cerebras (llama-3.3-70b)")
+            raw_response_content = response.content
 
-    # Attempt Primary: Cerebras (llama-3.3-70b)
-    try:
-        print(f"[Financial Agent] Attempting to use Cerebras (llama-3.3-70b)...")
-        prompt = get_financial_agent_prompt(
-            company_name=company_name,
-            persona=persona,
-            financial_context=full_context,
-            source_list=source_list
-        )
+        except Exception as e:
+            print(f"[Financial Agent] Cerebras failed: {e}. Fallback to Groq (llama-3.1-8b-instant)...")
+            
+            # Apply truncation for Groq (4500 chars)
+            if len(full_context) > 4500:
+                truncated_context = full_context[:4500] + "... [TRUNCATED]"
+            else:
+                truncated_context = full_context
 
-        llm = get_llm("llama-3.3-70b")
-        response = llm.invoke([
-            SystemMessage(content=FINANCIAL_AGENT_SYSTEM),
-            HumanMessage(content=prompt)
-        ])
-        print(f"[Financial Agent] SUCCESS: Processed by Cerebras (llama-3.3-70b)")
-        
-        set_cached_result(cache_key, response.content)
+            prompt = get_financial_agent_prompt(
+                company_name=company_name,
+                persona=persona,
+                financial_context=truncated_context,
+                source_list=source_list
+            )
+            
+            llm = get_llm("llama-3.1-8b-instant")
+            response = llm.invoke([
+                SystemMessage(content=FINANCIAL_AGENT_SYSTEM),
+                HumanMessage(content=prompt)
+            ])
+            print(f"[Financial Agent] SUCCESS: Processed by Groq (llama-3.1-8b-instant)")
+            raw_response_content = response.content
 
-        return {
-            "financial_analysis": response.content,
-            "citation_registry": citation_registry
-        }
+        # Cache the result
+        set_cached_result(cache_key, raw_response_content)
 
-    except Exception as e:
-        print(f"[Financial Agent] Cerebras failed: {e}. Fallback to Groq (llama-3.1-8b-instant)...")
-        
-        # Apply truncation for Groq (4500 chars)
-        if len(full_context) > 4500:
-            truncated_context = full_context[:4500] + "... [TRUNCATED]"
-        else:
-            truncated_context = full_context
+    # === PROCESS OUTPUT & EXTRACT EVIDENCE ===
+    evidence_list = extract_json_from_response(raw_response_content)
+    
+    # Strip JSON block for clean analysis display
+    clean_analysis = raw_response_content
+    if "```json" in clean_analysis:
+        clean_analysis = clean_analysis.split("```json")[0].strip()
+    elif "```" in clean_analysis and "[" in clean_analysis and clean_analysis.rfind("```") > clean_analysis.rfind("["):
+         # Try to split on last code block if generic
+        parts = clean_analysis.rsplit("```", 1)
+        if len(parts) > 0:
+            clean_analysis = parts[0].strip()
 
-        prompt = get_financial_agent_prompt(
-            company_name=company_name,
-            persona=persona,
-            financial_context=truncated_context,
-            source_list=source_list
-        )
+    # Convert to Pydantic models
+    evidence_objects = []
+    for item in evidence_list:
+        try:
+            evidence_objects.append(EvidencePoint(**item))
+        except Exception as e:
+            print(f"[Financial Agent] Failed to parse evidence point: {item} - {e}")
 
-        llm = get_llm("llama-3.1-8b-instant")
-        response = llm.invoke([
-            SystemMessage(content=FINANCIAL_AGENT_SYSTEM),
-            HumanMessage(content=prompt)
-        ])
-        print(f"[Financial Agent] SUCCESS: Processed by Groq (llama-3.1-8b-instant)")
-
-        set_cached_result(cache_key, response.content)
-
-        return {
-            "financial_analysis": response.content,
-            "citation_registry": citation_registry
-        }
+    return {
+        "financial_analysis": clean_analysis,
+        "citation_registry": citation_registry,       
+        "raw_evidence": {"financial": evidence_objects}
+    }
 
 
 def financial_critique(state: AgentState) -> Dict[str, Any]:
