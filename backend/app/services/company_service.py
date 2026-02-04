@@ -47,6 +47,7 @@ COMMON_NAMES = {
     '5602.KL': 'Padini',            # Padini Holdings Berhad
     '5248.KL': 'Bermaz',            # Bermaz Auto Berhad
     '1818.KL': 'Bursa',             # Bursa Malaysia
+    '0085.KL': 'Mlabs',             # Mlabs Systems Berhad
 }
 
 # Expanded list of major Bursa Malaysia companies (~70 companies)
@@ -96,6 +97,7 @@ INITIAL_TICKERS = [
     '0097.KL',  # Globetronics
     '7036.KL',  # Unisem
     '0045.KL',  # Vitrox
+    '0085.KL',  # Mlabs Systems Berhad
     
     # Plantation
     '2216.KL',  # Sime Darby Plantation
