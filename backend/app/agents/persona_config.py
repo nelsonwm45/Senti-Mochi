@@ -113,6 +113,7 @@ PERSONA_CONFIG: Dict[str, PersonaDirectives] = {
 - If liquidity concerns BUT strong brand reputation: MONITOR
 - If recent negative press BUT financial stability: MONITOR with enhanced due diligence
 - If values misalignment on ESG (e.g., fossil fuel heavy vs our green mandate): AVOID unless clear remediation path
+- If severe financial distress (e.g., trading suspension, negative margins > 50%) is present: AVOID, regardless of recent capital raises.
 """
     },
 
