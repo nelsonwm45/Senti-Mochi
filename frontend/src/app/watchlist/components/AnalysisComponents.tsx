@@ -1268,50 +1268,101 @@ const DebateReportSection = ({ report, registry }: { report: AnalysisReport; reg
                 </GlassCard>
             </div>
 
-            {/* Judge Verdict */}
-            <GlassCard className="border-l-2 border-l-purple-500/50">
-                <div className="flex items-center gap-2 mb-4">
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                        <Gavel size={16} className="text-purple-400" />
-                    </div>
-                    <h3 className="font-semibold text-white">Judge's Verdict</h3>
-                </div>
-
-                {/* Verdict Decision */}
-                <div className="text-xl font-bold text-purple-400 mb-3">
-                    {debateReport.judge_verdict}
-                </div>
-
-                {/* Verdict Reasoning (only if present) */}
-                {debateReport.verdict_reasoning && (
-                    <div className="mb-4">
-                        <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Reasoning</div>
-                        <div className="text-sm text-gray-300 prose prose-invert prose-sm max-w-none bg-white/5 p-3 rounded-lg border border-white/10">
-                            <ReactMarkdown components={citationComponents}>{debateReport.verdict_reasoning}</ReactMarkdown>
+            {/* Judge Verdict - Cohesive Redesign */}
+            <GlassCard className="border-l-4 border-l-purple-500 overflow-hidden relative group p-0">
+                {/* Background Accent */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 blur-3xl -mr-32 -mt-32 rounded-full group-hover:bg-purple-500/10 transition-all duration-1000" />
+                
+                {/* Header Section */}
+                <div className="p-6 pb-4 border-b border-white/5 bg-gradient-to-r from-purple-500/[0.03] to-transparent">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                                <Gavel size={16} className="text-purple-400" />
+                                <h3 className="font-bold text-white text-base tracking-tight italic">Judicial Synthesis</h3>
+                            </div>
+                            <div className="text-3xl font-black bg-gradient-to-r from-purple-300 via-purple-100 to-fuchsia-300 bg-clip-text text-transparent drop-shadow-sm">
+                                {debateReport.judge_verdict}
+                            </div>
                         </div>
-                    </div>
-                )}
 
-                {/* Key Deciding Factors (only if present) */}
-                {debateReport.verdict_key_factors && debateReport.verdict_key_factors.length > 0 && (
-                    <div>
-                        <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                            <Scale size={12} /> Key Deciding Factors
-                        </div>
-                        <div className="space-y-2">
-                            {debateReport.verdict_key_factors.map((factor, idx) => (
-                                <div key={idx} className="text-sm text-gray-300 flex items-start gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
-                                    <span className="text-purple-400 font-bold">{idx + 1}.</span>
-                                    <div className="prose prose-invert prose-sm max-w-none">
-                                        <ReactMarkdown components={citationComponents}>
-                                            {factor}
-                                        </ReactMarkdown>
-                                    </div>
+                        {/* Right: Confidence Visualization */}
+                        <div className="flex items-center gap-4 bg-purple-500/10 rounded-2xl px-5 py-3 border border-purple-500/20 backdrop-blur-md">
+                            <div className="relative w-12 h-12">
+                                <svg className="w-full h-full -rotate-90">
+                                    <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="4" className="text-white/5" />
+                                    <motion.circle
+                                        cx="24"
+                                        cy="24"
+                                        r="20"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                        strokeDasharray={2 * Math.PI * 20}
+                                        initial={{ strokeDashoffset: 2 * Math.PI * 20 }}
+                                        animate={{ strokeDashoffset: 2 * Math.PI * 20 * (1 - (debateReport.verdict_confidence || 50) / 100) }}
+                                        transition={{ duration: 1.5, ease: "easeOut" }}
+                                        className="text-purple-500"
+                                        strokeLinecap="round"
+                                    />
+                                </svg>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-xs font-bold text-white leading-none">{debateReport.verdict_confidence || 50}%</span>
                                 </div>
-                            ))}
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-bold text-purple-300 uppercase tracking-widest leading-none mb-1">Confidence</span>
+                                <span className="text-[10px] text-gray-500 font-medium whitespace-nowrap">Evidence Match</span>
+                            </div>
                         </div>
                     </div>
-                )}
+                </div>
+
+                {/* Content Section */}
+                <div className="p-6 space-y-6 bg-[#0a0a0c]/40 relative z-10">
+                    {/* Integrated Rationale */}
+                    {debateReport.verdict_reasoning && (
+                        <div className="relative">
+                            {/* Visual Bridge */}
+                            <div className="absolute -left-6 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-500/50 to-transparent opacity-30" />
+                            
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Core Justification</span>
+                            </div>
+                            
+                            <div className="text-sm text-gray-300 leading-relaxed font-normal bg-white/5 p-4 rounded-xl border border-white/5 shadow-inner backdrop-blur-sm">
+                                <ReactMarkdown components={citationComponents}>{debateReport.verdict_reasoning}</ReactMarkdown>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Key Deciding Factors */}
+                    {debateReport.verdict_key_factors && debateReport.verdict_key_factors.length > 0 && (
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-2">Key Deciding Factors</span>
+                                <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {debateReport.verdict_key_factors.map((factor, idx) => (
+                                    <div key={idx} className="flex items-start gap-3 bg-gradient-to-br from-white/[0.03] to-transparent p-4 rounded-xl border border-white/5 hover:border-purple-500/30 hover:from-purple-500/5 transition-all group/factor">
+                                        <div className="shrink-0 w-8 h-8 rounded-lg bg-black/40 border border-white/5 flex items-center justify-center text-xs font-bold text-purple-400 group-hover/factor:text-purple-300">
+                                            {idx + 1}
+                                        </div>
+                                        <div className="flex-1 text-sm text-gray-400 leading-snug group-hover/factor:text-gray-200 transition-colors">
+                                            <ReactMarkdown components={citationComponents}>
+                                                {factor}
+                                            </ReactMarkdown>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </GlassCard>
             
             {/* Debate Transcript */}

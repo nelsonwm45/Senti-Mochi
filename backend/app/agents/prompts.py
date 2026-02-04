@@ -396,6 +396,7 @@ SYNTHESIS INSTRUCTIONS:
    - `opposition_summary`: Summarize the CON critiques in 1 sentence.
    - `opposition_arguments`: List of **AT LEAST 4** key bearish arguments from the transcript.
    - `verdict`: A short phrase declaring the winner (e.g., "Government Prevails", "Opposition Prevails", "Mixed Decision"). Max 5 words.
+   - `verdict_confidence`: A score from 0-100 indicating your confidence in the verdict.
    - `verdict_reasoning`: A descriptive 2-3 sentence explanation of WHY this side won.
    - `verdict_key_factors`: 3-5 key factors specific to the debate outcome.
    - STRICTLY PRESERVE all citations from the transcript.
@@ -403,7 +404,7 @@ SYNTHESIS INSTRUCTIONS:
    ### DEBATE TRANSCRIPT (copy this verbatim to the 'transcript' field):
    {debate_transcript}
 
-6. VERDICT (JSON Field: `verdict`, `verdict_reasoning`):
+6. VERDICT (JSON Field: `verdict`, `verdict_confidence`, `verdict_reasoning`):
    - verdict: Your ESG assessment verdict
    - verdict_reasoning: 2-3 sentences explaining your ESG verdict, referencing document [D#] and news [N#] evidence.
    - GROUND TRUTH CHECK: If the debate contained false claims contradicting the RAW EVIDENCE, explicitly mention this in your reasoning.

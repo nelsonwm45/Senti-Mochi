@@ -135,6 +135,7 @@ class JudgeDebateOutput(BaseModel):
     # New optional fields for enhanced verdict display
     verdict_reasoning: str = Field(default="", description="2-3 sentence explanation of why this verdict was reached")
     verdict_key_factors: List[str] = Field(default_factory=list, description="3-5 key factors with citations that influenced the verdict")
+    verdict_confidence: int = Field(default=50, ge=0, le=100)
     transcript: str = Field(default="", description="Full markdown transcript of the debate")
 
 
@@ -350,6 +351,7 @@ def build_final_output(
         judge_verdict=judge_output.debate.verdict,
         verdict_reasoning=judge_output.debate.verdict_reasoning,
         verdict_key_factors=judge_output.debate.verdict_key_factors,
+        verdict_confidence=judge_output.debate.verdict_confidence,
         transcript=actual_transcript  # Use actual transcript from state, not LLM output
     )
 
