@@ -25,6 +25,7 @@ class AgentState(TypedDict):
     company_id: str  # UUID as string
     company_name: str
     job_id: Optional[str]  # Analysis job ID for status tracking
+    user_id: Optional[str]  # User ID for ownership tracking
     analysis_persona: str  # INVESTOR, RELATIONSHIP_MANAGER, CREDIT_RISK, MARKET_ANALYST
 
     # ==========================================================================

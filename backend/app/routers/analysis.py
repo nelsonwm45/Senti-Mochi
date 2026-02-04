@@ -84,7 +84,8 @@ def trigger_analysis(
         analysis_persona=analysis_persona,
         status=AnalysisStatus.PENDING,
         current_step="Initializing analysis",
-        progress=0
+        progress=0,
+        user_id=current_user.id
     )
     session.add(job)
     session.commit()
@@ -155,7 +156,8 @@ def trigger_analysis(
                 "company_name": company.name,
                 "job_id": str(job.id),  # Pass job_id for status updates
                 "analysis_persona": job_persona,  # Pass persona for polymorphic analysis
-                "errors": []
+                "errors": [],
+                "user_id": str(current_user.id)
             }
             result = app_workflow.invoke(initial_state)
 
@@ -165,7 +167,8 @@ def trigger_analysis(
                 latest_report = db.exec(
                     select(AnalysisReport)
                     .where(AnalysisReport.company_id == company_id)
-                    .order_by(col(AnalysisReport.created_at).desc())
+                    .where(AnalysisReport.user_id == current_user.id)
+                    .order_by(AnalysisReport.created_at.desc())
                 ).first()
 
                 update_job_status(
@@ -192,14 +195,15 @@ def trigger_analysis(
     }
 
 @router.get("/{company_id}/status")
-def get_analysis_status(company_id: UUID, session: Session = Depends(get_session)):
+def get_analysis_status(company_id: str, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
     """
     Get the status of the latest analysis job for a company.
     """
     job = session.exec(
         select(AnalysisJob)
         .where(AnalysisJob.company_id == company_id)
-        .order_by(col(AnalysisJob.started_at).desc())
+        .where(AnalysisJob.user_id == current_user.id)
+        .order_by(AnalysisJob.started_at.desc())
     ).first()
 
     if not job:
@@ -220,11 +224,11 @@ def get_analysis_status(company_id: UUID, session: Session = Depends(get_session
     }
 
 @router.get("/job/{job_id}/status")
-def get_job_status(job_id: UUID, session: Session = Depends(get_session)):
+def get_job_status(job_id: UUID, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
     """
     Get the status of a specific analysis job.
     """
-    job = session.get(AnalysisJob, job_id)
+    job = session.exec(select(AnalysisJob).where(AnalysisJob.id == job_id, AnalysisJob.user_id == current_user.id)).first()
 
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -242,24 +246,33 @@ def get_job_status(job_id: UUID, session: Session = Depends(get_session)):
     }
 
 @router.get("/{company_id}/reports")
-def get_reports(company_id: UUID, session: Session = Depends(get_session)):
+def get_reports(company_id: str, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
     """
     Retrieves analysis reports for a company.
     """
-    statement = (
-        select(AnalysisReport)
-        .where(AnalysisReport.company_id == company_id)
-        .order_by(col(AnalysisReport.created_at).desc())
-    )
-    reports = session.exec(statement).all()
-    return reports
+    print(f"DEBUG: get_reports company={company_id}, user={current_user.id}")
+    try:
+        statement = (
+            select(AnalysisReport)
+            .where(AnalysisReport.company_id == company_id)
+            .where(AnalysisReport.user_id == current_user.id)
+            .order_by(AnalysisReport.created_at.desc())
+        )
+        reports = session.exec(statement).all()
+        reports = session.exec(statement).all()
+        return reports
+    except Exception as e:
+        print(f"DEBUG ERROR in get_reports: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/report/{report_id}")
 def get_report(report_id: UUID, session: Session = Depends(get_session)):
     """
     Retrieves a specific analysis report.
     """
-    report = session.get(AnalysisReport, report_id)
+    report = session.exec(select(AnalysisReport).where(AnalysisReport.id == report_id, AnalysisReport.user_id == current_user.id)).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     return report
@@ -269,7 +282,7 @@ def delete_report(report_id: UUID, session: Session = Depends(get_session)):
     """
     Deletes a specific analysis report.
     """
-    report = session.get(AnalysisReport, report_id)
+    report = session.exec(select(AnalysisReport).where(AnalysisReport.id == report_id, AnalysisReport.user_id == current_user.id)).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
@@ -280,12 +293,13 @@ def delete_report(report_id: UUID, session: Session = Depends(get_session)):
 @router.post("/report/{report_id}/talking-points/generate")
 def generate_talking_points(
     report_id: UUID,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Generates talking points for a Relationship Manager based on an existing analysis.
     """
-    report = session.get(AnalysisReport, report_id)
+    report = session.exec(select(AnalysisReport).where(AnalysisReport.id == report_id, AnalysisReport.user_id == current_user.id)).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
         
@@ -361,12 +375,13 @@ def generate_talking_points(
 def update_talking_points(
     report_id: UUID,
     talking_points: dict, 
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Updates the talking points for a specific analysis report (manual save/edit).
     """
-    report = session.get(AnalysisReport, report_id)
+    report = session.exec(select(AnalysisReport).where(AnalysisReport.id == report_id, AnalysisReport.user_id == current_user.id)).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 

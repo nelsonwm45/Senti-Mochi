@@ -409,6 +409,7 @@ def save_report_to_db(
         with Session(engine) as session:
             report = AnalysisReport(
                 company_id=state['company_id'],
+                user_id=state.get('user_id'),
                 rating=judge_output.decision,
                 confidence_score=judge_output.confidence_score,
                 summary=judge_output.summary,

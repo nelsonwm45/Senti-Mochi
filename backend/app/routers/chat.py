@@ -159,7 +159,8 @@ async def query(
             structured_chunks = rag_service.get_structured_chunks_for_companies(
                 companies, 
                 session, 
-                query_embedding=query_embedding
+                query_embedding=query_embedding,
+                user_id=current_user.id
             )
         else:
              structured_chunks = []

@@ -121,3 +121,49 @@ def get_company_details(
     info.update(financials)
     
     return info
+
+@router.post("/", response_model=Dict[str, Any])
+def create_company(
+    ticker: str,
+    session: Session = Depends(get_session)
+):
+    """
+    Add a company to the global list.
+    """
+    ticker = ticker.upper().strip()
+    
+    # Check if already exists (Global)
+    statement = select(Company).where(Company.ticker == ticker)
+    existing = session.exec(statement).first()
+    if existing:
+        return {
+            "id": str(existing.id),
+            "ticker": existing.ticker,
+            "name": existing.name,
+            "message": "Company already exists"
+        }
+        
+    # Fetch info to populate fields
+    info = finance_service.get_company_info(ticker)
+    if not info or "error" in info:
+        raise HTTPException(status_code=400, detail="Invalid ticker or unable to fetch company info")
+        
+    new_company = Company(
+        name=info.get("name", ticker),
+        ticker=ticker,
+        sector=info.get("sector"),
+        sub_sector=info.get("sub_sector"),
+        website_url=info.get("website_url")
+    )
+    
+    session.add(new_company)
+    session.commit()
+    session.refresh(new_company)
+    
+    return {
+        "id": str(new_company.id),
+        "ticker": new_company.ticker,
+        "name": new_company.name,
+        "sector": new_company.sector,
+        "message": "Company added successfully"
+    }
