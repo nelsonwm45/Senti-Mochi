@@ -67,7 +67,8 @@ def search_companies(
         query = query.strip().lower()
         statement = statement.where(
             (Company.ticker.ilike(f"%{query}%")) | 
-            (Company.name.ilike(f"%{query}%"))
+            (Company.name.ilike(f"%{query}%")) |
+            (Company.common_name.ilike(f"%{query}%"))
         )
     
     statement = statement.limit(limit)
