@@ -292,6 +292,97 @@ def check_citation_hallucinations(text: str, citation_registry: Dict[str, Any]) 
     return hallucinated
 
 
+def remove_hallucinated_citations(text: str, citation_registry: Dict[str, Any]) -> str:
+    """
+    Remove hallucinated citations from text.
+    
+    Args:
+        text: Text containing citation tags
+        citation_registry: Valid citation registry
+    
+    Returns:
+        Cleaned text with invalid citations removed
+    """
+    if not text:
+        return text
+        
+    def replace_citation(match):
+        citation_id = match.group(1)
+        # If citation is NOT in registry, return empty string (remove it)
+        if citation_id not in citation_registry:
+            return ""
+        # Otherwise keep original match
+        return match.group(0)
+
+    # Regex to find [N1], [F5], [D10] etc.
+    # We include optional leading space to avoid double spaces after removal
+    # e.g. "Fact [N99]." -> "Fact." (if we match space) vs "Fact ." (if we don't)
+    citation_pattern = r'\s*\[([NFD]\d+)\]'
+    
+    # Also handle page numbers: [D1, Page 12]
+    # This is trickier, simplified pattern:
+    complex_citation_pattern = r'\s*\[([NFD]\d+)(?:,\s*Page\s*\d+)?\]'
+    
+    return re.sub(complex_citation_pattern, replace_citation, text)
+
+
+def clean_judge_output(
+    output: JudgeDecisionOutput, 
+    citation_registry: Dict[str, Any]
+) -> JudgeDecisionOutput:
+    """
+    Recursively remove hallucinated citations from all string fields in the output.
+    """
+    # Helper to clean a list of strings
+    def clean_list(items):
+        return [remove_hallucinated_citations(i, citation_registry) for i in items]
+    
+    # helper to clean section output
+    def clean_section(section: JudgeSectionOutput):
+        section.preview_summary = remove_hallucinated_citations(section.preview_summary, citation_registry)
+        section.detailed_findings = clean_list(section.detailed_findings)
+        section.highlights = clean_list(section.highlights)
+        return section
+
+    # 1. Top level string fields
+    output.summary = remove_hallucinated_citations(output.summary, citation_registry)
+    output.bull_case = remove_hallucinated_citations(output.bull_case, citation_registry)
+    output.bear_case = remove_hallucinated_citations(output.bear_case, citation_registry)
+    output.risk_factors = remove_hallucinated_citations(output.risk_factors, citation_registry)
+    output.justification = remove_hallucinated_citations(output.justification, citation_registry)
+    output.confidence_reasoning = remove_hallucinated_citations(output.confidence_reasoning, citation_registry)
+    output.key_concerns = clean_list(output.key_concerns)
+    
+    # 2. Market Sentiment
+    output.market_sentiment.summary = remove_hallucinated_citations(output.market_sentiment.summary, citation_registry)
+    output.market_sentiment.key_events = clean_list(output.market_sentiment.key_events)
+    output.market_sentiment.risks_from_news = clean_list(output.market_sentiment.risks_from_news)
+    
+    # 3. ESG Analysis
+    clean_section(output.esg_analysis.overview)
+    clean_section(output.esg_analysis.governance)
+    clean_section(output.esg_analysis.environmental)
+    clean_section(output.esg_analysis.social)
+    clean_section(output.esg_analysis.disclosure)
+    
+    # 4. Financial Analysis
+    clean_section(output.financial_analysis.valuation)
+    clean_section(output.financial_analysis.profitability)
+    clean_section(output.financial_analysis.growth)
+    clean_section(output.financial_analysis.health)
+    
+    # 5. Debate (Tricky because transcript is raw, but arguments might have hallucinations)
+    # We generally trust the transcript as "record", but summaries/arguments are generated
+    output.debate.government_summary = remove_hallucinated_citations(output.debate.government_summary, citation_registry)
+    output.debate.government_arguments = clean_list(output.debate.government_arguments)
+    output.debate.opposition_summary = remove_hallucinated_citations(output.debate.opposition_summary, citation_registry)
+    output.debate.opposition_arguments = clean_list(output.debate.opposition_arguments)
+    output.debate.verdict_reasoning = remove_hallucinated_citations(output.debate.verdict_reasoning, citation_registry)
+    output.debate.verdict_key_factors = clean_list(output.debate.verdict_key_factors)
+    
+    return output
+
+
 def convert_section_to_content(section: JudgeSectionOutput) -> SectionContent:
     """Convert JudgeSectionOutput to SectionContent for final output."""
     return SectionContent(
@@ -675,6 +766,10 @@ Output valid JSON matching the schema below:
             response = JudgeDecisionOutput(**response_data)
         else:
             response = response_data
+            
+        # === CLEAN HALLUCINATIONS ===
+        # Remove any citations that don't exist in the registry BEFORE saving
+        response = clean_judge_output(response, citation_registry)
 
         # Build final output structure
         final_output = build_final_output(state, response, citation_registry)
