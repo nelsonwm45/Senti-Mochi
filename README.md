@@ -1,121 +1,115 @@
-# Mochi: AI-Powered Market Intelligence Platform
+# Senti-Mochi — AI-Powered Market Intelligence for Relationship Managers
 
-## Problem Statement
+<p align="center">
+  <a href="https://drive.google.com/drive/folders/1X-BqEwcLJQJOMCNU3ULdVTsJWJAt4wuy?usp=sharing">📹 Demo Videos</a> •
+  <a href="https://www.canva.com/design/DAHAcj5v1Vw/XmWQ_9IB6-VEQnc4vldz4w/edit?utm_content=DAHAcj5v1Vw&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton">📊 Presentation Deck</a>
+</p>
 
-Market signals are abundant but fragmented and unstructured across sources such as Bursa filings, news, and PDFs. While existing solutions may help with isolated tasks (e.g., pulling live information or extracting text), they operate in silos and fail to support an end-to-end, traceable decision workflow. As a result, teams are forced to rely on manual interpretation under time pressure, leading to:
+---
 
-- **Inconsistent sentiment and labeling**, where different analysts reach different conclusions from the same information
-- **Key financial data trapped in PDFs**, making it difficult to standardize ratios and compare performance across companies and time
-- **Weak alerting**, either missing early warning signals or overwhelming users with false positives
-- **Low defensibility of decisions**, due to the lack of citations, clear analytical rationale, RBAC, audit trails, and proper data retention and privacy controls
+## The Problem
 
-Because these gaps exist across the workflow rather than in any single step, existing tools fail to deliver consistent, trusted intelligence—resulting in slower decisions, higher operational costs, and increased risk exposure.
+Relationship Managers spend hours daily scanning fragmented news, manually interpreting financial reports, and preparing for client meetings — leading to inconsistent analysis, missed signals, and indefensible decisions.
 
-## Our Solution
+## The Solution
 
-Our product provides an end-to-end market intelligence workflow that helps bank teams cut through noisy, unstructured market signals and make consistent, defensible decisions.
+Senti-Mochi gives RMs an end-to-end intelligence workflow that turns unstructured market signals into consistent, citation-backed, actionable insights.
 
-### Workflow Overview
+### RM Workflow
 
-**Watchlists**
-Users add Bursa-listed companies to a watchlist so the system monitors only relevant entities.
+```
+1. Add Clients     →  Build your watchlist / portfolio
+2. Auto-Ingest     →  System pulls news from The Edge, The Star, NST
+3. Sentiment Tags  →  Every article AI-analyzed with sentiment scoring
+4. Deep Analysis   →  Upload annual/sustainability reports to trigger
+                       multi-agent courtroom-style debate
+5. Meeting Notes   →  Generate structured talking points from the latest analysis
+```
 
-**Source Ingestion**
-News, announcements, and reports are preiodically pulled from credible sources such as Bursa, NST, and The Star.
+### Impact
 
-**Processing & Storage**
-All documents are parsed, enriched (sentiment, entities), and stored in a vector database to support search, analysis, and traceability.
+| Task | Before | After |
+|---|---|---|
+| Daily Market Scanning | 30–45 min | **5–10 min** |
+| Client Risk Assessment | 2–3 hours | **30 min** |
+| Client Communication Prep | 30–45 min | **5–10 min** |
 
-### Key Capabilities
+✅ Defensible decisions with full citations &nbsp;·&nbsp; ✅ Single source of truth &nbsp;·&nbsp; ✅ Confident client conversations
 
-**Dashboard News Feed**
-- Company-specific news tagged with consistent sentiment (positive / negative / neutral)
-- Alerts for critical or attention-worthy issues
-- AI summaries with links back to original sources
-- Quick actions to draft client emails or WhatsApp messages
+---
 
-**Company Watchlist**
-- Standardized financial metrics for side-by-side comparison across companies and time
-- Support for manual document uploads to enrich company context
+## Key Features
 
-**AI Copilot**
-- Ask questions about companies or industries
-- Answers generated only from ingested data
-- Full citations provided for every insight
+**📰 Sentiment-Tagged News Feed** — Company-specific news with AI sentiment, alerts, summaries, and WhatsApp/email quick actions.
 
-### Who It's For
+**📋 Company Watchlist** — Standardized financial metrics for side-by-side comparison. Pin up to 3 companies for at-a-glance monitoring.
 
-- **Relationship Managers / Coverage Teams**: Get fast, reliable context before client engagements.
-- **Market Intelligence & Research Analysts**: Reduce manual scanning and work from consistent, structured signals.
-- **Credit & Risk Stakeholders**: Access standardized financial data and defend decisions with clear evidence trails.
+**⚖️ Multi-Agent Analysis Engine** — Courtroom-style debate workflow (LangGraph):
+1. **Intelligence Gathering** — Financial, News, and Claims agents collect data with tagged citations `[N#]` `[F#]` `[D#]`
+2. **Briefing** — Findings consolidated into structured briefs
+3. **Cross-Examination** — Government (pro) vs Opposition (skeptic) agents debate
+4. **Judgment** — Judge agent synthesizes, verifies citations, and produces the final report
 
-## 📹 Demo Video
+Supports persona-based analysis with sector-specific KPIs.
 
-[View Demo Video](https://youtu.be/mFSPfLC2hdc)
+**📝 Meeting Notes** — Auto-generate structured talking points for client engagements based on the latest analysis.
 
-## 📊 Presentation Deck
+**📄 Document Uploads** — Upload PDFs, DOCX, XLSX (annual reports, sustainability reports) to enrich company context.
 
-[View Presentation Deck](https://www.canva.com/design/DAG-SVuKCNs/NKoCQBp7AqrFnBOZn2Y4Qg/edit?utm_content=DAG-SVuKCNs&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
+---
 
 ## 🛠 Tech Stack
 
-### Frontend
-- **Next.js + React**: Modern web framework with server-side rendering
-- **TypeScript**: Type-safe development
-- **Tailwind CSS**: Utility-first styling
+| Layer | Technologies |
+|---|---|
+| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS, Zustand, Recharts, Framer Motion |
+| **Backend** | FastAPI, SQLModel, PostgreSQL + pgvector, Celery + Redis, MinIO (S3), Alembic |
+| **AI** | LangGraph, LangChain, Groq / Cerebras / Google Gemini, sentence-transformers, RAG |
+| **Ingestion** | Scrapy, newspaper3k, yfinance, PyMuPDF, pytesseract |
+| **Infra** | Docker Compose (7 services), JWT + Google OAuth, Prometheus, SlowAPI |
 
-### Backend
-- **FastAPI**: High-performance Python web framework
-- **PostgreSQL**: Robust relational database
-- **Celery + Redis**: Asynchronous task processing and caching
-
-### AI / Intelligence
-- **Local embeddings + LLM**: On-device AI processing
-- **RAG**: Retrieval-Augmented Generation for smart document retrieval
-
-### Documents
-- **PDF processing**: Advanced document parsing and extraction
-
-### Infra & Security
-- **Docker**: Containerized deployment
-- **JWT auth**: Secure authentication
+---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-*   [Docker](https://docs.docker.com/get-docker/) & Docker Compose
-*   [Make](https://www.gnu.org/software/make/) (optional, but recommended for running commands)
+- [Docker](https://docs.docker.com/get-docker/) & Docker Compose
+- [Make](https://www.gnu.org/software/make/) (optional)
 
-### Setup Instructions
+### Setup
 
-1.  **Clone the Repository**
-    ```bash
-    git clone <repository-url>
-    cd Mochi
-    ```
+```bash
+git clone <repository-url>
+cd Mochi
+cp backend/.env.example backend/.env
+# Edit backend/.env — set GROQ_API_KEY, CEREBRAS_API_KEY, GOOGLE_CLIENT_ID/SECRET, SECRET_KEY
+make build && make up
+```
 
-2.  **Environment Configuration**
-    Create a `.env` file in the `backend` directory based on the example.
-    ```bash
-    cp backend/.env.example backend/.env
-    ```
-    
-    **Critical: Update `backend/.env` with your real keys:**
-    *   `GROQ_API_KEY`: Get one from [console.groq.com](https://console.groq.com/).
-    *   `GOOGLE_CLIENT_ID` / `SECRET`: Required if you want Google Login to work.
-    *   `SECRET_KEY`: Generate a random string for security (e.g., `openssl rand -hex 32`).
+For development with hot-reload: `make dev`
 
-3.  **Run the Application**
-    We use `Makefile` to simplify Docker commands.
+### Access
 
-    **Build and Start:**
-    ```bash
-    make build
-    make up
-    ```
-    *(Or using Docker directly: `docker compose up --build -d`)*
+| Service | URL |
+|---|---|
+| Frontend | [http://localhost:3000](http://localhost:3000) |
+| API Docs | [http://localhost:8000/docs](http://localhost:8000/docs) |
+| MinIO Console | [http://localhost:9001](http://localhost:9001) (`minioadmin` / `minioadmin`) |
 
-4.  **Access the Application**
-    *   **Frontend**: [http://localhost:3000](http://localhost:3000)
-    *   **Backend API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-    *   **MinIO Console**: [http://localhost:9001](http://localhost:9001) (User/Pass: `minioadmin`)
+---
+
+## 📁 Project Structure
+
+```
+Mochi/
+├── frontend/           # Next.js app (dashboard, watchlist, chat, company analysis)
+├── backend/
+│   ├── app/
+│   │   ├── agents/     # Multi-agent analysis engine (LangGraph)
+│   │   ├── routers/    # API endpoints
+│   │   ├── services/   # RAG, sentiment, ingestion, embedding
+│   │   └── tasks/      # Celery async tasks
+│   └── alembic/        # Database migrations
+├── docker-compose.yml  # 7-service orchestration
+└── Makefile            # Dev commands (up, down, build, dev, reset-db, etc.)
+```
